@@ -179,6 +179,7 @@ public class CrmRegistroProyectosController {
         ArrayList<HashMap<String, String>> agentes2 = new ArrayList<HashMap<String, String>>();
         ArrayList<HashMap<String, Object>> arrayExtra = new ArrayList<HashMap<String, Object>>();
         HashMap<String, Object> extra = new HashMap<String, Object>();
+        HashMap<String, String> parametros = new HashMap<String, String>();
         
         //Decodificar id de usuario
         Integer id_usuario = Integer.parseInt(Base64Coder.decodeString(id_user_cod));
@@ -186,10 +187,13 @@ public class CrmRegistroProyectosController {
         Integer id_empresa = Integer.parseInt(userDat.get("empresa_id"));
         Integer id_agente = Integer.parseInt(userDat.get("empleado_id"));
         
+        parametros = this.getCrmDao().getCrm_Parametros(id_empresa, Integer.parseInt(userDat.get("sucursal_id")));
+        
         //Id del Agente de Ventas(id del empleado)
         extra.put("no_agen", String.valueOf(id_agente));
         
-        agentes = this.getCrmDao().getAgentes(id_empresa);
+        //Obtener los empleados de un departamento
+        agentes = this.getCrmDao().getEmpleadosPorDepartamento(id_empresa, Integer.parseInt(parametros.get("depto_id")));
         
         if(Integer.parseInt(this.getCrmDao().getUserRol(id_usuario).get("exis_rol_admin"))<=0){
             for( HashMap<String,String> i : agentes ){
@@ -220,7 +224,7 @@ public class CrmRegistroProyectosController {
             @RequestParam(value="id", required=true) Integer id,
             @RequestParam(value="iu", required=true) String id_user,
             Model model
-            ) {
+        ) {
         
         log.log(Level.INFO, "Ejecutando getRegistroProyectoJson de {0}", CrmRegistroProyectosController.class.getName());
         HashMap<String,Object> jsonretorno = new HashMap<String,Object>();
@@ -228,12 +232,15 @@ public class CrmRegistroProyectosController {
         ArrayList<HashMap<String, Object>> datos = new ArrayList<HashMap<String, Object>>();
         ArrayList<HashMap<String, String>> arrayExtra = new ArrayList<HashMap<String, String>>();
         HashMap<String, String> extra = new HashMap<String, String>();
+        HashMap<String, String> parametros = new HashMap<String, String>();
         
-        //decodificar id de usuario
+        //Decodificar id de usuario
         Integer id_usuario = Integer.parseInt(Base64Coder.decodeString(id_user));
         userDat = this.getHomeDao().getUserById(id_usuario);
         Integer id_empresa = Integer.parseInt(userDat.get("empresa_id"));
         Integer id_agente = Integer.parseInt(userDat.get("empleado_id"));
+        
+        parametros = this.getCrmDao().getCrm_Parametros(id_empresa, Integer.parseInt(userDat.get("sucursal_id")));
         
         if( id != 0  ){
             datos = this.getCrmDao().getCrmRegistroProyectos_Datos(id);
@@ -244,9 +251,11 @@ public class CrmRegistroProyectosController {
         extra.put("id_agente", String.valueOf(id_agente));
         arrayExtra.add(0,extra);
         
+        //Obtener los empleados de un departamento
+        jsonretorno.put("Agentes", this.getCrmDao().getEmpleadosPorDepartamento(id_empresa, Integer.parseInt(parametros.get("depto_id"))));
+        
         jsonretorno.put("Datos", datos);
         jsonretorno.put("Extra", arrayExtra);
-        jsonretorno.put("Agentes", this.getCrmDao().getAgentes(id_empresa));
         jsonretorno.put("Monedas", this.getCrmDao().getMonedas());
         jsonretorno.put("Estatus", this.getCrmDao().getCrmRegistroProyectos_Estatus(id_empresa));
         jsonretorno.put("Segmentos", this.getCxcDao().getCliente_Clasificacion1());

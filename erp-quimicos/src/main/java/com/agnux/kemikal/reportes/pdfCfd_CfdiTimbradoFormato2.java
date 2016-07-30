@@ -153,7 +153,7 @@ public class pdfCfd_CfdiTimbradoFormato2 {
         this.setVendedor(extras.get("nombre_vendedor"));
         this.setObservaciones(extras.get("observaciones"));
         this.setFecha_pago(extras.get("fecha_vencimiento"));
-        this.setMetodo_pago(datosCliente.get("comprobante_attr_metododepago"));
+        this.setMetodo_pago(datosCliente.get("comprobante_attr_metodopagotitulo"));
         this.setNo_cuenta(datosCliente.get("comprobante_attr_numerocuenta"));
         this.setFormaPago("PAGO EN UNA SOLA EXIBICION");
         this.setFachaTimbrado(extras.get("fechaTimbre"));
@@ -749,7 +749,8 @@ public class pdfCfd_CfdiTimbradoFormato2 {
                 cell.setHorizontalAlignment(Element.ALIGN_LEFT);
                 table2.addCell(cell);
             }else{
-                cell = new PdfPCell(new Paragraph("", smallFont));
+                //cell = new PdfPCell(new Paragraph("", smallFont));
+                cell = new PdfPCell(new Paragraph(getMetodo_pago(), smallFont));
                 cell.setBorder(0);
                 cell.setUseAscender(true);
                 cell.setHorizontalAlignment(Element.ALIGN_LEFT);

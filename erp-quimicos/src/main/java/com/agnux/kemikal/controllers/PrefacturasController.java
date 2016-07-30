@@ -299,7 +299,7 @@ public class PrefacturasController {
         jsonretorno.put("Extras", arrayExtras);
         jsonretorno.put("Vendedores", this.getPdao().getVendedores(id_empresa, id_sucursal));
         jsonretorno.put("Condiciones", this.getPdao().getCondiciones());
-        jsonretorno.put("MetodosPago", this.getPdao().getMetodosPago());
+        jsonretorno.put("MetodosPago", this.getPdao().getMetodosPago(id_empresa));
         jsonretorno.put("Almacenes", this.getPdao().getAlmacenes(id_empresa));
         
         return jsonretorno;

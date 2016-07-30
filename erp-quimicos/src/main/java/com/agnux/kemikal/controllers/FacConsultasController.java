@@ -298,7 +298,7 @@ public class FacConsultasController {
         jsonretorno.put("Monedas", this.getFacdao().getFactura_Monedas());
         jsonretorno.put("Vendedores", this.getFacdao().getFactura_Agentes(id_empresa, id_sucursal));
         jsonretorno.put("Condiciones", this.getFacdao().getFactura_DiasDeCredito());
-        jsonretorno.put("MetodosPago", this.getFacdao().getMetodosPago());
+        jsonretorno.put("MetodosPago", this.getFacdao().getMetodosPago(id_empresa));
         
         return jsonretorno;
     }

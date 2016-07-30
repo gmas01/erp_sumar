@@ -3177,4 +3177,59 @@ public class GralSpringDao implements GralInterfaceDao{
     }
     
     
+    
+    @Override
+    public ArrayList<HashMap<String, Object>> getMetodosDePago_PaginaGrid(String data_string, int offset, int pageSize, String orderBy, String asc) {
+        String sql_busqueda = "select id from gral_bus_catalogos(?) as foo (id integer)";
+        
+	String sql_to_query = ""
+        + "select "
+            +"fac_metodos_pago.id, "
+            +"fac_metodos_pago.clave_sat as clave, "
+            +"fac_metodos_pago.titulo "
+        +"from fac_metodos_pago "
+        +"JOIN ("+sql_busqueda+") AS sbt ON sbt.id = fac_metodos_pago.id "
+        +"order by "+orderBy+" "+asc+" limit ? OFFSET ? ";
+        
+        //System.out.println("Busqueda GetPage: "+sql_to_query+" "+data_string+" "+ offset +" "+ pageSize);
+        ArrayList<HashMap<String, Object>> hm = (ArrayList<HashMap<String, Object>>) this.jdbcTemplate.query(
+            sql_to_query,
+            new Object[]{data_string, new Integer(pageSize),new Integer(offset)}, new RowMapper() {
+                @Override
+                public Object mapRow(ResultSet rs, int rowNum) throws SQLException {
+                    HashMap<String, Object> row = new HashMap<String, Object>();
+                    row.put("id",rs.getInt("id"));
+                    row.put("clave",rs.getString("clave"));
+                    row.put("titulo",rs.getString("titulo"));
+                    return row;
+                }
+            }
+        );
+        return hm;
+    }
+
+    
+    //Métodos para el Catalogo de Deducciones
+    //Guarda los datos de los Deducciones
+    @Override
+    public ArrayList<HashMap<String, Object>> getMetodosDePago_Datos(Integer id) {
+        String sql_to_query = "select id, clave_sat as clave, titulo from fac_metodos_pago where id=?;";
+            ArrayList<HashMap<String, Object>> dato_puesto = (ArrayList<HashMap<String, Object>>) this.jdbcTemplate.query(
+            sql_to_query,
+            
+            new Object[]{new Integer(id)}, new RowMapper(){
+                @Override
+                public Object mapRow(ResultSet rs, int rowNum) throws SQLException {
+                    HashMap<String, Object> row = new HashMap<String, Object>();
+                    row.put("id",rs.getInt("id"));
+                    row.put("clave",rs.getString("clave"));
+                    row.put("titulo",rs.getString("titulo"));
+                    return row;
+                }
+            }
+        );
+        return dato_puesto;
+    }
+    
+    
 }

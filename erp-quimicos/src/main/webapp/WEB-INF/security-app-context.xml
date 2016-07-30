@@ -160,7 +160,8 @@ xmlns:beans="http://www.springframework.org/schema/beans"
         ROLE_GRAL_IVA_TRASLADADO,
         ROLE_GRAL_IVA_RETENIDO,
         ROLE_CXC_REPORTE_COMERCIAL,
-        ROLE_CRM_TIPO_SEGUIMIENTO_VISITA" />
+        ROLE_CRM_TIPO_SEGUIMIENTO_VISITA,
+        ROLE_GRAL_METODO_PAGO" />
         
         <intercept-url pattern="/controllers/productos/startup.agnux" access="ROLE_ADMIN,ROLE_ALTA_PRODUCTO" />
         <intercept-url pattern="/controllers/proveedores/startup.agnux" access="ROLE_ADMIN,ROLE_ALTA_PROVEEDOR" />
@@ -235,6 +236,7 @@ xmlns:beans="http://www.springframework.org/schema/beans"
         
         <intercept-url pattern="/controllers/gralimptras/startup.agnux" access="ROLE_ADMIN,ROLE_GRAL_IVA_TRASLADADO" />
         <intercept-url pattern="/controllers/gralimpret/startup.agnux" access="ROLE_ADMIN,ROLE_GRAL_IVA_RETENIDO" />
+        <intercept-url pattern="/controllers/gralmetodosdepago/startup.agnux" access="ROLE_ADMIN,ROLE_GRAL_METODO_PAGO" />
         
         
         <intercept-url pattern="/controllers/invrepexis/startup.agnux" access="ROLE_ADMIN,ROLE_CONSULTAS_ALMACEN" /><!--Noe-->

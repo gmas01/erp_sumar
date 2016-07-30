@@ -58,9 +58,9 @@
         <!--Conexion a bd instance01 LOCAL-->
 	<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
 	     <property name="driverClassName" value="org.postgresql.Driver" />
-	     <property name="url" value="jdbc:postgresql://localhost:5432/kathion" />
-	     <property name="username" value="ms" />
-	     <property name="password" value="ms" />
+	     <property name="url" value="jdbc:postgresql://localhost:5432/sumar" />
+	     <property name="username" value="sumar" />
+	     <property name="password" value="sumar" />
 	</bean>
         
         

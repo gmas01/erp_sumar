@@ -480,17 +480,19 @@ public class CrmSpringDao implements CrmInterfaceDao{
     //obtiene todos los agentes de la empresa
     @Override
     public ArrayList<HashMap<String, String>> getAgentes(Integer id_empresa) {
-        String sql_to_query = "SELECT cxc_agen.id,  "
-                                        +"cxc_agen.nombre AS nombre_agente "
-                                +"FROM cxc_agen "
-                                +"JOIN gral_usr_suc ON gral_usr_suc.gral_usr_id=cxc_agen.gral_usr_id "
-                                +"JOIN gral_suc ON gral_suc.id=gral_usr_suc.gral_suc_id "
-                                +"WHERE gral_suc.empresa_id="+id_empresa+" ORDER BY cxc_agen.id;";
+        String sql_to_query = "";
+        
+        sql_to_query = ""
+        + "SELECT cxc_agen.id,cxc_agen.nombre AS nombre_agente "
+        +"FROM cxc_agen "
+        +"JOIN gral_usr_suc ON gral_usr_suc.gral_usr_id=cxc_agen.gral_usr_id "
+        +"JOIN gral_suc ON gral_suc.id=gral_usr_suc.gral_suc_id "
+        +"WHERE gral_suc.empresa_id=? ORDER BY cxc_agen.id;";
 
         //log.log(Level.INFO, "Ejecutando query de {0}", sql_to_query);
         ArrayList<HashMap<String, String>> hm = (ArrayList<HashMap<String, String>>) this.jdbcTemplate.query(
             sql_to_query,
-            new Object[]{}, new RowMapper(){
+            new Object[]{new Integer(id_empresa)}, new RowMapper(){
                 @Override
                 public Object mapRow(ResultSet rs, int rowNum) throws SQLException {
                     HashMap<String, String> row = new HashMap<String, String>();
@@ -502,7 +504,47 @@ public class CrmSpringDao implements CrmInterfaceDao{
         );
         return hm;
     }
-
+    
+    
+    //Obtiene los Empleados de un departamento de la empresa
+    //Si el ID del departamento es menor o igual a CERO enntonces solo obtener los agentes de Ventas
+    @Override
+    public ArrayList<HashMap<String, String>> getEmpleadosPorDepartamento(Integer id_empresa, Integer id_departamento) {
+        String sql_to_query = "";
+        
+        if(id_departamento > 0){
+            sql_to_query = ""
+            + "select * from ("
+                + "SELECT gral_empleados.id, (((gral_empleados.nombre_pila::text || ' '::text) || gral_empleados.apellido_paterno::text) || ' '::text) || gral_empleados.apellido_materno::text AS nombre "
+                + "FROM gral_empleados "
+                + "WHERE gral_empleados.gral_emp_id=? and gral_empleados.gral_depto_id="+id_departamento+" and gral_empleados.borrado_logico=false"
+            + ") as sbt ORDER BY sbt.nombre;";
+        }else{
+            sql_to_query = ""
+            + "SELECT cxc_agen.id,cxc_agen.nombre "
+            +"FROM cxc_agen "
+            +"JOIN gral_usr_suc ON gral_usr_suc.gral_usr_id=cxc_agen.gral_usr_id "
+            +"JOIN gral_suc ON gral_suc.id=gral_usr_suc.gral_suc_id "
+            +"WHERE gral_suc.empresa_id=? ORDER BY cxc_agen.nombre;";
+        }
+        
+        //log.log(Level.INFO, "Ejecutando query de {0}", sql_to_query);
+        ArrayList<HashMap<String, String>> hm = (ArrayList<HashMap<String, String>>) this.jdbcTemplate.query(
+            sql_to_query,
+            new Object[]{new Integer(id_empresa)}, new RowMapper(){
+                @Override
+                public Object mapRow(ResultSet rs, int rowNum) throws SQLException {
+                    HashMap<String, String> row = new HashMap<String, String>();
+                    row.put("id",rs.getString("id")  );
+                    row.put("nombre_agente",rs.getString("nombre"));
+                    return row;
+                }
+            }
+        );
+        return hm;
+    }
+    
+    
 
     @Override
     public HashMap<String, String> getUserRol(Integer id_user) {
@@ -2387,6 +2429,23 @@ public class CrmSpringDao implements CrmInterfaceDao{
         return hm;
     }
    //----------------------------------------------fin de catalogo de motivos de llamada--------------------------------------------------
-
+    
+    
+    //Obtiene los parametros de compras
+    @Override
+    public HashMap<String, String> getCrm_Parametros(Integer id_emp, Integer id_suc) {
+        HashMap<String, String> mapDatos = new HashMap<String, String>();
+        
+        if(this.getJdbcTemplate().queryForInt("select count(*) from crm_par WHERE gral_emp_id="+id_emp+" AND gral_suc_id="+id_suc)>0){
+            String sql_query = "SELECT * FROM crm_par WHERE gral_emp_id="+id_emp+" AND gral_suc_id="+id_suc+";";
+            Map<String, Object> map = this.getJdbcTemplate().queryForMap(sql_query);
+            
+            mapDatos.put("depto_id", String.valueOf(map.get("gral_depto_id")));
+        }else{
+            mapDatos.put("depto_id", "0");
+        }
+        
+        return mapDatos;
+    }
     
 }

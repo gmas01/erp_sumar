@@ -248,7 +248,7 @@ public class RemisionesController {
         jsonretorno.put("Tc", tipoCambioActual);
         jsonretorno.put("Vendedores", this.getPocDao().getAgentes(id_empresa, id_sucursal, obtener_todos_los_agentes));
         jsonretorno.put("Condiciones", this.getPocDao().getCondicionesDePago());
-        jsonretorno.put("MetodosPago", this.getPocDao().getMetodosPago());
+        jsonretorno.put("MetodosPago", this.getPocDao().getMetodosPago(id_empresa));
         jsonretorno.put("Extra", this.getPocDao().getUserRol(id_usuario));
         
         return jsonretorno;

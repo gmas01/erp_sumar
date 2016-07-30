@@ -36,7 +36,7 @@ public interface CxcInterfaceDao {
     public ArrayList<HashMap<String, Object>> getCliente_Clasificacion3();
     public ArrayList<HashMap<String, Object>> getCliente_InicioCredito();
     public ArrayList<HashMap<String, Object>> getCliente_TiposEmbarque();
-    public ArrayList<HashMap<String, Object>> getMetodosPago();
+    public ArrayList<HashMap<String, Object>> getMetodosPago(Integer empresaId);
     public ArrayList<HashMap<String, Object>> getCliente_CuentasMayor(Integer id_empresa);
     public ArrayList<HashMap<String, String>> getCliente_CuentasContables(Integer cta_mayor, Integer detalle, String clasifica, String cta, String scta, String sscta, String ssscta, String sssscta, String descripcion, Integer id_empresa );
     public ArrayList<HashMap<String, Object>> getCliente_DatosContabilidad(Integer id);

@@ -266,4 +266,7 @@ public interface GralInterfaceDao {
     public ArrayList<HashMap<String, Object>> getImpRet_PaginaGrid(String data_string, int offset, int pageSize, String orderBy, String asc);
     public ArrayList<HashMap<String, Object>> getImpRet_DatosContabilidad(Integer id);
     
+    //Catalogo de Métodos de Pago
+    public ArrayList<HashMap<String, Object>> getMetodosDePago_PaginaGrid(String data_string, int offset, int pageSize, String orderBy, String asc);
+    public ArrayList<HashMap<String, Object>> getMetodosDePago_Datos(Integer id);
 }

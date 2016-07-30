@@ -2201,12 +2201,12 @@ public class PocSpringDao implements PocInterfaceDao{
 
 
     @Override
-    public ArrayList<HashMap<String, String>> getMetodosPago() {
-        String sql_to_query = "SELECT id, titulo FROM fac_metodos_pago WHERE borrado_logico=false;";
+    public ArrayList<HashMap<String, String>> getMetodosPago(Integer empresaId) {
+        String sql_to_query = "SELECT id, (case when clave_sat<>'' then clave_sat||' ' else '' end)||titulo as titulo FROM fac_metodos_pago WHERE borrado_logico=false and gral_emp_id=?;";
         //log.log(Level.INFO, "Ejecutando query de {0}", sql_to_query);
         ArrayList<HashMap<String, String>> hm = (ArrayList<HashMap<String, String>>) this.jdbcTemplate.query(
             sql_to_query,
-            new Object[]{}, new RowMapper(){
+            new Object[]{new Integer(empresaId)}, new RowMapper(){
                 @Override
                 public Object mapRow(ResultSet rs, int rowNum) throws SQLException {
                     HashMap<String, String> row = new HashMap<String, String>();

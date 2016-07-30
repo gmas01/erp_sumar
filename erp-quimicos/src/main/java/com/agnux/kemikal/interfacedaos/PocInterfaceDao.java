@@ -71,7 +71,7 @@ public interface PocInterfaceDao{
     public ArrayList<HashMap<String, Object>> getRemisiones_PaginaGrid(String data_string,int offset, int pageSize, String orderBy , String asc);
     public ArrayList<HashMap<String, String>> getRemisiones_Datos(Integer id_remision);
     public ArrayList<HashMap<String, String>> getRemisiones_DatosGrid(Integer id_remision);
-    public ArrayList<HashMap<String, String>> getMetodosPago();
+    public ArrayList<HashMap<String, String>> getMetodosPago(Integer empresaId);
 
     public HashMap<String, String> getRemisiones_DatosPdf(Integer id_remision);
     public ArrayList<HashMap<String, String>> getRemisiones_ConceptosPdf(Integer id_remision, String rfc_empresa);

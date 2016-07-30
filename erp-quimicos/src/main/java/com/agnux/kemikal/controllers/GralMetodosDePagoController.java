@@ -27,19 +27,21 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
+
 /**
  *
  * @author Noe Martinez
  * gpmarsan@gmail.com
+ * 12/julio/2016
  * 
  */
 @Controller
 @SessionAttributes({"user"})
-@RequestMapping("/gralpercepciones/")
-public class GralPercepcionesController {
+@RequestMapping("/gralmetodosdepago/")
+public class GralMetodosDePagoController {
     
     ResourceProject resource = new ResourceProject();
-    private static final Logger log  = Logger.getLogger(GralPercepcionesController.class.getName());
+    private static final Logger log  = Logger.getLogger(GralMetodosDePagoController.class.getName());
     
     @Autowired
     @Qualifier("daoGral")
@@ -64,15 +66,13 @@ public class GralPercepcionesController {
             @ModelAttribute("user") UserSessionData user
             )throws ServletException, IOException {
         
-        log.log(Level.INFO, "Ejecutando starUp de {0}", GralPercepcionesController.class.getName());
+        log.log(Level.INFO, "Ejecutando starUp de {0}", GralMetodosDePagoController.class.getName());
         LinkedHashMap<String,String> infoConstruccionTabla = new LinkedHashMap<String,String>();
-        infoConstruccionTabla.put("id", "Acciones:70");
-        infoConstruccionTabla.put("clave", "Clave:100");
-        infoConstruccionTabla.put("percepcion", "Titulo:350");
-        infoConstruccionTabla.put("estado", "Estado:100");
-        infoConstruccionTabla.put("tipo_percepcion", "Tipo Percepci&oacute;n:400");
+        infoConstruccionTabla.put("id", "Acciones:90");
+        infoConstruccionTabla.put("clave", "Clave:110");
+        infoConstruccionTabla.put("titulo", "Titulo:500");
         
-        ModelAndView x = new ModelAndView("gralpercepciones/startup", "title", "Cat&aacute;logo de Percepciones");
+        ModelAndView x = new ModelAndView("gralmetodosdepago/startup", "title", "Cat&aacute;logo de M&eacute;todos de Pago");
         x = x.addObject("layoutheader", resource.getLayoutheader());
         x = x.addObject("layoutmenu", resource.getLayoutmenu());
         x = x.addObject("layoutfooter", resource.getLayoutfooter());
@@ -91,45 +91,9 @@ public class GralPercepcionesController {
         return x;
     }
     
- 
     
-    
-    @RequestMapping(method = RequestMethod.POST, value="/getPercepciones.json")        
-    public @ResponseBody HashMap<String,ArrayList<HashMap<String, Object>>> getPercepcionesJson(
-            @RequestParam(value="id", required=true) Integer id,
-            @RequestParam(value="iu", required=true) String id_user_cod,
-            Model model
-            ){
-        
-        log.log(Level.INFO, "Ejecutando getPercepciones de {0}", GralPercepcionesController.class.getName());
-        HashMap<String,ArrayList<HashMap<String, Object>>> jsonretorno = new HashMap<String,ArrayList<HashMap<String, Object>>>();
-        HashMap<String, String> userDat = new HashMap<String, String>();
-       
-        ArrayList<HashMap<String, Object>> datosPercepciones = new ArrayList<HashMap<String, Object>>(); 
-        ArrayList<HashMap<String, Object>> percepciones = new ArrayList<HashMap<String, Object>>();
-       
-        //decodificar id de usuario
-        Integer id_usuario = Integer.parseInt(Base64Coder.decodeString(id_user_cod));
-        userDat = this.getHomeDao().getUserById(id_usuario);
-     
-        
-        // Integer id = Integer.parseInt(userDat.get("id"));
-        Integer id_empresa = Integer.parseInt(userDat.get("empresa_id"));
-       
-        if( id != 0 ){
-            datosPercepciones = this.getGralDao().getPercepciones_Datos(id);
-        }
-        
-        percepciones=this.getGralDao().getPercepciones_Tipos(id_empresa);
-        
-       //datos percepcioness es lo que me trajo de la consulta y los pone en el json
-       jsonretorno.put("Percepciones", datosPercepciones);
-       jsonretorno.put("TiposPercepciones", percepciones);
-       return jsonretorno;
-    }
-    
-     @RequestMapping(value="/getAllPercepciones.json", method = RequestMethod.POST)
-     public @ResponseBody HashMap<String,ArrayList<HashMap<String, Object>>> getAllPercepcionesJson(
+     @RequestMapping(value="/getAllMetodos.json", method = RequestMethod.POST)
+     public @ResponseBody HashMap<String,ArrayList<HashMap<String, Object>>> getAllMetodosJson(
            @RequestParam(value="orderby", required=true) String orderby,
            @RequestParam(value="desc", required=true) String desc,
            @RequestParam(value="items_por_pag", required=true) int items_por_pag,
@@ -143,20 +107,20 @@ public class GralPercepcionesController {
         HashMap<String,ArrayList<HashMap<String, Object>>> jsonretorno = new HashMap<String,ArrayList<HashMap<String, Object>>>();
         HashMap<String,String> has_busqueda = StringHelper.convert2hash(StringHelper.ascii2string(cadena_busqueda));
         
-        //aplicativo catalogo de marcas 
-        Integer app_selected = 170;
+        //Catálogo de Métodos de Pago(FAC)
+        Integer app_selected = 209;
         
         //decodificar id de usuario
         Integer id_usuario = Integer.parseInt(Base64Coder.decodeString(id_user_cod));
         
         //variables para el buscador
-        String percepciones = "%"+StringHelper.isNullString(String.valueOf(has_busqueda.get("percepcion")))+"%";
+        String clave = "%"+StringHelper.isNullString(String.valueOf(has_busqueda.get("clave")))+"%";
+        String titulo = "%"+StringHelper.isNullString(String.valueOf(has_busqueda.get("titulo")))+"%";
         
-        String data_string = app_selected+"___"+id_usuario+"___"+percepciones;
+        String data_string = app_selected+"___"+id_usuario+"___"+clave+"___"+titulo;
         
         //obtiene total de registros en base de datos, con los parametros de busqueda
         int total_items = this.getGralDao().countAll(data_string);              
-                
         
         //calcula el total de paginas
         int total_pags = resource.calculaTotalPag(total_items,items_por_pag);
@@ -167,7 +131,7 @@ public class GralPercepcionesController {
         int offset = resource.__get_inicio_offset(items_por_pag, pag_start);
         
         //obtiene los registros para el grid, de acuerdo a los parametros de busqueda
-        jsonretorno.put("Data", this.getGralDao().getPercepciones_PaginaGrid(data_string, offset, items_por_pag, orderby, desc));
+        jsonretorno.put("Data", this.getGralDao().getMetodosDePago_PaginaGrid(data_string, offset, items_por_pag, orderby, desc));
                
         //obtiene el hash para los datos que necesita el datagrid
         jsonretorno.put("DataForGrid", dataforpos.formaHashForPos(dataforpos));
@@ -175,35 +139,63 @@ public class GralPercepcionesController {
         return jsonretorno;
     }
 
+ 
+    
+    
+    @RequestMapping(method = RequestMethod.POST, value="/getMetodos.json")        
+    public @ResponseBody HashMap<String,ArrayList<HashMap<String, Object>>> getMetodosJson(
+            @RequestParam(value="id", required=true) Integer id,
+            @RequestParam(value="iu", required=true) String id_user_cod,
+            Model model
+            ){
+        
+        log.log(Level.INFO, "Ejecutando getPercepciones de {0}", GralMetodosDePagoController.class.getName());
+        HashMap<String,ArrayList<HashMap<String, Object>>> jsonretorno = new HashMap<String,ArrayList<HashMap<String, Object>>>();
+        HashMap<String, String> userDat = new HashMap<String, String>();
+       
+        ArrayList<HashMap<String, Object>> metodosDePago = new ArrayList<HashMap<String, Object>>(); 
+       
+        //decodificar id de usuario
+        Integer id_usuario = Integer.parseInt(Base64Coder.decodeString(id_user_cod));
+        userDat = this.getHomeDao().getUserById(id_usuario);
+     
+        
+        // Integer id = Integer.parseInt(userDat.get("id"));
+        Integer id_empresa = Integer.parseInt(userDat.get("empresa_id"));
+       
+        if( id != 0 ){
+            metodosDePago = this.getGralDao().getMetodosDePago_Datos(id);
+        }
+        
+        
+       //datos percepcioness es lo que me trajo de la consulta y los pone en el json
+       jsonretorno.put("Datos", metodosDePago);
+       return jsonretorno;
+    }
+    
+    
+    
     //crear y editar una percepción
     @RequestMapping(method = RequestMethod.POST, value="/edit.json")
     public @ResponseBody HashMap<String, String> editJson(
             @RequestParam(value="identificador", required=true) Integer id,
-            //@RequestParam(value="clave", required=false) String clave,
+            @RequestParam(value="clave", required=false) String clave,
             @RequestParam(value="titulo", required=true) String titulo,
-            @RequestParam(value="check_activo", required=false) String check_activo,
-            @RequestParam(value="select_percepcion", required=true) String select_percepcion,
-            
             @ModelAttribute("user") UserSessionData user,
             Model model
             ) {
         
         HashMap<String, String> jsonretorno = new HashMap<String, String>();
         HashMap<String, String> succes = new HashMap<String, String>();
-        Integer app_selected = 170;//catalogo de percepcioness
+        
+        //Catálogo de Métodos de Pago(FAC)
+        Integer app_selected = 209;
         String command_selected = "new";
         //decodificar id de usuario
         Integer id_usuario = user.getUserId();
         
         String extra_data_array = "'sin datos'";
         String actualizo = "0";
-        
-        
-        //si los campos select vienen null les asigna un 0(cero)
-            select_percepcion = StringHelper.verificarSelect(select_percepcion);
-            
-        //Verifica los campos CheckBox y les asigna true o false
-            check_activo = StringHelper.verificarCheckBox(check_activo);
         
         if( id==0 ){
             command_selected = "new";
@@ -212,7 +204,7 @@ public class GralPercepcionesController {
         }
         
         
-        String data_string = app_selected+"___"+command_selected+"___"+id_usuario+"___"+id+"___"+titulo.toUpperCase()+"___"+check_activo+"___"+select_percepcion;
+        String data_string = app_selected+"___"+command_selected+"___"+id_usuario+"___"+id+"___"+ clave.trim() +"___"+ titulo.trim().toUpperCase();
         
         succes = this.getGralDao().selectFunctionValidateAaplicativo(data_string, app_selected, extra_data_array);
         log.log(Level.INFO, "despues de validacion {0}", String.valueOf(succes.get("success")));
@@ -239,7 +231,8 @@ public class GralPercepcionesController {
         //decodificar id de usuario
         Integer id_usuario = Integer.parseInt(Base64Coder.decodeString(id_user));
         
-        Integer app_selected = 170;
+        //Catálogo de Métodos de Pago(FAC)
+        Integer app_selected = 209;
         String command_selected = "delete";
         String extra_data_array = "'sin datos'";
         String data_string = app_selected+"___"+command_selected+"___"+id_usuario+"___"+id;
@@ -249,5 +242,4 @@ public class GralPercepcionesController {
         jsonretorno.put("success",String.valueOf( this.getGralDao().selectFunctionForThisApp(data_string, extra_data_array)));
         return jsonretorno;
     }
-    
 }

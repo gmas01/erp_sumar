@@ -260,7 +260,7 @@ public class FacturasController {
         monedas = this.getFacdao().getFactura_Monedas();
         vendedores = this.getFacdao().getFactura_Agentes(id_empresa, id_sucursal);
         condiciones = this.getFacdao().getFactura_DiasDeCredito();
-        metodos_pago = this.getFacdao().getMetodosPago();
+        metodos_pago = this.getFacdao().getMetodosPago(id_empresa);
         
         jsonretorno.put("datosFactura", datosFactura);
         jsonretorno.put("datosGrid", datosGrid);

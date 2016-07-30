@@ -511,12 +511,12 @@ public class FacturasSpringDao implements FacturasInterfaceDao{
     
     
     @Override
-    public ArrayList<HashMap<String, Object>> getMetodosPago() {
-        String sql_to_query = "SELECT id, titulo FROM fac_metodos_pago WHERE borrado_logico=false;";
+    public ArrayList<HashMap<String, Object>> getMetodosPago(Integer empresaId) {
+        String sql_to_query = "SELECT id, (case when clave_sat<>'' then clave_sat||' ' else '' end)||titulo as titulo FROM fac_metodos_pago WHERE borrado_logico=false and gral_emp_id=?;";
         //log.log(Level.INFO, "Ejecutando query de {0}", sql_to_query);
         ArrayList<HashMap<String, Object>> hm = (ArrayList<HashMap<String, Object>>) this.jdbcTemplate.query(
             sql_to_query,
-            new Object[]{}, new RowMapper(){
+            new Object[]{new Integer(empresaId)}, new RowMapper(){
                 @Override
                 public Object mapRow(ResultSet rs, int rowNum) throws SQLException {
                     HashMap<String, Object> row = new HashMap<String, Object>();
@@ -689,7 +689,9 @@ public class FacturasSpringDao implements FacturasInterfaceDao{
         //obtener id del cliente
         String sql_to_query = ""
                 + "SELECT erp_prefacturas.cliente_id, "
-                        + "fac_metodos_pago.titulo AS metodo_pago, "
+                        + "fac_metodos_pago.clave_sat AS metodo_pago, "
+                        //+ "fac_metodos_pago.titulo AS metodo_pago_titulo, "
+                        + "fac_metodos_pago.clave_sat AS metodo_pago_titulo, "
                         + "(CASE WHEN fac_metodos_pago.id=7 THEN 'NO APLICA' ELSE erp_prefacturas.no_cuenta END ) AS no_cuenta, "
                         + "cxc_clie_credias.descripcion AS condicion_pago,"
                         + "gral_mon.iso_4217 AS moneda, "
@@ -758,6 +760,8 @@ public class FacturasSpringDao implements FacturasInterfaceDao{
         data.put("comprobante_attr_simbolo_moneda",map.get("simbolo_moneda").toString().toUpperCase());
         data.put("comprobante_attr_tc",StringHelper.roundDouble(map.get("tipo_cambio").toString(), 4));
         data.put("comprobante_attr_metododepago",map.get("metodo_pago").toString().toUpperCase());
+        data.put("comprobante_attr_metodopagotitulo",map.get("metodo_pago_titulo").toString().toUpperCase());
+        
         String no_cta ="";
         if (!map.get("no_cuenta").toString().equals("null") && !map.get("no_cuenta").toString().equals("")){
             no_cta=map.get("no_cuenta").toString();
@@ -2761,7 +2765,9 @@ public class FacturasSpringDao implements FacturasInterfaceDao{
         String sql_to_query = ""
                 + "SELECT "
                     + "fac_nota_credito.cxc_clie_id, "
-                    + "'No Identificado'::character varying AS metodo_pago, "
+                    + "'99'::character varying AS metodo_pago, "
+                    //+ "'OTROS'::character varying AS metodo_pago_titulo, "
+                    + "'99'::character varying AS metodo_pago_titulo, "
                     + "''::character varying AS no_cuenta, "
                     + "'No aplica'::character varying AS condicion_pago, "
                     + "fac_nota_credito.subtotal, "
@@ -2814,6 +2820,7 @@ public class FacturasSpringDao implements FacturasInterfaceDao{
         data.put("comprobante_attr_subtotal",map.get("subtotal").toString().toUpperCase());
         data.put("comprobante_attr_total",this.getTotal());
         data.put("comprobante_attr_metododepago",map.get("metodo_pago").toString().toUpperCase());
+        data.put("comprobante_attr_metododepagotitulo",map.get("metodo_pago_titulo").toString().toUpperCase());
         data.put("comprobante_attr_simbolo_moneda",map.get("simbolo_moneda").toString().toUpperCase());
         data.put("moneda_abr",map.get("moneda_abr").toString().toUpperCase());
         data.put("nombre_moneda",map.get("moneda_titulo").toString().toUpperCase());
@@ -4671,7 +4678,7 @@ public class FacturasSpringDao implements FacturasInterfaceDao{
         String sql_to_query = ""
         + "SELECT "
             + "fac_nomina_det.gral_empleado_id, "
-            + "(CASE WHEN fac_metodos_pago.titulo IS NULL THEN '' ELSE fac_metodos_pago.titulo END) AS metodo_pago, "
+            + "(CASE WHEN fac_metodos_pago.clave_sat IS NULL THEN '' ELSE fac_metodos_pago.clave_sat END) AS metodo_pago, "
             + "fac_nomina.forma_pago, "
             + "fac_nomina.fecha_pago::character varying AS fecha_pago,"
             + "gral_mon.iso_4217 AS moneda, "

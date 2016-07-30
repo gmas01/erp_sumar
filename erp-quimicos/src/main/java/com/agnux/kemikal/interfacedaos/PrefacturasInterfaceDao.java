@@ -41,7 +41,7 @@ public interface PrefacturasInterfaceDao {
     
     public ArrayList<HashMap<String, Object>> getVendedores(Integer id_empresa, Integer id_sucursal);
     public ArrayList<HashMap<String, Object>> getCondiciones();
-    public ArrayList<HashMap<String, Object>> getMetodosPago();
+    public ArrayList<HashMap<String, Object>> getMetodosPago(Integer empresaId);
     public ArrayList<HashMap<String, Integer>> getAnioInforme();
     public ArrayList<HashMap<String, Object>> get_buscador_clientes(String cadena, Integer filtro, Integer id_empresa, Integer id_sucursal);
     public ArrayList<HashMap<String, Object>> getDatosClienteByNoCliente(String no_control,  Integer id_empresa, Integer id_sucursal);

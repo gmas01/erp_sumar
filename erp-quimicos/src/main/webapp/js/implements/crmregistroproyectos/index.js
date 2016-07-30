@@ -151,7 +151,7 @@ $(function() {
 			var agente_hmtl = '';
 			
 			if(data['Extra'][0]['mostrarAgentes']){
-				agente_hmtl += '<option value="0" >[-- Selecionar Agente --]</option>';
+				agente_hmtl += '<option value="0" >[-- Selecionar Empleado --]</option>';
 			}
 			
 			$.each(data['Agentes'],function(entryIndex,agente){
@@ -765,7 +765,7 @@ $(function() {
 			$select_agente.children().remove();
 			var agente_hmtl = '';
 			if(parseInt(entry['Extra'][0]['exis_rol_admin']) > 0){
-				agente_hmtl += '<option value="0" >[-- Selecionar Agente --]</option>';
+				agente_hmtl += '<option value="0" >[-- Selecionar Empleado --]</option>';
 			}
 			
 			$.each(entry['Agentes'],function(entryIndex,agente){

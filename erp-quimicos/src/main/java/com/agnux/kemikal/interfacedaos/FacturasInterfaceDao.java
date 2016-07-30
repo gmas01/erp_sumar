@@ -25,7 +25,7 @@ public interface FacturasInterfaceDao {
     public ArrayList<HashMap<String, Object>> getFactura_Monedas();
     public ArrayList<HashMap<String, Object>> getFactura_Agentes(Integer id_empresa, Integer id_sucursal);
     public ArrayList<HashMap<String, Object>> getFactura_DiasDeCredito();
-    public ArrayList<HashMap<String, Object>> getMetodosPago();
+    public ArrayList<HashMap<String, Object>> getMetodosPago(Integer empresaId);
     public ArrayList<HashMap<String, Integer>> getFactura_AnioInforme();
     
     public String getSerieFolioFactura(Integer id_factura, Integer idEmp);

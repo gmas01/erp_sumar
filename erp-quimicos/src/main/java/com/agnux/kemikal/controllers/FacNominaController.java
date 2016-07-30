@@ -251,7 +251,7 @@ public class FacNominaController {
         jsonretorno.put("Datos", datos);
         jsonretorno.put("datosGrid", datosGrid);
         jsonretorno.put("Monedas", this.getFacdao().getFactura_Monedas());
-        jsonretorno.put("MetodosPago", this.getFacdao().getMetodosPago());
+        jsonretorno.put("MetodosPago", this.getFacdao().getMetodosPago(id_empresa));
         jsonretorno.put("Periodicidad", this.getFacdao().getFacNomina_PeriodicidadPago(id_empresa));
         jsonretorno.put("Puestos", this.getFacdao().getFacNomina_Puestos(id_empresa));
         jsonretorno.put("Deptos", this.getFacdao().getFacNomina_Departamentos(id_empresa));

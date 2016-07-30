@@ -256,7 +256,7 @@ public class ClientsController {
         iniciosCredito = this.getCxcDao().getCliente_InicioCredito();
         tiposEmbarque = this.getCxcDao().getCliente_TiposEmbarque();
         cuentasMayor = this.getCxcDao().getCliente_CuentasMayor(id_empresa);
-        metodos_pago = this.getCxcDao().getMetodosPago();
+        metodos_pago = this.getCxcDao().getMetodosPago(id_empresa);
         
         jsonretorno.put("Cliente", datoscliente);
         jsonretorno.put("Tiposclient", tiposclient);

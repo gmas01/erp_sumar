@@ -47,6 +47,7 @@ public interface CrmInterfaceDao {
     public ArrayList<HashMap<String, Object>> getCrmRegistroVisitas_PaginaGrid(String data_string, int offset, int pageSize, String orderBy, String asc);
     public ArrayList<HashMap<String, String>> getCrmRegistroVisitas_Datos(Integer id);
     public ArrayList<HashMap<String, String>> getAgentes(Integer id_empresa);
+    public ArrayList<HashMap<String, String>> getEmpleadosPorDepartamento(Integer id_empresa, Integer id_departamento);
     public HashMap<String, String> getUserRol(Integer id_empleado);
     public ArrayList<HashMap<String, String>> getCrmRegistroVisitas_Motivos(Integer id_empresa);
     public ArrayList<HashMap<String, String>> getCrmRegistroVisitas_Calificaciones(Integer id_empresa);
@@ -126,4 +127,5 @@ public interface CrmInterfaceDao {
     public ArrayList<HashMap<String, Object>> getSeguimientoVisitas_Datos(Integer id);
     public ArrayList<HashMap<String, Object>> getSeguimientoVisitas_PaginaGrid(String data_string, int offset, int pageSize, String orderBy, String asc, Integer id_empresa);
     
+    public HashMap<String, String> getCrm_Parametros(Integer id_emp, Integer id_suc);
 }

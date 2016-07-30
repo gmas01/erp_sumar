@@ -318,7 +318,7 @@ public class PocPedidosController {
         jsonretorno.put("Monedas", this.getPocDao().getMonedas());
         jsonretorno.put("Vendedores", this.getPocDao().getAgentes(id_empresa, id_sucursal, obtener_todos_los_agentes));
         jsonretorno.put("Condiciones", this.getPocDao().getCondicionesDePago());
-        jsonretorno.put("MetodosPago", this.getPocDao().getMetodosPago());
+        jsonretorno.put("MetodosPago", this.getPocDao().getMetodosPago(id_empresa));
         jsonretorno.put("Almacenes", this.getPocDao().getPocPedido_Almacenes(id_sucursal));
         jsonretorno.put("UM", this.getPocDao().getUnidadesMedida());
         jsonretorno.put("Ieps", this.getPocDao().getIeps(id_empresa, 0));
