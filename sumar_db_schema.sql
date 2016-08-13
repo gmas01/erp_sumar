@@ -560,7 +560,11 @@ BEGIN
 				JOIN gral_suc ON gral_suc.id=inv_suc_alm.sucursal_id
 				WHERE gral_suc.empresa_id='||emp_id||' AND inv_alm.borrado_logico=FALSE AND inv_alm.titulo ILIKE '''||str_data[3]||''' '||cadena_where;
 	END IF;	--termina buscador  del Catalogo de almacenes
-	
+
+	--buscador de proveedores
+	IF app_selected = 2 THEN
+		sql_query := 'select id from cxp_prov where empresa_id='||emp_id||' and sucursal_id='||suc_id||' and borrado_logico=FALSE and razon_social ILIKE '''||str_data[3]||''' AND rfc ilike '''||str_data[4]||''' AND folio ilike '''||str_data[5]||''';';
+	END IF;	--termina buscador de proveedores	
 	
 	--buscador de empleados
         IF app_selected = 4 THEN
@@ -609,6 +613,29 @@ BEGIN
 	END IF;	--termina buscador de clientes
 
 
+	
+	--buscador de productos
+	IF app_selected = 8 THEN
+		--str_data[3]	sku
+		--str_data[4]	descripcion
+		--str_data[5]	por_tipo
+		IF str_data[3] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.sku ILIKE '''||str_data[3]||'''';
+		END IF;
+		
+		IF str_data[4] != '%%' THEN
+			cadena_where:= cadena_where ||' AND  inv_prod.descripcion ILIKE '''||str_data[4]||'''';
+		END IF;
+		
+		IF str_data[5]::integer != 0 THEN
+			cadena_where:= cadena_where ||' AND inv_prod.tipo_de_producto_id='||str_data[5]::integer;
+		END IF;
+		
+		sql_query := 'SELECT id FROM inv_prod WHERE empresa_id='||emp_id||' AND borrado_logico=FALSE '||cadena_where;
+		
+	END IF;	--termina buscador de productos
+
+	
 	--buscador de Catalogo Clientes Clasificacion 1
 	IF app_selected = 20 THEN
 		sql_query := 'SELECT id FROM cxc_clie_clas1 WHERE titulo ILIKE '''||str_data[3]||''';';
@@ -633,7 +660,34 @@ BEGIN
         IF app_selected = 24 THEN
                 sql_query := 'SELECT id FROM cxc_clie_grupos WHERE titulo ILIKE '''||str_data[3]||''';';
         END IF;        --termina Catalogo de Grupos de Clientes
-	
+
+
+	--buscador de Catalogo Proveedores Clasificacion 1
+        IF app_selected = 25 THEN
+                sql_query := 'SELECT id FROM cxp_prov_clas1 WHERE titulo ILIKE '''||str_data[3]||''' AND borrado_logico=FALSE AND gral_emp_id= '||emp_id;
+        END IF;--termina Catalogo Proveedores Clasificacion 1
+        
+        --buscador de Catalogo Proveedores Clasificacion 2
+        IF app_selected = 26 THEN
+                sql_query := 'SELECT id FROM cxp_prov_clas2 WHERE titulo ILIKE '''||str_data[3]||''' AND borrado_logico=FALSE AND gral_emp_id= '||emp_id;
+        END IF;--termina Catalogo Proveedores Clasificacion 2
+        
+        --buscador de Catalogo Proveedores Clasificacion 3
+        IF app_selected = 27 THEN
+                sql_query := 'SELECT id FROM cxp_prov_clas3 WHERE titulo ILIKE '''||str_data[3]||''' AND borrado_logico=FALSE AND gral_emp_id= '||emp_id;
+        END IF;--termina Catalogo Proveedores Clasificacion 3
+
+        --buscador de Catalogo zona de Proveedores
+        IF app_selected = 28 THEN
+                sql_query := 'SELECT id FROM cxp_prov_zonas WHERE titulo ILIKE '''||str_data[3]||''';';
+        END IF;        --termina Catalogo Zona de proveedores
+
+        --buscador de Catalogo grupos de Proveedores
+        IF app_selected = 29 THEN
+                sql_query := 'SELECT id FROM cxp_prov_grupos WHERE titulo ILIKE '''||str_data[3]||''';';
+        END IF;        --termina Catalogo grupos de proveedores
+
+        
 	--buscador de Catalogo de tipos de movimientos inventario
         IF app_selected = 35 THEN
                 sql_query := 'SELECT id FROM inv_mov_tipos WHERE titulo ILIKE '''||str_data[3]||''' and  descripcion ILIKE '''||str_data[4]||''' and borrado_logico=false;';
@@ -828,7 +882,78 @@ BEGIN
 		WHERE cxc_clie_df.borrado_logico=false 
 		AND cxc_clie.empresa_id = '|| emp_id ||' '||cadena_where;
 	END IF;	--termina buscador de clientes
+
+
+	--Buscador de Aplicativo Actualizador de Contraseña de Usuario
+	IF app_selected = 155 THEN
+		sql_query := 'select gral_usr.id from gral_usr left join gral_empleados on gral_empleados.id=gral_usr.gral_empleados_id where gral_usr.id='||id_user||';';
+	END IF;	--Termina Buscador de Aplicativo Actualizador de Contraseña de Usuario
+
 	
+	--Buscador del catalogo de Percepcines
+	IF app_selected = 170 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	TITULO
+		IF str_data[3] !='%%' THEN
+			cadena_where='AND titulo ilike '''||str_data[3]||'''';
+		END IF;
+		
+		sql_query := 'SELECT id FROM nom_percep WHERE gral_emp_id='||emp_id||' AND borrado_logico=false '||cadena_where;
+	END IF;	--termina buscador del catalogo de Percepciones
+
+	
+	--Buscador del catalogo de Deducciones
+	IF app_selected = 171 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	TITULO
+		IF str_data[3]<>'%%' THEN
+			cadena_where='AND titulo ilike '''||str_data[3]||'''';
+		END IF;
+		
+		sql_query := 'SELECT id FROM nom_deduc WHERE gral_emp_id='||emp_id||' AND borrado_logico=false '||cadena_where;
+	END IF;
+	--Termina buscador del catalogo de Deducciones
+
+
+	--Buscador del catalogo de Periodicidad de Pago
+	IF app_selected = 172 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	titulo
+		IF str_data[3] !='%%' THEN
+			cadena_where='AND titulo ilike '''||str_data[3]||'''';
+		END IF;
+		
+		sql_query := 'SELECT id FROM nom_periodicidad_pago WHERE gral_emp_id='||emp_id||' AND borrado_logico=false '||cadena_where;
+	END IF;
+	--Termina buscador del catalogo de Periodicidad de Pago
+
+	
+	--Buscador del catalogo de Configuracion de  Periodicidad de Pago
+	IF app_selected = 174 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	anio
+		--str_data[4]	titulo
+
+		IF str_data[3]::integer != 0 THEN
+			cadena_where:= cadena_where ||' AND nom_periodos_conf.ano='||str_data[3];
+		END IF;
+		
+		IF str_data[4] !='%%' THEN
+			cadena_where:= cadena_where ||' AND nom_periodicidad_pago.titulo ilike  '''||str_data[4]||'''';
+		END IF;
+		
+		sql_query := 'SELECT nom_periodos_conf.id FROM nom_periodos_conf 
+		JOIN nom_periodicidad_pago on nom_periodicidad_pago.id=nom_periodos_conf.nom_periodicidad_pago_id
+		WHERE nom_periodos_conf.gral_emp_id = '|| emp_id ||' AND nom_periodos_conf.borrado_logico=FALSE '||cadena_where;
+		
+	
+	END IF;
+	--Termina buscador para el Aplicativo de Configuracion de  Periodicidad de Pago
+		
 
 	--RAISE EXCEPTION '%',sql_query;
 	
@@ -1643,6 +1768,139 @@ ALTER SEQUENCE cxc_clie_zonas_id_seq OWNED BY cxc_clie_zonas.id;
 
 
 --
+-- Name: cxp_prov; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE cxp_prov (
+    id integer NOT NULL,
+    folio character varying,
+    rfc character varying,
+    curp character varying DEFAULT ''::character varying,
+    razon_social character varying DEFAULT ''::character varying,
+    clave_comercial character varying DEFAULT ''::character varying NOT NULL,
+    calle character varying DEFAULT ''::character varying,
+    numero character varying DEFAULT ''::character varying,
+    colonia character varying DEFAULT ''::character varying,
+    cp character varying DEFAULT ''::character varying,
+    entre_calles character varying DEFAULT ''::character varying,
+    pais_id integer DEFAULT 0,
+    estado_id integer DEFAULT 0,
+    municipio_id integer DEFAULT 0,
+    localidad_alternativa character varying DEFAULT ''::character varying,
+    telefono1 character varying DEFAULT ''::character varying,
+    extension1 character varying DEFAULT ''::character varying,
+    fax character varying DEFAULT ''::character varying,
+    telefono2 character varying DEFAULT ''::character varying,
+    extension2 character varying DEFAULT ''::character varying,
+    correo_electronico character varying DEFAULT ''::character varying,
+    web_site character varying DEFAULT ''::character varying,
+    impuesto integer DEFAULT 0,
+    cxp_prov_zona_id integer DEFAULT 0,
+    grupo_id integer DEFAULT 0,
+    proveedortipo_id integer DEFAULT 0,
+    clasif_1 integer DEFAULT 0,
+    clasif_2 integer DEFAULT 0,
+    clasif_3 integer DEFAULT 0,
+    moneda_id integer DEFAULT 0,
+    tiempo_entrega_id integer DEFAULT 0,
+    estatus boolean DEFAULT true,
+    limite_credito double precision DEFAULT 0,
+    dias_credito_id integer DEFAULT 0,
+    descuento double precision DEFAULT 0,
+    credito_a_partir integer DEFAULT 0,
+    cxp_prov_tipo_embarque_id integer DEFAULT 0,
+    flete_pagado boolean DEFAULT false,
+    condiciones text DEFAULT ''::text,
+    observaciones text DEFAULT ''::text,
+    vent_contacto character varying DEFAULT ''::character varying,
+    vent_puesto character varying DEFAULT ''::character varying,
+    vent_calle character varying DEFAULT ''::character varying,
+    vent_numero character varying DEFAULT ''::character varying,
+    vent_colonia character varying DEFAULT ''::character varying,
+    vent_cp character varying DEFAULT ''::character varying,
+    vent_entre_calles character varying DEFAULT ''::character varying,
+    vent_pais_id integer DEFAULT 0,
+    vent_estado_id integer DEFAULT 0,
+    vent_municipio_id integer DEFAULT 0,
+    vent_telefono1 character varying DEFAULT ''::character varying,
+    vent_extension1 character varying DEFAULT ''::character varying,
+    vent_fax character varying DEFAULT ''::character varying,
+    vent_telefono2 character varying DEFAULT ''::character varying,
+    vent_extension2 character varying DEFAULT ''::character varying,
+    vent_email character varying DEFAULT ''::character varying,
+    cob_contacto character varying DEFAULT ''::character varying,
+    cob_puesto character varying DEFAULT ''::character varying,
+    cob_calle character varying DEFAULT ''::character varying,
+    cob_numero character varying DEFAULT ''::character varying,
+    cob_colonia character varying DEFAULT ''::character varying,
+    cob_cp character varying DEFAULT ''::character varying,
+    cob_entre_calles character varying DEFAULT ''::character varying,
+    cob_pais_id integer DEFAULT 0,
+    cob_estado_id integer DEFAULT 0,
+    cob_municipio_id integer DEFAULT 0,
+    cob_telefono1 character varying DEFAULT ''::character varying,
+    cob_extension1 character varying DEFAULT ''::character varying,
+    cob_fax character varying DEFAULT ''::character varying,
+    cob_telefono2 character varying DEFAULT ''::character varying,
+    cob_extension2 character varying DEFAULT ''::character varying,
+    cob_email character varying DEFAULT ''::character varying,
+    comentarios text DEFAULT ''::text,
+    empresa_id integer DEFAULT 0,
+    sucursal_id integer DEFAULT 0,
+    borrado_logico boolean DEFAULT false,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    id_usuario_creacion integer DEFAULT 0,
+    id_usuario_actualizacion integer DEFAULT 0,
+    id_usuario_baja integer DEFAULT 0,
+    ctb_cta_id_pasivo integer DEFAULT 0,
+    ctb_cta_id_egreso integer DEFAULT 0,
+    ctb_cta_id_ietu integer DEFAULT 0,
+    ctb_cta_id_comple integer DEFAULT 0,
+    ctb_cta_id_pasivo_comple integer DEFAULT 0,
+    transportista boolean DEFAULT false NOT NULL
+);
+
+
+ALTER TABLE cxp_prov OWNER TO sumar;
+
+--
+-- Name: COLUMN cxp_prov.ctb_cta_id_pasivo; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN cxp_prov.ctb_cta_id_pasivo IS 'id de la Cuenta Contable para Pasivos';
+
+
+--
+-- Name: COLUMN cxp_prov.ctb_cta_id_egreso; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN cxp_prov.ctb_cta_id_egreso IS 'id de la Cuenta Contable para Egresos';
+
+
+--
+-- Name: COLUMN cxp_prov.ctb_cta_id_ietu; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN cxp_prov.ctb_cta_id_ietu IS 'id de la Cuenta Contable para IETU';
+
+
+--
+-- Name: COLUMN cxp_prov.ctb_cta_id_comple; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN cxp_prov.ctb_cta_id_comple IS 'id de la Cuenta Contable para Complementeria';
+
+
+--
+-- Name: COLUMN cxp_prov.ctb_cta_id_pasivo_comple; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN cxp_prov.ctb_cta_id_pasivo_comple IS 'id de la Cuenta Contable para Pasivo Complementaria';
+
+
+--
 -- Name: cxp_prov_clas1; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -1802,6 +2060,43 @@ ALTER SEQUENCE cxp_prov_clases_id_seq OWNED BY cxp_prov_clases.id;
 
 
 --
+-- Name: cxp_prov_contactos; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE cxp_prov_contactos (
+    id integer NOT NULL,
+    contacto character varying NOT NULL,
+    proveedor_id integer NOT NULL,
+    telefono character varying,
+    email character varying,
+    fax character varying
+);
+
+
+ALTER TABLE cxp_prov_contactos OWNER TO sumar;
+
+--
+-- Name: cxp_prov_contactos_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE cxp_prov_contactos_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE cxp_prov_contactos_id_seq OWNER TO sumar;
+
+--
+-- Name: cxp_prov_contactos_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE cxp_prov_contactos_id_seq OWNED BY cxp_prov_contactos.id;
+
+
+--
 -- Name: cxp_prov_credias; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -1833,6 +2128,166 @@ ALTER TABLE cxp_prov_credias_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE cxp_prov_credias_id_seq OWNED BY cxp_prov_credias.id;
+
+
+--
+-- Name: cxp_prov_fleteras; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE cxp_prov_fleteras (
+    id integer NOT NULL,
+    razon_social character varying NOT NULL,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    empresa_id integer DEFAULT 0,
+    sucursal_id integer DEFAULT 0
+);
+
+
+ALTER TABLE cxp_prov_fleteras OWNER TO sumar;
+
+--
+-- Name: cxp_prov_fleteras_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE cxp_prov_fleteras_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE cxp_prov_fleteras_id_seq OWNER TO sumar;
+
+--
+-- Name: cxp_prov_fleteras_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE cxp_prov_fleteras_id_seq OWNED BY cxp_prov_fleteras.id;
+
+
+--
+-- Name: cxp_prov_grupos; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE cxp_prov_grupos (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    borrado_logico boolean
+);
+
+
+ALTER TABLE cxp_prov_grupos OWNER TO sumar;
+
+--
+-- Name: cxp_prov_grupos_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE cxp_prov_grupos_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE cxp_prov_grupos_id_seq OWNER TO sumar;
+
+--
+-- Name: cxp_prov_grupos_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE cxp_prov_grupos_id_seq OWNED BY cxp_prov_grupos.id;
+
+
+--
+-- Name: cxp_prov_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE cxp_prov_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE cxp_prov_id_seq OWNER TO sumar;
+
+--
+-- Name: cxp_prov_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE cxp_prov_id_seq OWNED BY cxp_prov.id;
+
+
+--
+-- Name: cxp_prov_tipos_embarque; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE cxp_prov_tipos_embarque (
+    id integer NOT NULL,
+    titulo character varying NOT NULL
+);
+
+
+ALTER TABLE cxp_prov_tipos_embarque OWNER TO sumar;
+
+--
+-- Name: cxp_prov_tipos_embarque_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE cxp_prov_tipos_embarque_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE cxp_prov_tipos_embarque_id_seq OWNER TO sumar;
+
+--
+-- Name: cxp_prov_tipos_embarque_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE cxp_prov_tipos_embarque_id_seq OWNED BY cxp_prov_tipos_embarque.id;
+
+
+--
+-- Name: cxp_prov_zonas; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE cxp_prov_zonas (
+    id integer NOT NULL,
+    titulo character varying NOT NULL
+);
+
+
+ALTER TABLE cxp_prov_zonas OWNER TO sumar;
+
+--
+-- Name: cxp_prov_zonas_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE cxp_prov_zonas_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE cxp_prov_zonas_id_seq OWNER TO sumar;
+
+--
+-- Name: cxp_prov_zonas_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE cxp_prov_zonas_id_seq OWNED BY cxp_prov_zonas.id;
 
 
 --
@@ -3874,6 +4329,262 @@ ALTER SEQUENCE inv_mov_tipos_id_seq OWNED BY inv_mov_tipos.id;
 
 
 --
+-- Name: inv_prod; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod (
+    id integer NOT NULL,
+    sku character varying DEFAULT ''::character varying,
+    descripcion character varying NOT NULL,
+    codigo_barras character varying DEFAULT ''::character varying,
+    tentrega integer DEFAULT 0,
+    inv_clas_id integer DEFAULT 0,
+    inv_stock_clasif_id integer DEFAULT 0,
+    estatus boolean DEFAULT true,
+    inv_prod_familia_id integer DEFAULT 0,
+    subfamilia_id integer DEFAULT 0,
+    inv_prod_grupo_id integer DEFAULT 0,
+    ieps integer DEFAULT 0,
+    meta_impuesto character varying DEFAULT ''::character varying,
+    inv_prod_linea_id integer DEFAULT 0,
+    inv_mar_id integer DEFAULT 0,
+    tipo_de_producto_id integer DEFAULT 0,
+    inv_seccion_id integer DEFAULT 0,
+    unidad_id integer DEFAULT 0,
+    requiere_numero_serie boolean DEFAULT false,
+    requiere_numero_lote boolean DEFAULT false,
+    requiere_pedimento boolean DEFAULT false,
+    permitir_stock boolean DEFAULT false,
+    venta_moneda_extranjera boolean DEFAULT false,
+    compra_moneda_extranjera boolean DEFAULT false,
+    requiere_nom boolean DEFAULT false,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    id_usuario_creacion integer DEFAULT 0,
+    id_usuario_actualizacion integer DEFAULT 0,
+    id_usuario_baja integer DEFAULT 0,
+    sucursal_id integer DEFAULT 0,
+    empresa_id integer DEFAULT 0,
+    cxp_prov_id integer DEFAULT 0,
+    sku_aux character varying DEFAULT ''::character varying,
+    id_aux integer DEFAULT 0,
+    densidad double precision DEFAULT 0,
+    valor_maximo double precision DEFAULT 0,
+    valor_minimo double precision DEFAULT 0,
+    punto_reorden double precision DEFAULT 0,
+    gral_impto_id integer DEFAULT 0,
+    ctb_cta_id_gasto integer DEFAULT 0,
+    ctb_cta_id_costo_venta integer DEFAULT 0,
+    ctb_cta_id_venta integer DEFAULT 0,
+    descripcion_corta text,
+    descripcion_larga text,
+    archivo_img character varying DEFAULT ''::character varying,
+    archivo_pdf character varying DEFAULT ''::character varying,
+    inv_prod_presentacion_id integer DEFAULT 0,
+    flete boolean DEFAULT false NOT NULL,
+    no_clie character varying DEFAULT ''::character varying NOT NULL,
+    gral_mon_id integer DEFAULT 0 NOT NULL,
+    gral_imptos_ret_id integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE inv_prod OWNER TO sumar;
+
+--
+-- Name: COLUMN inv_prod.gral_impto_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_prod.gral_impto_id IS 'Impuesto especifico para el Producto';
+
+
+--
+-- Name: COLUMN inv_prod.ctb_cta_id_gasto; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_prod.ctb_cta_id_gasto IS 'id de la Cuenta Contable para Gastos';
+
+
+--
+-- Name: COLUMN inv_prod.ctb_cta_id_costo_venta; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_prod.ctb_cta_id_costo_venta IS 'id de la Cuenta Contable para Costo de Venta';
+
+
+--
+-- Name: COLUMN inv_prod.ctb_cta_id_venta; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_prod.ctb_cta_id_venta IS 'id de la Cuenta Contable para Ventas';
+
+
+--
+-- Name: COLUMN inv_prod.inv_prod_presentacion_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_prod.inv_prod_presentacion_id IS 'Id de la Presentacion DEFAULT. Esta presentacion debera ser Equivalente a la Unidad de Medida del Producto.';
+
+
+--
+-- Name: COLUMN inv_prod.flete; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_prod.flete IS 'Indica que el producto es un flete y debe retener impuesto cuando la empresa sea transportista.';
+
+
+--
+-- Name: inv_prod_familias; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod_familias (
+    id integer NOT NULL,
+    identificador_familia_padre integer,
+    titulo character varying NOT NULL,
+    descripcion text NOT NULL,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0,
+    inv_prod_tipo_id integer DEFAULT 0
+);
+
+
+ALTER TABLE inv_prod_familias OWNER TO sumar;
+
+--
+-- Name: inv_prod_familias_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_familias_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_familias_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_familias_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_familias_id_seq OWNED BY inv_prod_familias.id;
+
+
+--
+-- Name: inv_prod_grupos; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod_grupos (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    descripcion text NOT NULL,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0
+);
+
+
+ALTER TABLE inv_prod_grupos OWNER TO sumar;
+
+--
+-- Name: inv_prod_grupos_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_grupos_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_grupos_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_grupos_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_grupos_id_seq OWNED BY inv_prod_grupos.id;
+
+
+--
+-- Name: inv_prod_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_id_seq OWNED BY inv_prod.id;
+
+
+--
+-- Name: inv_prod_tipos; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod_tipos (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    borrado_logico boolean DEFAULT false
+);
+
+
+ALTER TABLE inv_prod_tipos OWNER TO sumar;
+
+--
+-- Name: TABLE inv_prod_tipos; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON TABLE inv_prod_tipos IS 'Alberga las diferentes clasificaciones que pudiece tener los productos  del sistema';
+
+
+--
+-- Name: inv_prod_tipos_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_tipos_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_tipos_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_tipos_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_tipos_id_seq OWNED BY inv_prod_tipos.id;
+
+
+--
 -- Name: inv_prod_unidades; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -3951,6 +4662,166 @@ ALTER SEQUENCE inv_suc_alm_id_seq OWNED BY inv_suc_alm.id;
 
 
 --
+-- Name: nom_deduc; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE nom_deduc (
+    id integer NOT NULL,
+    clave character varying DEFAULT ''::character varying NOT NULL,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    nom_deduc_tipo_id integer DEFAULT 0,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualiza timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_crea integer DEFAULT 0,
+    gral_usr_id_actualiza integer DEFAULT 0,
+    gral_usr_id_cancela integer DEFAULT 0,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0
+);
+
+
+ALTER TABLE nom_deduc OWNER TO sumar;
+
+--
+-- Name: nom_deduc_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE nom_deduc_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE nom_deduc_id_seq OWNER TO sumar;
+
+--
+-- Name: nom_deduc_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE nom_deduc_id_seq OWNED BY nom_deduc.id;
+
+
+--
+-- Name: nom_deduc_tipo; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE nom_deduc_tipo (
+    id integer NOT NULL,
+    clave character varying DEFAULT ''::character varying NOT NULL,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    activo boolean DEFAULT true NOT NULL
+);
+
+
+ALTER TABLE nom_deduc_tipo OWNER TO sumar;
+
+--
+-- Name: nom_deduc_tipo_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE nom_deduc_tipo_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE nom_deduc_tipo_id_seq OWNER TO sumar;
+
+--
+-- Name: nom_deduc_tipo_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE nom_deduc_tipo_id_seq OWNED BY nom_deduc_tipo.id;
+
+
+--
+-- Name: nom_percep; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE nom_percep (
+    id integer NOT NULL,
+    clave character varying DEFAULT ''::character varying NOT NULL,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    nom_percep_tipo_id integer DEFAULT 0,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualiza timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_crea integer DEFAULT 0,
+    gral_usr_id_actualiza integer DEFAULT 0,
+    gral_usr_id_cancela integer DEFAULT 0,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0
+);
+
+
+ALTER TABLE nom_percep OWNER TO sumar;
+
+--
+-- Name: nom_percep_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE nom_percep_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE nom_percep_id_seq OWNER TO sumar;
+
+--
+-- Name: nom_percep_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE nom_percep_id_seq OWNED BY nom_percep.id;
+
+
+--
+-- Name: nom_percep_tipo; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE nom_percep_tipo (
+    id integer NOT NULL,
+    clave character varying DEFAULT ''::character varying NOT NULL,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    activo boolean DEFAULT true NOT NULL
+);
+
+
+ALTER TABLE nom_percep_tipo OWNER TO sumar;
+
+--
+-- Name: nom_percep_tipo_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE nom_percep_tipo_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE nom_percep_tipo_id_seq OWNER TO sumar;
+
+--
+-- Name: nom_percep_tipo_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE nom_percep_tipo_id_seq OWNED BY nom_percep_tipo.id;
+
+
+--
 -- Name: nom_periodicidad_pago; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -3992,6 +4863,88 @@ ALTER TABLE nom_periodicidad_pago_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE nom_periodicidad_pago_id_seq OWNED BY nom_periodicidad_pago.id;
+
+
+--
+-- Name: nom_periodos_conf; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE nom_periodos_conf (
+    id integer NOT NULL,
+    ano integer DEFAULT 0 NOT NULL,
+    nom_periodicidad_pago_id integer,
+    prefijo character varying DEFAULT ''::character varying,
+    borrado_logico boolean DEFAULT false,
+    momento_creacion timestamp with time zone,
+    momento_actualiza timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_crea integer DEFAULT 0,
+    gral_usr_id_actualiza integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0
+);
+
+
+ALTER TABLE nom_periodos_conf OWNER TO sumar;
+
+--
+-- Name: nom_periodos_conf_det; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE nom_periodos_conf_det (
+    id integer NOT NULL,
+    nom_periodos_conf_id integer NOT NULL,
+    folio character varying DEFAULT ''::character varying,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    fecha_ini date,
+    fecha_fin date,
+    estatus boolean DEFAULT false
+);
+
+
+ALTER TABLE nom_periodos_conf_det OWNER TO sumar;
+
+--
+-- Name: nom_periodos_conf_det_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE nom_periodos_conf_det_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE nom_periodos_conf_det_id_seq OWNER TO sumar;
+
+--
+-- Name: nom_periodos_conf_det_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE nom_periodos_conf_det_id_seq OWNED BY nom_periodos_conf_det.id;
+
+
+--
+-- Name: nom_periodos_conf_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE nom_periodos_conf_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE nom_periodos_conf_id_seq OWNER TO sumar;
+
+--
+-- Name: nom_periodos_conf_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE nom_periodos_conf_id_seq OWNED BY nom_periodos_conf.id;
 
 
 --
@@ -4346,6 +5299,13 @@ ALTER TABLE ONLY cxc_clie_zonas ALTER COLUMN id SET DEFAULT nextval('cxc_clie_zo
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY cxp_prov ALTER COLUMN id SET DEFAULT nextval('cxp_prov_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY cxp_prov_clas1 ALTER COLUMN id SET DEFAULT nextval('cxp_prov_clas1_id_seq'::regclass);
 
 
@@ -4374,7 +5334,42 @@ ALTER TABLE ONLY cxp_prov_clases ALTER COLUMN id SET DEFAULT nextval('cxp_prov_c
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY cxp_prov_contactos ALTER COLUMN id SET DEFAULT nextval('cxp_prov_contactos_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY cxp_prov_credias ALTER COLUMN id SET DEFAULT nextval('cxp_prov_credias_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_fleteras ALTER COLUMN id SET DEFAULT nextval('cxp_prov_fleteras_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_grupos ALTER COLUMN id SET DEFAULT nextval('cxp_prov_grupos_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_tipos_embarque ALTER COLUMN id SET DEFAULT nextval('cxp_prov_tipos_embarque_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_zonas ALTER COLUMN id SET DEFAULT nextval('cxp_prov_zonas_id_seq'::regclass);
 
 
 --
@@ -4682,6 +5677,34 @@ ALTER TABLE ONLY inv_mov_tipos ALTER COLUMN id SET DEFAULT nextval('inv_mov_tipo
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY inv_prod ALTER COLUMN id SET DEFAULT nextval('inv_prod_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_familias ALTER COLUMN id SET DEFAULT nextval('inv_prod_familias_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_grupos ALTER COLUMN id SET DEFAULT nextval('inv_prod_grupos_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_tipos ALTER COLUMN id SET DEFAULT nextval('inv_prod_tipos_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY inv_prod_unidades ALTER COLUMN id SET DEFAULT nextval('inv_prod_unidades_id_seq'::regclass);
 
 
@@ -4696,7 +5719,49 @@ ALTER TABLE ONLY inv_suc_alm ALTER COLUMN id SET DEFAULT nextval('inv_suc_alm_id
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY nom_deduc ALTER COLUMN id SET DEFAULT nextval('nom_deduc_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_deduc_tipo ALTER COLUMN id SET DEFAULT nextval('nom_deduc_tipo_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_percep ALTER COLUMN id SET DEFAULT nextval('nom_percep_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_percep_tipo ALTER COLUMN id SET DEFAULT nextval('nom_percep_tipo_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY nom_periodicidad_pago ALTER COLUMN id SET DEFAULT nextval('nom_periodicidad_pago_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_periodos_conf ALTER COLUMN id SET DEFAULT nextval('nom_periodos_conf_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_periodos_conf_det ALTER COLUMN id SET DEFAULT nextval('nom_periodos_conf_det_id_seq'::regclass);
 
 
 --
@@ -4948,6 +6013,15 @@ SELECT pg_catalog.setval('cxc_clie_zonas_id_seq', 1, false);
 
 
 --
+-- Data for Name: cxp_prov; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY cxp_prov (id, folio, rfc, curp, razon_social, clave_comercial, calle, numero, colonia, cp, entre_calles, pais_id, estado_id, municipio_id, localidad_alternativa, telefono1, extension1, fax, telefono2, extension2, correo_electronico, web_site, impuesto, cxp_prov_zona_id, grupo_id, proveedortipo_id, clasif_1, clasif_2, clasif_3, moneda_id, tiempo_entrega_id, estatus, limite_credito, dias_credito_id, descuento, credito_a_partir, cxp_prov_tipo_embarque_id, flete_pagado, condiciones, observaciones, vent_contacto, vent_puesto, vent_calle, vent_numero, vent_colonia, vent_cp, vent_entre_calles, vent_pais_id, vent_estado_id, vent_municipio_id, vent_telefono1, vent_extension1, vent_fax, vent_telefono2, vent_extension2, vent_email, cob_contacto, cob_puesto, cob_calle, cob_numero, cob_colonia, cob_cp, cob_entre_calles, cob_pais_id, cob_estado_id, cob_municipio_id, cob_telefono1, cob_extension1, cob_fax, cob_telefono2, cob_extension2, cob_email, comentarios, empresa_id, sucursal_id, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, ctb_cta_id_pasivo, ctb_cta_id_egreso, ctb_cta_id_ietu, ctb_cta_id_comple, ctb_cta_id_pasivo_comple, transportista) FROM stdin;
+1	1	PDO850228KN5		PINTURAS DOAL, SA E CV	DOAL	CARR AV SAN MIGUEL	1	JARDINES DE SAN RAFAEL	67110		2	19	973		8181311100					DDD@JJ.COM		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SS	SS						0	0	0														0	0	0								1	1	f	2014-12-19 05:13:58.229361-05	\N	\N	37	0	0	0	0	0	0	0	f
+\.
+
+
+--
 -- Data for Name: cxp_prov_clas1; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -5012,6 +6086,21 @@ SELECT pg_catalog.setval('cxp_prov_clases_id_seq', 1, false);
 
 
 --
+-- Data for Name: cxp_prov_contactos; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY cxp_prov_contactos (id, contacto, proveedor_id, telefono, email, fax) FROM stdin;
+\.
+
+
+--
+-- Name: cxp_prov_contactos_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('cxp_prov_contactos_id_seq', 1, false);
+
+
+--
 -- Data for Name: cxp_prov_credias; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -5032,6 +6121,80 @@ COPY cxp_prov_credias (id, descripcion, dias) FROM stdin;
 --
 
 SELECT pg_catalog.setval('cxp_prov_credias_id_seq', 1, false);
+
+
+--
+-- Data for Name: cxp_prov_fleteras; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY cxp_prov_fleteras (id, razon_social, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, empresa_id, sucursal_id) FROM stdin;
+1	FLETES ANONIMOS S.A. DE C.V.	f	2012-09-05 08:12:12-04	\N	\N	1	1
+2	FLETES DEL NORTE S.A. DE C.V.	f	2012-09-05 08:12:12-04	\N	\N	1	1
+\.
+
+
+--
+-- Name: cxp_prov_fleteras_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('cxp_prov_fleteras_id_seq', 2, true);
+
+
+--
+-- Data for Name: cxp_prov_grupos; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY cxp_prov_grupos (id, titulo, borrado_logico) FROM stdin;
+1	Grupo 1	f
+\.
+
+
+--
+-- Name: cxp_prov_grupos_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('cxp_prov_grupos_id_seq', 1, false);
+
+
+--
+-- Name: cxp_prov_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('cxp_prov_id_seq', 1, false);
+
+
+--
+-- Data for Name: cxp_prov_tipos_embarque; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY cxp_prov_tipos_embarque (id, titulo) FROM stdin;
+1	Terrestre
+2	Aereo
+3	Maritimo
+\.
+
+
+--
+-- Name: cxp_prov_tipos_embarque_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('cxp_prov_tipos_embarque_id_seq', 1, false);
+
+
+--
+-- Data for Name: cxp_prov_zonas; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY cxp_prov_zonas (id, titulo) FROM stdin;
+1	Zona 1
+\.
+
+
+--
+-- Name: cxp_prov_zonas_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('cxp_prov_zonas_id_seq', 1, true);
 
 
 --
@@ -5073,6 +6236,8 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 2	18.9116999999999997	2016-08-06 10:04:37.959918-04	2	DOF
 3	18.8690999999999995	2016-08-08 19:25:43.893056-04	2	DOF
 4	18.3478999999999992	2016-08-11 12:18:21.565737-04	2	DOF
+5	18.2678000000000011	2016-08-12 23:22:45.78109-04	2	DOF
+6	18.2678000000000011	2016-08-13 10:23:34.936361-04	2	DOF
 \.
 
 
@@ -5080,7 +6245,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 -- Name: erp_monedavers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_monedavers_id_seq', 4, true);
+SELECT pg_catalog.setval('erp_monedavers_id_seq', 6, true);
 
 
 --
@@ -8338,7 +9503,7 @@ SELECT pg_catalog.setval('gral_tc_url_id_seq', 1, false);
 --
 
 COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id) FROM stdin;
-1	admin	123qwe	t	2016-08-11 21:07:03.397194-04	1
+1	admin	123qwe	t	2016-08-13 12:18:31.194419-04	1
 \.
 
 
@@ -8455,6 +9620,77 @@ SELECT pg_catalog.setval('inv_mov_tipos_id_seq', 1, false);
 
 
 --
+-- Data for Name: inv_prod; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod (id, sku, descripcion, codigo_barras, tentrega, inv_clas_id, inv_stock_clasif_id, estatus, inv_prod_familia_id, subfamilia_id, inv_prod_grupo_id, ieps, meta_impuesto, inv_prod_linea_id, inv_mar_id, tipo_de_producto_id, inv_seccion_id, unidad_id, requiere_numero_serie, requiere_numero_lote, requiere_pedimento, permitir_stock, venta_moneda_extranjera, compra_moneda_extranjera, requiere_nom, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, sucursal_id, empresa_id, cxp_prov_id, sku_aux, id_aux, densidad, valor_maximo, valor_minimo, punto_reorden, gral_impto_id, ctb_cta_id_gasto, ctb_cta_id_costo_venta, ctb_cta_id_venta, descripcion_corta, descripcion_larga, archivo_img, archivo_pdf, inv_prod_presentacion_id, flete, no_clie, gral_mon_id, gral_imptos_ret_id) FROM stdin;
+1	S-21	MESCLA XK XILOL MEK		0	1	1	t	0	0	1	0		1	1	1	1	1	f	f	f	f	f	f	f	f	2015-04-22 08:40:02.080175-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
+\.
+
+
+--
+-- Data for Name: inv_prod_familias; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod_familias (id, identificador_familia_padre, titulo, descripcion, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, inv_prod_tipo_id) FROM stdin;
+1	1	QUIMICOS	QUIMICOS	f	1980-01-09 19:00:00-05	\N	\N	1	1	1	0	0	0
+\.
+
+
+--
+-- Name: inv_prod_familias_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_familias_id_seq', 1, true);
+
+
+--
+-- Data for Name: inv_prod_grupos; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod_grupos (id, titulo, descripcion, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja) FROM stdin;
+1	GPO1	GRUPO 1	f	2012-06-28 16:19:34.528647-04	\N	\N	1	1	1	0	0
+\.
+
+
+--
+-- Name: inv_prod_grupos_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_grupos_id_seq', 1, true);
+
+
+--
+-- Name: inv_prod_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_id_seq', 1, false);
+
+
+--
+-- Data for Name: inv_prod_tipos; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod_tipos (id, titulo, borrado_logico) FROM stdin;
+4	Servicios	f
+3	Kit	t
+1	Prod. Terminado	f
+2	Prod. Intermedio	f
+5	Refacciones	f
+6	Accesorios	f
+7	Materia Prima	f
+8	Prod. en Desarrollo	f
+\.
+
+
+--
+-- Name: inv_prod_tipos_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_tipos_id_seq', 1, false);
+
+
+--
 -- Data for Name: inv_prod_unidades; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -8493,6 +9729,121 @@ SELECT pg_catalog.setval('inv_suc_alm_id_seq', 1, false);
 
 
 --
+-- Data for Name: nom_deduc; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY nom_deduc (id, clave, titulo, activo, nom_deduc_tipo_id, borrado_logico, momento_creacion, momento_actualiza, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_cancela, gral_emp_id, gral_suc_id) FROM stdin;
+2	002	I.S.P.T.	t	2	f	2014-04-09 12:26:05.627644-04	\N	\N	20	0	0	1	1
+1	001	I.M.S.S.	t	1	f	2014-04-09 12:25:36.412666-04	2014-04-09 12:26:22.81177-04	\N	20	20	0	1	1
+3	003	INFONAVIT	t	9	f	2014-04-09 12:27:57.603561-04	\N	\N	20	0	0	1	1
+4	004	FALTAS	t	20	f	2014-04-09 12:28:55.189673-04	\N	\N	20	0	0	1	1
+5	005	PRESTAMO EMPRESA	t	4	f	2014-04-09 12:29:30.589378-04	\N	\N	20	0	0	1	1
+6	006	AGUINALDO	t	2	t	2015-01-13 07:30:56.862142-05	\N	2015-01-13 07:39:06.561286-05	37	0	0	1	1
+\.
+
+
+--
+-- Name: nom_deduc_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('nom_deduc_id_seq', 1, false);
+
+
+--
+-- Data for Name: nom_deduc_tipo; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY nom_deduc_tipo (id, clave, titulo, activo) FROM stdin;
+\.
+
+
+--
+-- Name: nom_deduc_tipo_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('nom_deduc_tipo_id_seq', 1, false);
+
+
+--
+-- Data for Name: nom_percep; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY nom_percep (id, clave, titulo, activo, nom_percep_tipo_id, borrado_logico, momento_creacion, momento_actualiza, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_cancela, gral_emp_id, gral_suc_id) FROM stdin;
+1	001	SUELDO	t	1	f	2014-04-09 11:56:51.592842-04	2014-04-09 11:57:20.915139-04	\N	20	20	0	1	1
+3	003	AGUINALDO	t	2	f	2014-04-09 12:15:08.030891-04	\N	\N	20	0	0	1	1
+4	004	PREMIO PUNTUALIDAD	t	10	f	2014-04-09 12:15:51.543651-04	\N	\N	20	0	0	1	1
+5	005	TIEMPO EXTRA	t	19	f	2014-04-09 12:19:26.192793-04	\N	\N	20	0	0	1	1
+6	006	PRIMA VACACIONES	t	21	f	2014-04-09 12:19:57.782522-04	\N	\N	20	0	0	1	1
+2	002	VALES DE DESPENSA	f	7	t	2014-04-09 12:14:44.730578-04	2014-04-09 12:21:07.298992-04	2014-04-09 12:21:28.696457-04	20	20	0	1	1
+7	007	VALES DE DESPENSA	t	29	f	2014-04-09 12:22:10.694126-04	\N	\N	20	0	0	1	1
+8	008	SUBSIDIO AL EMPLEO	t	17	f	2014-04-10 06:46:57.25754-04	\N	\N	20	0	0	1	1
+9	009	PERSEPCION 	t	2	f	2015-01-13 07:40:14.19252-05	\N	\N	37	0	0	1	1
+10	010	FINIQUITO	t	25	f	2016-02-02 11:03:27.818135-05	\N	\N	22	0	0	1	1
+\.
+
+
+--
+-- Name: nom_percep_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('nom_percep_id_seq', 1, false);
+
+
+--
+-- Data for Name: nom_percep_tipo; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY nom_percep_tipo (id, clave, titulo, activo) FROM stdin;
+1	001	Sueldos, Salarios  Rayas y Jornales\n	t
+2	002	Gratificación Anual (Aguinaldo)\n	t
+3	003	Participación de los Trabajadores en las Utilidades PTU\n	t
+4	004	Reembolso de Gastos Médicos Dentales y Hospitalarios\n	t
+5	005	Fondo de Ahorro\n	t
+6	006	Caja de ahorro\n	t
+7	007	Vales\n	t
+8	008	Ayudas\n	t
+9	009	Contribuciones a Cargo del Trabajador Pagadas por el Patrón\n	t
+10	010	Premios por puntualidad\n	t
+11	011	Prima de Seguro de vida\n	t
+12	012	Seguro de Gastos Medicos Mayores\n	t
+13	013	Cuotas Sindicales Pagadas por el Patrón\n	t
+14	014	Subsidios por incapacidad\n	t
+15	015	Becas para trabajadores y/o hijos\n	t
+16	016	Otros\n	t
+17	017	Subsidio para el empleo\n	t
+18	018	Fomento al primer empleo\n	t
+19	019	Horas extra\n	t
+20	020	Prima dominical\n	t
+21	021	Prima vacacional\n	t
+22	022	Prima por antigüedad\n	t
+23	023	Pagos por separación\n	t
+24	024	Seguro de retiro\n	t
+25	025	Indemnizaciones\n	t
+26	026	Reembolso por funeral\n	t
+27	027	Cuotas de seguridad social pagadas por el patrón\n	t
+28	028	Comisiones\n	t
+29	029	Vales de despensa\n	t
+30	030	Vales de restaurante\n	t
+31	031	Vales de gasolina\n	t
+32	032	Vales de ropa\n	t
+33	033	Ayuda para renta\n	t
+34	034	Ayuda para artículos escolares\n	t
+35	035	Ayuda para anteojos\n	t
+36	036	Ayuda para transporte\n	t
+37	037	Ayuda para gastos de funeral\n	t
+38	038	Otros ingresos por salarios\n	t
+39	039	Jubilaciones, pensiones o haberes de retiro\n	t
+\.
+
+
+--
+-- Name: nom_percep_tipo_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('nom_percep_tipo_id_seq', 1, false);
+
+
+--
 -- Data for Name: nom_periodicidad_pago; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -8506,6 +9857,38 @@ COPY nom_periodicidad_pago (id, titulo, no_periodos, activo, borrado_logico, mom
 --
 
 SELECT pg_catalog.setval('nom_periodicidad_pago_id_seq', 1, false);
+
+
+--
+-- Data for Name: nom_periodos_conf; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY nom_periodos_conf (id, ano, nom_periodicidad_pago_id, prefijo, borrado_logico, momento_creacion, momento_actualiza, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_baja, gral_emp_id, gral_suc_id) FROM stdin;
+1	2016	1	Q	f	2016-01-17 19:00:00-05	\N	\N	1	0	0	1	1
+\.
+
+
+--
+-- Data for Name: nom_periodos_conf_det; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY nom_periodos_conf_det (id, nom_periodos_conf_id, folio, titulo, fecha_ini, fecha_fin, estatus) FROM stdin;
+1	1	1	PAGO DE LA QUINCENA DEL 16/07/2016 AL 31/07/2016	2016-07-16	2016-07-31	t
+\.
+
+
+--
+-- Name: nom_periodos_conf_det_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('nom_periodos_conf_det_id_seq', 1, true);
+
+
+--
+-- Name: nom_periodos_conf_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('nom_periodos_conf_id_seq', 1, true);
 
 
 --
@@ -8799,6 +10182,70 @@ ALTER TABLE ONLY cxp_prov_credias
 
 
 --
+-- Name: cxp_prov_folio_borrado_logico_key; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT cxp_prov_folio_borrado_logico_key UNIQUE (folio, borrado_logico);
+
+
+--
+-- Name: cxp_prov_grupos_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_grupos
+    ADD CONSTRAINT cxp_prov_grupos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cxp_prov_grupos_titulo_key; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_grupos
+    ADD CONSTRAINT cxp_prov_grupos_titulo_key UNIQUE (titulo);
+
+
+--
+-- Name: cxp_prov_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT cxp_prov_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cxp_prov_rfc_borrado_logico_key; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT cxp_prov_rfc_borrado_logico_key UNIQUE (rfc, borrado_logico);
+
+
+--
+-- Name: cxp_prov_rfc_razon_social_borrado_logido_key; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT cxp_prov_rfc_razon_social_borrado_logido_key UNIQUE (rfc, razon_social, borrado_logico);
+
+
+--
+-- Name: cxp_prov_tipos_embarque_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_tipos_embarque
+    ADD CONSTRAINT cxp_prov_tipos_embarque_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cxp_zonas_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_zonas
+    ADD CONSTRAINT cxp_zonas_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: denominacion_vers_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -8836,6 +10283,14 @@ ALTER TABLE ONLY fac_cfds_conf
 
 ALTER TABLE ONLY fac_nomina
     ADD CONSTRAINT fac_nomina_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleteras_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_fleteras
+    ADD CONSTRAINT fleteras_pkey PRIMARY KEY (id);
 
 
 --
@@ -9199,11 +10654,51 @@ ALTER TABLE ONLY inv_mov_tipos
 
 
 --
+-- Name: inv_prod_familias_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_familias
+    ADD CONSTRAINT inv_prod_familias_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_prod_grupos_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_grupos
+    ADD CONSTRAINT inv_prod_grupos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_prod_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod
+    ADD CONSTRAINT inv_prod_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_prod_tipos_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_tipos
+    ADD CONSTRAINT inv_prod_tipos_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: inv_prod_unidades_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
 ALTER TABLE ONLY inv_prod_unidades
     ADD CONSTRAINT inv_prod_unidades_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_prod_unidades_titulo_key; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_unidades
+    ADD CONSTRAINT inv_prod_unidades_titulo_key UNIQUE (titulo);
 
 
 --
@@ -9223,11 +10718,59 @@ ALTER TABLE ONLY erp_mascaras_para_validaciones_por_app
 
 
 --
+-- Name: nom_conf_periodo_pago_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_periodos_conf
+    ADD CONSTRAINT nom_conf_periodo_pago_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: nom_deduc_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_deduc
+    ADD CONSTRAINT nom_deduc_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: nom_deduc_tipo_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_deduc_tipo
+    ADD CONSTRAINT nom_deduc_tipo_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: nom_percep_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_percep
+    ADD CONSTRAINT nom_percep_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: nom_percep_tipo_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_percep_tipo
+    ADD CONSTRAINT nom_percep_tipo_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: nom_periodicidad_pago_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
 ALTER TABLE ONLY nom_periodicidad_pago
     ADD CONSTRAINT nom_periodicidad_pago_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: nom_periodos_conf_det_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_periodos_conf_det
+    ADD CONSTRAINT nom_periodos_conf_det_pkey PRIMARY KEY (id);
 
 
 --
@@ -9292,6 +10835,14 @@ ALTER TABLE ONLY erp_parametros_generales
 
 ALTER TABLE ONLY erp_parametros_generales
     ADD CONSTRAINT parametros_generales_variable_key UNIQUE (variable);
+
+
+--
+-- Name: proveedor_contactos_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_contactos
+    ADD CONSTRAINT proveedor_contactos_pkey PRIMARY KEY (id);
 
 
 --
@@ -9375,6 +10926,22 @@ ALTER TABLE ONLY inv_suc_alm
 
 
 --
+-- Name: uniquenomdeduc_clave_emp; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_deduc
+    ADD CONSTRAINT uniquenomdeduc_clave_emp UNIQUE (clave, gral_emp_id, borrado_logico);
+
+
+--
+-- Name: uniquenompercep_clave_emp; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY nom_percep
+    ADD CONSTRAINT uniquenompercep_clave_emp UNIQUE (clave, gral_emp_id, borrado_logico);
+
+
+--
 -- Name: fki_12314333; Type: INDEX; Schema: public; Owner: sumar
 --
 
@@ -9431,6 +10998,14 @@ ALTER TABLE ONLY gral_suc_pza
 
 ALTER TABLE ONLY cxc_clie
     ADD CONSTRAINT clientes_cliente_tipo_id_fkey FOREIGN KEY (clienttipo_id) REFERENCES cxc_clie_clases(id);
+
+
+--
+-- Name: cxp_prov_cxp_prov_zon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT cxp_prov_cxp_prov_zon_id_fkey FOREIGN KEY (cxp_prov_zona_id) REFERENCES cxp_prov_zonas(id);
 
 
 --
@@ -9503,6 +11078,30 @@ ALTER TABLE ONLY cxc_clie
 
 ALTER TABLE ONLY cxc_clie
     ADD CONSTRAINT fk76676777 FOREIGN KEY (clasif_2) REFERENCES cxc_clie_clas2(id);
+
+
+--
+-- Name: fk8970a; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT fk8970a FOREIGN KEY (clasif_3) REFERENCES cxp_prov_clas3(id);
+
+
+--
+-- Name: fk8970b; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT fk8970b FOREIGN KEY (clasif_2) REFERENCES cxp_prov_clas2(id);
+
+
+--
+-- Name: fk8970c; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT fk8970c FOREIGN KEY (clasif_1) REFERENCES cxp_prov_clas1(id);
 
 
 --
@@ -9594,6 +11193,14 @@ ALTER TABLE ONLY gral_cons
 
 
 --
+-- Name: fk_nom_percep_00001; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_empleado_percep
+    ADD CONSTRAINT fk_nom_percep_00001 FOREIGN KEY (nom_percep_id) REFERENCES nom_percep(id);
+
+
+--
 -- Name: fk_pais_00; Type: FK CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -9631,6 +11238,22 @@ ALTER TABLE ONLY gral_suc
 
 ALTER TABLE ONLY gral_usr_rol
     ADD CONSTRAINT fk_usr FOREIGN KEY (gral_usr_id) REFERENCES gral_usr(id);
+
+
+--
+-- Name: inv_prod_tipo_de_producto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod
+    ADD CONSTRAINT inv_prod_tipo_de_producto_id_fkey FOREIGN KEY (tipo_de_producto_id) REFERENCES inv_prod_tipos(id);
+
+
+--
+-- Name: proveedors_proveedortipo_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT proveedors_proveedortipo_id_fkey FOREIGN KEY (proveedortipo_id) REFERENCES cxp_prov_clases(id);
 
 
 --
