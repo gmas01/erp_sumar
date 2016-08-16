@@ -30,6 +30,598 @@ COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 SET search_path = public, pg_catalog;
 
 --
+-- Name: erp_fn_validaciones_por_aplicativo(text, integer, text[]); Type: FUNCTION; Schema: public; Owner: sumar
+--
+
+CREATE FUNCTION erp_fn_validaciones_por_aplicativo(campos_data text, id_app integer, arreglo text[]) RETURNS text
+    LANGUAGE plpgsql
+    AS $$
+
+DECLARE
+
+        -- # The store procedure's caller is expecting
+        -- # an string reply. The caller is goint to be
+        -- # on charge of parsing so.
+	valor_retorno text := '';
+
+
+	-- # Buffer array for "campos_data" splitted content
+	-- # The rest of the variables over this section
+	-- # are use to store any element of this array in
+	-- # its original or modified form.
+	str_data text[];	
+	command_selected character varying:='';
+	
+
+        -- # When is ocurring 
+        -- # such validation
+	espacio_tiempo_ejecucion timestamp with time zone := now();
+	ano_actual integer:=0;
+	mes_actual integer:=0;
+	
+
+	-- # From Where and who is 
+	-- # performing validation
+	usuario_id integer;
+	emp_id integer;
+	suc_id integer;
+	id_almacen integer := 0;
+
+
+        -- # Store procedure setting flag variables
+        -- # These group of variables control how
+        -- # this store procedure is going to act
+        -- # when one or more erp features are enabled
+        empresa_transportista boolean;
+	incluye_modulo_produccion boolean;
+	incluye_modulo_contabilidad boolean;
+	incluye_nomina  boolean:=false;
+	validaListaPrecioCliente boolean:=false;
+	controlExisPres boolean := false;
+	
+	
+        -- # General purpose variables related with 
+        -- # store procedure purpose
+	mask_general character varying;
+	match_cadena boolean=false;
+	valida_integridad integer;
+
+BEGIN
+
+	SELECT EXTRACT(YEAR FROM espacio_tiempo_ejecucion) INTO ano_actual;
+	SELECT EXTRACT(MONTH FROM espacio_tiempo_ejecucion) INTO mes_actual;
+
+	SELECT INTO str_data string_to_array(''||campos_data||'','___');
+	
+	-- Comando que desea ejecutar el aplicativo que llamo el procedimiento almacenado
+	command_selected := str_data[2];
+	
+	-- usuario que utiliza el aplicativo
+	usuario_id := str_data[3]::integer;
+	
+	--RAISE EXCEPTION '%','usuario_id: '||usuario_id;
+	
+	--obtiene empresa_id, sucursal_id y sucursal_id
+  	SELECT gral_suc.empresa_id, gral_usr_suc.gral_suc_id,inv_suc_alm.almacen_id FROM gral_usr_suc 
+	JOIN gral_suc ON gral_suc.id = gral_usr_suc.gral_suc_id
+	JOIN inv_suc_alm ON inv_suc_alm.sucursal_id = gral_suc.id
+	WHERE gral_usr_suc.gral_usr_id=usuario_id
+	INTO emp_id, suc_id, id_almacen;
+	--RAISE EXCEPTION '%','emp_id: '||emp_id;
+	
+	--Query para verificar si la empresa actual incluye Modulo de Contabilidad, Control de Existencias por Presentacion
+	SELECT incluye_produccion, incluye_contabilidad, control_exis_pres, lista_precio_clientes, transportista, nomina FROM gral_emp WHERE id=emp_id 
+	INTO incluye_modulo_produccion, incluye_modulo_contabilidad, controlExisPres, validaListaPrecioCliente, empresa_transportista, incluye_nomina;
+
+
+	--INICIA VALIDACION Catalogo de proveedores
+	IF id_app=2 THEN
+		--rfc
+		IF str_data[29]::integer = 1 OR str_data[29]::integer = 0 THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_RFCCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||trim(str_data[6])||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'rfc:RFC No Valido___';
+			END IF;
+		END IF;
+		
+		--curp
+		IF str_data[7] != ''  AND str_data[7] != ' ' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CurpCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[7]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'curp:La CURP ingresada no es no Valida___';
+			END IF;
+		END IF;
+		
+		--razon social
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_RazonSocialCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[8]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'rsocial:Razon Social No Valida___';
+		END IF;
+		
+		--nombre comercial
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_TituloCorrerct'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[9]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := 'ncomercial:Nombre Comercial No Valido___';
+		END IF;
+		
+		--calle
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CalleCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[10]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'calle:Calle No Valida___';
+		END IF;
+		
+		--num calle
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_AddressNumberCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[11]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'numcalle:Numero de Calle No Valida___';
+		END IF;
+		
+		--colonia
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_ColoniaCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[12]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'colonia:Colonia No Valido___';
+		END IF;
+		
+		--cp
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CodigoPostalCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[13]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'cp:Codigo Postal No Valido___';
+		END IF;
+		
+		--pais
+		IF str_data[15]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'pais:Es necesario seleccionar el Pais del Proveedor___';
+		END IF;
+		
+		--estado
+		IF str_data[16]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'estado:Es necesario seleccionar el Estado del Proveedor___';
+		END IF;
+		
+		--municipio
+		IF str_data[17]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'municipio:Es necesario seleccionar el Municipio del Proveedor___';
+		END IF;
+		
+		
+		--telefono 1
+		IF str_data[19]='' OR str_data[19]=' ' THEN
+			valor_retorno := ''||valor_retorno||'tel1:Es necesario ingresar el numero de Teléfono___';
+		ELSE
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_PhoneCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[19]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'tel1:Numero de Teléfono No Valido___';
+			END IF;
+		END IF;
+		
+		--e-mail
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_EmailCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[24]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'email:Correo Electronico No Valido___';
+		END IF;
+		
+		--zona del proveedor
+		IF str_data[27]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'zona:Es necesario seleccionar una Zona para el proveedor___';
+		END IF;
+		
+		--grupo del proveedor
+		IF str_data[28]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'grupo:Es necesario seleccionar un Grupo para el proveedor___';
+		END IF;
+		
+		
+		--tipo de proveedor
+		IF str_data[29]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'provtipo:Es necesario seleccionar el Tipo de Proveedor___';
+		END IF;
+		
+		--Clasificacion 1 del proveedor
+		IF str_data[30]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'clasif1:Es necesario seleccionar un Clasificación para el proveedor___';
+		END IF;
+		
+		--Clasificacion 2 del proveedor
+		IF str_data[31]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'clasif2:Es necesario seleccionar un Clasificación para el proveedor___';
+		END IF;
+		
+		--Clasificacion 3 del proveedor
+		IF str_data[32]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'clasif3:Es necesario seleccionar un Clasificación para el proveedor___';
+		END IF;
+		
+		
+		--moneda_id del proveedor
+		IF str_data[33]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'moneda:Es necesario seleccionar una moneda para el proveedor___';
+		END IF;
+		
+		
+		--dias de credito
+		IF str_data[37]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'credito:Es necesario seleccionar los Días de Crédito___';
+		END IF;
+		
+		--inicio de credito
+		IF str_data[39]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'inicred:Es necesario seleccionar el Inicio del Crédito___';
+		END IF;
+		
+		--contacto ventas
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_ContactoCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[44]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'vcontacto:Ingrese el Nombre del contacto___';
+		END IF;
+		
+		--Puesto del contacto ventas
+		IF str_data[45] = '' OR str_data[45] = ' ' THEN
+			valor_retorno := ''||valor_retorno||'vpuesto:Es Ingresar el Puesto del Contacto___';
+		END IF;
+		
+		
+		
+		--e-mail ccontacto ventas
+		IF str_data[59] != '' AND str_data[59] != ' ' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_EmailCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[59]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'vemail:E-mail del Contacto No Valido___';
+			END IF;
+		END IF;
+		
+		
+		
+		--valida la integridad de los datos, si el Proveedor es Nuevo
+		IF str_data[4] = '0' THEN
+			IF valor_retorno = '' THEN
+				IF str_data[29]::integer=1 OR str_data[29]::integer=0 THEN
+					EXECUTE 'select count(id) from cxp_prov where  rfc='''||str_data[6]||'''  and borrado_logico=false AND empresa_id='||emp_id||';' INTO valida_integridad;
+					IF valida_integridad > 0 THEN
+						valor_retorno := ''||valor_retorno||'rfc:El RFC ingresado ya se encuentra en uso___';
+					END IF;
+				END IF;
+			END IF;
+			IF valor_retorno = '' THEN
+				EXECUTE 'select count(id) from cxp_prov where  razon_social='''||str_data[8]||''' and borrado_logico=false AND empresa_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'rsocial:La Razon Social ingresada ya se encuentra en uso___';
+				END IF;
+			END IF;
+			IF valor_retorno = '' THEN
+				EXECUTE 'select count(id) from cxp_prov where clave_comercial='''||str_data[9]||''' and borrado_logico=false AND empresa_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'ncomercial:El Nombre comercial ingresado ya se encuentra en uso___';
+				END IF;
+			END IF;
+			IF valor_retorno = '' THEN
+				EXECUTE 'select count(id) from cxp_prov where correo_electronico='''||str_data[24]||''' AND empresa_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'email:El Correo Electrónico ingresado ya se encuentra en uso___';
+				END IF;
+			END IF;
+		END IF;
+	END IF; --TERMINA VALIDACION Catalogo de proveedores
+
+
+	--INICIA VALIDACION Catalogo de empleados
+	IF id_app=4 THEN
+		--RAISE EXCEPTION '%',str_data[12]||' '||str_data[13]||' '||str_data[14]||' '||str_data[15]||' '||str_data[16]||' '||str_data[17];
+		--SELECT INTO str_data string_to_array(''||campos_data||'','___');
+		--nombre, 
+		--RAISE EXCEPTION '%',str_data[3]; 
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_NombreCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[5]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := 'nombre:Nombre No Valido___';
+		END IF;
+		
+		--apellido paterno
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_ApellidopaternoCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[6]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := 'apellidopaterno:Apellido paterno No Valido___';
+		END IF;
+		
+		--apellido materno, 
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_ApellidomaternoCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[7]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := 'apellidomaterno:Apellido materno No Valido___';
+		END IF;
+		
+		--imss
+		IF trim(str_data[8])<>'' THEN 
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_ImssCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[8]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'imss:No.IMSS No Valido. Debe ser 11 digitos___';
+			END IF;
+		END IF;
+		
+		--infonavit
+		IF trim(str_data[9])<>'' THEN 
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_InfonavitCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[9]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'infonavit:Numero de Infonavit No Valido___';
+			END IF;
+		END IF;
+		
+		--curp
+		IF incluye_nomina THEN 
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CurpCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[10]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'curp:Curp No Valido___';
+			END IF;
+		ELSE
+			IF trim(str_data[10])<>'' THEN 
+				EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CurpCorrect'';' INTO mask_general;
+				EXECUTE 'select '''||str_data[10]||''' ~ '''||mask_general||''';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'curp:Curp No Valido___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--rfc
+		IF incluye_nomina THEN 
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_RFCCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[11]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'rfc:RFC No Valido___';
+			END IF;
+		ELSE
+			IF trim(str_data[11])<>'' THEN 
+				EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_RFCCorrect'';' INTO mask_general;
+				EXECUTE 'select '''||str_data[11]||''' ~ '''||mask_general||''';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'rfc:RFC No Valido___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--fecha nacimiento
+		--IF str_data[12]!='' AND str_data[12]!=' ' THEN 
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_FechaNacIngCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[12]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'fechanacimiento:La fecha ingresada  No Valida___';
+			END IF;
+		--END IF;
+		
+		--fecha ingreso
+		IF incluye_nomina THEN 
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_FechaNacIngCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[13]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'fechaingreso:La fecha ingresada no es valida___';
+			END IF;
+		ELSE
+			IF trim(str_data[13])<>'' THEN 
+				EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_FechaNacIngCorrect'';' INTO mask_general;
+				EXECUTE 'select '''||str_data[13]||''' ~ '''||mask_general||''';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'fechaingreso:La fecha ingresada no es valida___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--escolaridad
+		IF str_data[14]::integer =0 THEN
+			valor_retorno := ''||valor_retorno||'escolaridad:La Escolaridad  NO es valida___';
+		END IF;
+		
+		--sexo
+		IF str_data[15]::integer= 0 THEN
+			valor_retorno := ''||valor_retorno||'genero:El Genero NO es valido___';
+		END IF;
+		
+		--edo civil
+		IF str_data[16]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'civil:El estado civil NO es valido___';
+		END IF;
+	
+		--puesto
+		IF str_data[33]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'puesto:El Puesto no es valido. Debe ser 10 digitos___';
+		END IF;
+		
+		--sucursal
+		IF str_data[34]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'sucursal:Debe ingresar una Sucursal___';
+		END IF;
+
+		--Nombre de usuario
+		IF trim(str_data[37])<>'' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_UserCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[37]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'email_usr:Introduzca un email de usuario___';
+			END IF;
+		END IF;
+		
+		--password
+		--RAISE EXCEPTION '%',str_data[38];
+		IF trim(str_data[37])<>'' THEN
+			--Si existe nombre de usuario hay que validar que exista la contraseña
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_PasswordCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[38]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena= false THEN
+				valor_retorno := ''||valor_retorno||'password:Debe introducir una contraseña___';
+			END IF;
+		END IF;
+		--RAISE EXCEPTION '%','arreglo: '||arreglo[1];
+		--telefono
+		IF trim(str_data[18])<>'' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_PhoneCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[18]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'telefono:El numero telefonico no es valido. Debe ser 10 digitos___';
+			END IF;
+		END IF;
+		
+		--pais
+		IF str_data[21]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'pais:Pais No Valido___';
+		END IF;
+
+		--estado
+		IF str_data[22]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'estado:Estado No Valido___';
+		END IF;
+		
+		--municipio
+		IF str_data[23]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'municipio:Municipio No Valido___';
+		END IF;
+
+		--calle
+		IF str_data[24]!='' AND str_data[24]!=' ' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CalleCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[24]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'calle:Calle No Valida___';
+			END IF;
+		END IF;
+		
+		--numero
+		IF str_data[25]!='' AND str_data[25]!=' ' THEN
+			IF str_data[25]!='' AND str_data[25]!=' ' THEN
+				EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_AddressNumberCorrect'';' INTO mask_general;
+				EXECUTE 'select '''||str_data[25]||''' ~ '''||mask_general||''';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'numero:Numero No Valido___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--colonia
+		IF trim(str_data[26])<>'' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_ColoniaCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[26]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'colonia:Colonia No Valido___';
+			END IF;
+		END IF;
+		
+		--cp
+		IF trim(str_data[27])<>'' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CpCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[27]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'cp:CP No Valido___';
+			END IF;
+		END IF;
+		
+		--telefono emergencia
+		IF trim(str_data[29])<>'' THEN 
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_PhoneCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[29]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'tcontacto:Telefono No Valido. Debe tener al menos 10 digitos___';
+			END IF;
+		END IF;
+
+		IF incluye_nomina THEN 
+			--Aqui solo entra si incluye nomina
+			--no_int,--str_data[54],
+			
+			--str_data[55]::integer Regimen de Contratacion
+			IF str_data[55]::integer=0 THEN
+				valor_retorno := ''||valor_retorno||'regimencontratacio:Es necesario seleccionar el Regimen de Contratacion.___';
+			END IF;
+			
+			--str_data[56]::integer Tipo de Contrato
+			--str_data[57]::integer Tipo de Jornada
+			--str_data[58]::integer Periodicidad del Pago
+			--str_data[59]::integer Banco
+			--str_data[60]::integer Rieso del Puesto
+			--str_data[61]::double precision Salario Base
+			--str_data[62]::double precision Salario Integrado
+			--str_data[63] Registro Patronal
+			--str_data[64] Clave
+			
+			
+			--str_data[65] Percepciones
+			IF trim(str_data[65])='' THEN
+				valor_retorno := ''||valor_retorno||'percep:Es necesario seleccionar por lo menos un concepto de Percepcion.___';
+			END IF;
+			
+			--str_data[66] deducciones
+			IF trim(str_data[66])='' THEN
+				valor_retorno := ''||valor_retorno||'deduc:Es necesario seleccionar por lo menos un concepto de Deduccion.___';
+			END IF;
+		END IF;
+		
+		
+		IF str_data[1] = '0' THEN
+			IF trim(str_data[10])<>'' THEN 
+				EXECUTE 'select count(id) from gral_empleados where borrado_logico=false and gral_emp_id='||emp_id||' and curp ilike '''||str_data[10]||''';' INTO valida_integridad;
+				--RAISE EXCEPTION '%',valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'curp:La curp ingresada ya se encuentra en uso___';
+				END IF;
+			END IF;
+			
+			valida_integridad:=0;
+
+			IF trim(str_data[11])<>'' THEN 
+				EXECUTE 'select count(id) from gral_empleados where borrado_logico=false and gral_emp_id='||emp_id||' and rfc ilike '''||str_data[11]||''';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'rfc:El RFC ingresado ya se encuentra en uso___';
+				END IF;
+			END IF;
+			
+			valida_integridad:=0;
+			IF trim(str_data[37])<>'' THEN 
+				EXECUTE 'select count(id) from gral_usr where titulo ilike '''||str_data[37]||''';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'email_usr:El usuario ingresado ya se encuentra en uso.___';
+				END IF;
+			END IF;
+			
+			IF trim(str_data[37])<>'' THEN
+				--Si existe el nombre del usuario hay que validar la verificacion del Password
+				valida_integridad:=0;
+				IF str_data[38] <> str_data[39] THEN
+					valor_retorno := ''||valor_retorno||'verificapass:La verificacion del password no coincide con la primera.___';
+				END IF;
+			END IF;
+
+		END IF;
+	END IF; --TERMINA VALIDACION Catalogo de empleados
+
+
+
+	
+	IF valor_retorno = '' THEN
+		valor_retorno := 'true';
+		RETURN valor_retorno;
+	ELSE
+		RETURN valor_retorno;
+	END IF;
+	
+END;
+
+$$;
+
+
+ALTER FUNCTION public.erp_fn_validaciones_por_aplicativo(campos_data text, id_app integer, arreglo text[]) OWNER TO sumar;
+
+--
 -- Name: gral_adm_catalogos(text, text[]); Type: FUNCTION; Schema: public; Owner: sumar
 --
 
@@ -461,6 +1053,128 @@ BEGIN
 
     END IF;--termina catalogo de empleados
 
+
+    -- Catalogo de Proveedores
+    IF app_selected = 2 THEN
+		IF command_selected = 'new' THEN
+
+			id_tipo_consecutivo:=2;--Folio de proveedor
+			
+			--aqui entra para tomar el consecutivo del folio  la sucursal actual
+			UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+			WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+			
+			--concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio 
+			nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+
+			INSERT INTO cxp_prov(
+				folio,--nuevo_folio
+				rfc,--str_data[6]
+				curp,--str_data[7]
+				razon_social,--str_data[8]
+				clave_comercial,--str_data[9]
+				calle,--str_data[10]
+				numero,--str_data[11]
+				colonia,--str_data[12]
+				cp,--str_data[13]
+				entre_calles,--str_data[14]
+				pais_id,--str_data[15]::integer
+				estado_id,--str_data[16]::integer
+				municipio_id,--str_data[17]::integer
+				localidad_alternativa,--str_data[18]
+				telefono1,--str_data[19]
+				extension1,--str_data[20]
+				fax,--str_data[21]
+				telefono2,--str_data[22]
+				extension2,--str_data[23]
+				correo_electronico,--str_data[24]
+				web_site,--str_data[25]
+				impuesto,--str_data[26]::integer
+				cxp_prov_zona_id,--str_data[27]::integer
+				grupo_id,--str_data[28]::integer
+				proveedortipo_id,--str_data[29]::integer
+				clasif_1,--str_data[30]::integer
+				clasif_2,--str_data[31]::integer
+				clasif_3,--str/controllers/facturas/startup.agnux_data[32]::integer
+				moneda_id,--str_data[33]::integer
+				tiempo_entrega_id,--str_data[34]::integer
+				estatus,--str_data[35]::boolean
+				limite_credito,--str_data[36]::double precision
+				dias_credito_id,--str_data[37]::integer
+				descuento,--str_data[38]::double precision
+				credito_a_partir,--str_data[39]::integer
+				cxp_prov_tipo_embarque_id,--str_data[40]::integer
+				flete_pagado,--str_data[41]::boolean
+				condiciones,--str_data[42]
+				observaciones,--str_data[43]
+				vent_contacto,--str_data[44]
+				vent_puesto,--str_data[45]
+				vent_calle,--str_data[46]
+				vent_numero,--/controllers/facturas/startup.agnuxstr_data[47]
+				vent_colonia,--str_data[48]
+				vent_cp,--str_data[49]
+				vent_entre_calles,--str_data[50]
+				vent_pais_id,--str_data[51]::integer
+				vent_estado_id,--str_data[52]::integer
+				vent_municipio_id,--str_data[53]::integer
+				vent_telefono1,--str_data[54]
+				vent_extension1,--str_data[55]
+				vent_fax,--str_data[56]
+				vent_telefono2,--str_data[57]
+				vent_extension2,--str_data[58]
+				vent_email,--str_data[59]
+				cob_contacto,--str_data[60]
+				cob_puesto,--str_data[61]
+				cob_calle,--str_data[62]
+				cob_numero,--str_data[63]
+				cob_colonia,--str_data[64]
+				cob_cp,--str_data[65]
+				cob_entre_calles,--str_data[66]
+				cob_pais_id,--str_data[67]::integer
+				cob_estado_id,--str_data[68]::integer
+				cob_municipio_id,--str_data[69]::integer
+				cob_telefono1,--str_data[70]
+				cob_extension1,--str_data[71]
+				cob_fax,--str_data[72]
+				cob_telefono2,--str_data[73]
+				cob_extension2,--str_data[74]
+				cob_email,--str_data[75]
+				comentarios,--str_data[76]
+				ctb_cta_id_pasivo,--str_data[77]::integer,
+				ctb_cta_id_egreso,--str_data[78]::integer,
+				ctb_cta_id_ietu,--str_data[79]::integer,
+				ctb_cta_id_comple,--str_data[80]::integer,
+				ctb_cta_id_pasivo_comple,--str_data[81]::integer,
+				transportista,--str_data[82]::boolean,
+				empresa_id,--emp_id
+				sucursal_id,--suc_id
+				borrado_logico,--false,
+				momento_creacion,--now()
+				id_usuario_creacion--usuario_id
+			)
+			VALUES(nuevo_folio,str_data[6],str_data[7],str_data[8],str_data[9],str_data[10],str_data[11],str_data[12],str_data[13],str_data[14],str_data[15]::integer,str_data[16]::integer,str_data[17]::integer,str_data[18],str_data[19],str_data[20],str_data[21],str_data[22],str_data[23],str_data[24],str_data[25],str_data[26]::integer,str_data[27]::integer,str_data[28]::integer,str_data[29]::integer,str_data[30]::integer,str_data[31]::integer,str_data[32]::integer,str_data[33]::integer,str_data[34]::integer,str_data[35]::boolean,str_data[36]::double precision,str_data[37]::integer,str_data[38]::double precision,str_data[39]::integer,str_data[40]::integer,str_data[41]::boolean,str_data[42],str_data[43],str_data[44],str_data[45],str_data[46],str_data[47],str_data[48],str_data[49],str_data[50],str_data[51]::integer,str_data[52]::integer,str_data[53]::integer,str_data[54],str_data[55],str_data[56],str_data[57],str_data[58],str_data[59],str_data[60],str_data[61],str_data[62],str_data[63],str_data[64],str_data[65],str_data[66],str_data[67]::integer,str_data[68]::integer,str_data[69]::integer,str_data[70],str_data[71],str_data[72],str_data[73],str_data[74],str_data[75],str_data[76], str_data[77]::integer, str_data[78]::integer, str_data[79]::integer, str_data[80]::integer, str_data[81]::integer, str_data[82]::boolean, emp_id, suc_id, false, now(), usuario_id);
+			
+			valor_retorno := '1';
+		END IF;
+
+		
+		IF command_selected = 'edit' THEN 
+
+			UPDATE cxp_prov SET rfc=str_data[6],curp=str_data[7],razon_social=str_data[8],clave_comercial=str_data[9],calle=str_data[10],numero=str_data[11],colonia=str_data[12],cp=str_data[13],entre_calles=str_data[14],pais_id=str_data[15]::integer,estado_id=str_data[16]::integer,municipio_id=str_data[17]::integer,localidad_alternativa=str_data[18],telefono1=str_data[19],extension1=str_data[20],fax=str_data[21],telefono2=str_data[22],extension2=str_data[23],correo_electronico=str_data[24],web_site=str_data[25],impuesto=str_data[26]::integer,cxp_prov_zona_id=str_data[27]::integer,grupo_id=str_data[28]::integer,proveedortipo_id=str_data[29]::integer,clasif_1=str_data[30]::integer,clasif_2=str_data[31]::integer,clasif_3=str_data[32]::integer,moneda_id=str_data[33]::integer,tiempo_entrega_id=str_data[34]::integer,estatus=str_data[35]::boolean,limite_credito=str_data[36]::double precision,dias_credito_id=str_data[37]::integer,
+				descuento=str_data[38]::double precision,credito_a_partir=str_data[39]::integer,cxp_prov_tipo_embarque_id=str_data[40]::integer,flete_pagado=str_data[41]::boolean,condiciones=str_data[42],observaciones=str_data[43],vent_contacto=str_data[44],vent_puesto=str_data[45],vent_calle=str_data[46],vent_numero=str_data[47],vent_colonia=str_data[48],vent_cp=str_data[49],vent_entre_calles=str_data[50],vent_pais_id=str_data[51]::integer,vent_estado_id=str_data[52]::integer,vent_municipio_id=str_data[53]::integer,vent_telefono1=str_data[54],vent_extension1=str_data[55],vent_fax=str_data[56],vent_telefono2=str_data[57],vent_extension2=str_data[58],vent_email=str_data[59],cob_contacto=str_data[60],cob_puesto=str_data[61],cob_calle=str_data[62],cob_numero=str_data[63],cob_colonia=str_data[64],cob_cp=str_data[65],cob_entre_calles=str_data[66],cob_pais_id=str_data[67]::integer,cob_estado_id=str_data[68]::integer,cob_municipio_id=str_data[69]::integer,
+				cob_telefono1=str_data[70],cob_extension1=str_data[71],cob_fax=str_data[72],cob_telefono2=str_data[73],cob_extension2=str_data[74],cob_email=str_data[75],comentarios=str_data[76], ctb_cta_id_pasivo=str_data[77]::integer, ctb_cta_id_egreso=str_data[78]::integer, ctb_cta_id_ietu=str_data[79]::integer, ctb_cta_id_comple=str_data[80]::integer, ctb_cta_id_pasivo_comple=str_data[81]::integer, transportista=str_data[82]::boolean, momento_actualizacion=now(),id_usuario_actualizacion=usuario_id
+			WHERE id = str_data[4]::integer;
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'delete' THEN
+			UPDATE cxp_prov SET borrado_logico=true, momento_baja=now(), id_usuario_baja=usuario_id WHERE id=str_data[4]::integer;
+			valor_retorno := '1';
+		END IF;
+    END IF;
+    --Termina catalogo de proveedores
+
+	
         
     --Empieza Job Actualiza Moneda
     IF app_selected = 121 THEN
@@ -694,6 +1408,74 @@ BEGIN
         END IF;        --termina Catalogo de tipos de movimientos inventario
 
 
+	--buscador de Catalogo de inv_secciones
+        IF app_selected = 37 THEN
+                sql_query := 'SELECT id FROM inv_secciones WHERE titulo ILIKE '''||str_data[3]||''' AND  descripcion ILIKE '''||str_data[4]||''' AND borrado_logico=false AND gral_emp_id='||emp_id;
+        END IF;        --termina buscador de Catalogo de inv_secciones
+        
+
+	--buscador del catalogo de Marcas
+	IF app_selected = 38 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	descripcion
+		sql_query := 'SELECT inv_mar.id
+				FROM inv_mar 
+				WHERE inv_mar.borrado_logico=false 
+				AND titulo ILIKE '''||str_data[3]||''' AND gral_emp_id='||emp_id;
+	END IF;	--termina buscador del catalogo   de marcas
+
+	--buscador de Catalogo de inv_prod_lineas
+        IF app_selected = 39 THEN
+                sql_query := 'SELECT id FROM inv_prod_lineas WHERE titulo ILIKE '''||str_data[3]||''' and  descripcion ILIKE '''||str_data[4]||''' and borrado_logico=false AND gral_emp_id='||emp_id;
+        END IF;--termina buscador de Catalogo inv_prod_lineas
+
+	--buscador de Catalogo de familias
+        IF app_selected = 43 THEN
+                sql_query := 'select id FROM inv_prod_familias WHERE borrado_logico=FALSE AND id=identificador_familia_padre AND titulo ILIKE '''||str_data[3]||''' AND  descripcion ILIKE '''||str_data[4]||''' AND borrado_logico=false AND gral_emp_id='||emp_id;
+        END IF;--termina buscador de Catalogo de familias
+
+
+	--buscador de producto grupos
+	IF app_selected =45 THEN
+		--str_data[5]	grupo
+		--str_data[6]	descripcion
+		sql_query := 'SELECT inv_prod_grupos.id
+				FROM inv_prod_grupos
+				WHERE titulo ILIKE '''||str_data[3]||''' AND borrado_logico=FALSE AND gral_emp_id='||emp_id;
+				--RAISE EXCEPTION '%',sql_query;							
+	END IF;	--termina buscador  de productos
+
+
+	--buscador de Catalogo de UNIDADES
+        IF app_selected = 49 THEN
+		IF str_data[4] != '' THEN
+			cadena_where:= cadena_where ||' WHERE  titulo_abr ILIKE '''||str_data[4]||'''';
+		END IF;
+		
+		IF str_data[3] != 'sinvalor' THEN
+			cadena_where:= cadena_where ||' and  inv_prod_unidades.decimales='||str_data[3]::integer;
+		END IF;
+		
+		sql_query := 'SELECT id 
+				FROM inv_prod_unidades' 
+				||cadena_where;
+		--RAISE EXCEPTION '%',sql_query;		
+        END IF;--termina buscador de Catalogo de UNIDADES
+
+
+        --buscador de clasificacion stock
+	IF app_selected =50 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	clasificacion
+		
+		sql_query := 'select inv_stock_clasificaciones.id from inv_stock_clasificaciones 
+		     WHERE titulo ILIKE '''||str_data[3]||''' and borrado_logico=false and gral_emp_id='||emp_id||';';
+		--RAISE EXCEPTION '%',sql_query;							
+	END IF;	--termina buscador  de clasificacion stock
+
+        
 	--buscador del catalogo de PUESTOS
 	IF app_selected = 75 THEN
 		--str_data[1]	app_selected
@@ -1042,6 +1824,39 @@ CREATE VIEW authorities AS
 
 
 ALTER TABLE authorities OWNER TO sumar;
+
+--
+-- Name: ctb_may_clases; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE ctb_may_clases (
+    id integer NOT NULL,
+    titulo character varying NOT NULL
+);
+
+
+ALTER TABLE ctb_may_clases OWNER TO sumar;
+
+--
+-- Name: ctb_may_clases_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE ctb_may_clases_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE ctb_may_clases_id_seq OWNER TO sumar;
+
+--
+-- Name: ctb_may_clases_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE ctb_may_clases_id_seq OWNED BY ctb_may_clases.id;
+
 
 --
 -- Name: gral_empleados; Type: TABLE; Schema: public; Owner: sumar
@@ -2097,6 +2912,39 @@ ALTER SEQUENCE cxp_prov_contactos_id_seq OWNED BY cxp_prov_contactos.id;
 
 
 --
+-- Name: cxp_prov_creapar; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE cxp_prov_creapar (
+    id integer NOT NULL,
+    titulo character varying NOT NULL
+);
+
+
+ALTER TABLE cxp_prov_creapar OWNER TO sumar;
+
+--
+-- Name: cxp_prov_creapar_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE cxp_prov_creapar_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE cxp_prov_creapar_id_seq OWNER TO sumar;
+
+--
+-- Name: cxp_prov_creapar_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE cxp_prov_creapar_id_seq OWNED BY cxp_prov_creapar.id;
+
+
+--
 -- Name: cxp_prov_credias; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -2511,6 +3359,39 @@ ALTER TABLE erp_parametros_generales_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE erp_parametros_generales_id_seq OWNED BY erp_parametros_generales.id;
+
+
+--
+-- Name: erp_tiempos_entrega; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE erp_tiempos_entrega (
+    id integer NOT NULL,
+    descripcion character varying NOT NULL
+);
+
+
+ALTER TABLE erp_tiempos_entrega OWNER TO sumar;
+
+--
+-- Name: erp_tiempos_entrega_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE erp_tiempos_entrega_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE erp_tiempos_entrega_id_seq OWNER TO sumar;
+
+--
+-- Name: erp_tiempos_entrega_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE erp_tiempos_entrega_id_seq OWNED BY erp_tiempos_entrega.id;
 
 
 --
@@ -4271,6 +5152,57 @@ ALTER SEQUENCE inv_clas_id_seq OWNED BY inv_clas.id;
 
 
 --
+-- Name: inv_mar; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_mar (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    url character varying,
+    estatus boolean DEFAULT true,
+    borrado_logico boolean DEFAULT false,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0
+);
+
+
+ALTER TABLE inv_mar OWNER TO sumar;
+
+--
+-- Name: TABLE inv_mar; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON TABLE inv_mar IS 'Alberga todas las posibles marcas de productos que se pudieran manejar en el sistema';
+
+
+--
+-- Name: inv_mar_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_mar_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_mar_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_mar_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_mar_id_seq OWNED BY inv_mar.id;
+
+
+--
 -- Name: inv_mov_tipos; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -4544,6 +5476,100 @@ ALTER SEQUENCE inv_prod_id_seq OWNED BY inv_prod.id;
 
 
 --
+-- Name: inv_prod_lineas; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod_lineas (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    descripcion text NOT NULL,
+    inv_seccion_id integer,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_actualizacion timestamp with time zone,
+    momento_creacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0
+);
+
+
+ALTER TABLE inv_prod_lineas OWNER TO sumar;
+
+--
+-- Name: inv_prod_lineas_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_lineas_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_lineas_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_lineas_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_lineas_id_seq OWNED BY inv_prod_lineas.id;
+
+
+--
+-- Name: inv_prod_presentaciones; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod_presentaciones (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    borrado_logico boolean DEFAULT false,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0,
+    cantidad double precision DEFAULT 0
+);
+
+
+ALTER TABLE inv_prod_presentaciones OWNER TO sumar;
+
+--
+-- Name: COLUMN inv_prod_presentaciones.cantidad; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_prod_presentaciones.cantidad IS 'Equivalencia de la presentacion en Cantidad de acuerdo a la Unidad de Medida definida.';
+
+
+--
+-- Name: inv_prod_presentaciones_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_presentaciones_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_presentaciones_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_presentaciones_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_presentaciones_id_seq OWNED BY inv_prod_presentaciones.id;
+
+
+--
 -- Name: inv_prod_tipos; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -4625,6 +5651,93 @@ ALTER TABLE inv_prod_unidades_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE inv_prod_unidades_id_seq OWNED BY inv_prod_unidades.id;
+
+
+--
+-- Name: inv_secciones; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_secciones (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    borrado_logico boolean,
+    activa boolean,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    descripcion character varying,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0
+);
+
+
+ALTER TABLE inv_secciones OWNER TO sumar;
+
+--
+-- Name: inv_secciones_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_secciones_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_secciones_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_secciones_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_secciones_id_seq OWNED BY inv_secciones.id;
+
+
+--
+-- Name: inv_stock_clasificaciones; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_stock_clasificaciones (
+    id integer NOT NULL,
+    titulo character varying,
+    descripcion character varying,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp without time zone,
+    momento_actualizacion timestamp without time zone,
+    momento_baja timestamp without time zone,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0
+);
+
+
+ALTER TABLE inv_stock_clasificaciones OWNER TO sumar;
+
+--
+-- Name: inv_stock_clasificaciones_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_stock_clasificaciones_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_stock_clasificaciones_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_stock_clasificaciones_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_stock_clasificaciones_id_seq OWNED BY inv_stock_clasificaciones.id;
 
 
 --
@@ -5222,6 +6335,13 @@ ALTER TABLE users OWNER TO sumar;
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY ctb_may_clases ALTER COLUMN id SET DEFAULT nextval('ctb_may_clases_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY cxc_clie ALTER COLUMN id SET DEFAULT nextval('cxc_clie_id_seq'::regclass);
 
 
@@ -5341,6 +6461,13 @@ ALTER TABLE ONLY cxp_prov_contactos ALTER COLUMN id SET DEFAULT nextval('cxp_pro
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY cxp_prov_creapar ALTER COLUMN id SET DEFAULT nextval('cxp_prov_creapar_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY cxp_prov_credias ALTER COLUMN id SET DEFAULT nextval('cxp_prov_credias_id_seq'::regclass);
 
 
@@ -5405,6 +6532,13 @@ ALTER TABLE ONLY erp_pagos_formas ALTER COLUMN id SET DEFAULT nextval('erp_pagos
 --
 
 ALTER TABLE ONLY erp_parametros_generales ALTER COLUMN id SET DEFAULT nextval('erp_parametros_generales_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_tiempos_entrega ALTER COLUMN id SET DEFAULT nextval('erp_tiempos_entrega_id_seq'::regclass);
 
 
 --
@@ -5670,6 +6804,13 @@ ALTER TABLE ONLY inv_clas ALTER COLUMN id SET DEFAULT nextval('inv_clas_id_seq':
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY inv_mar ALTER COLUMN id SET DEFAULT nextval('inv_mar_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY inv_mov_tipos ALTER COLUMN id SET DEFAULT nextval('inv_mov_tipos_id_seq'::regclass);
 
 
@@ -5698,6 +6839,20 @@ ALTER TABLE ONLY inv_prod_grupos ALTER COLUMN id SET DEFAULT nextval('inv_prod_g
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY inv_prod_lineas ALTER COLUMN id SET DEFAULT nextval('inv_prod_lineas_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_presentaciones ALTER COLUMN id SET DEFAULT nextval('inv_prod_presentaciones_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY inv_prod_tipos ALTER COLUMN id SET DEFAULT nextval('inv_prod_tipos_id_seq'::regclass);
 
 
@@ -5706,6 +6861,20 @@ ALTER TABLE ONLY inv_prod_tipos ALTER COLUMN id SET DEFAULT nextval('inv_prod_ti
 --
 
 ALTER TABLE ONLY inv_prod_unidades ALTER COLUMN id SET DEFAULT nextval('inv_prod_unidades_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_secciones ALTER COLUMN id SET DEFAULT nextval('inv_secciones_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_stock_clasificaciones ALTER COLUMN id SET DEFAULT nextval('inv_stock_clasificaciones_id_seq'::regclass);
 
 
 --
@@ -5804,6 +6973,28 @@ ALTER TABLE ONLY nom_tipo_incapacidad ALTER COLUMN id SET DEFAULT nextval('nom_t
 --
 
 ALTER TABLE ONLY nom_tipo_jornada ALTER COLUMN id SET DEFAULT nextval('nom_tipo_jornada_id_seq'::regclass);
+
+
+--
+-- Data for Name: ctb_may_clases; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY ctb_may_clases (id, titulo) FROM stdin;
+1	Activo
+2	Pasivo
+3	Capital
+4	Ingresos
+5	Egresos
+6	Cuentas de Orden
+7	Perdidas y Ganancias
+\.
+
+
+--
+-- Name: ctb_may_clases_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('ctb_may_clases_id_seq', 1, false);
 
 
 --
@@ -6017,7 +7208,26 @@ SELECT pg_catalog.setval('cxc_clie_zonas_id_seq', 1, false);
 --
 
 COPY cxp_prov (id, folio, rfc, curp, razon_social, clave_comercial, calle, numero, colonia, cp, entre_calles, pais_id, estado_id, municipio_id, localidad_alternativa, telefono1, extension1, fax, telefono2, extension2, correo_electronico, web_site, impuesto, cxp_prov_zona_id, grupo_id, proveedortipo_id, clasif_1, clasif_2, clasif_3, moneda_id, tiempo_entrega_id, estatus, limite_credito, dias_credito_id, descuento, credito_a_partir, cxp_prov_tipo_embarque_id, flete_pagado, condiciones, observaciones, vent_contacto, vent_puesto, vent_calle, vent_numero, vent_colonia, vent_cp, vent_entre_calles, vent_pais_id, vent_estado_id, vent_municipio_id, vent_telefono1, vent_extension1, vent_fax, vent_telefono2, vent_extension2, vent_email, cob_contacto, cob_puesto, cob_calle, cob_numero, cob_colonia, cob_cp, cob_entre_calles, cob_pais_id, cob_estado_id, cob_municipio_id, cob_telefono1, cob_extension1, cob_fax, cob_telefono2, cob_extension2, cob_email, comentarios, empresa_id, sucursal_id, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, ctb_cta_id_pasivo, ctb_cta_id_egreso, ctb_cta_id_ietu, ctb_cta_id_comple, ctb_cta_id_pasivo_comple, transportista) FROM stdin;
-1	1	PDO850228KN5		PINTURAS DOAL, SA E CV	DOAL	CARR AV SAN MIGUEL	1	JARDINES DE SAN RAFAEL	67110		2	19	973		8181311100					DDD@JJ.COM		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SS	SS						0	0	0														0	0	0								1	1	f	2014-12-19 05:13:58.229361-05	\N	\N	37	0	0	0	0	0	0	0	f
+4	4	AIN0307228S4		ABARROTES INTERNACIONALES, S.A. DE C.V.	ABARROTES	MIGUEL NIETO SUR	660-A	CENTRO\n	64000\n		2	19	973									1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t										0	0	0														0	0	0								1	1	f	\N	\N	\N	1	0	0	0	0	0	0	0	f
+5	5	GAME791116E65		ELEAZAR GARCIA MATA	GARCIA	CARRETERA NACIONAL	S/N	CENTRO	67350	CRUZ CON FRANCISCO I. MADERO	2	19	951		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:09:25.845764-04	\N	1	1	0	0	0	0	0	0	f
+6	6	TAFH8004043V4		HELIODORO DANIEL TAMEZ FLORES	TAMEZ	MORELOS NORTE	1708	IGNACIO ZARAGOZA	67350		2	19	951		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:10:38.40795-04	\N	1	1	0	0	0	0	0	0	f
+1	1	ESR130812TGA		EXPORTACIONES SUAREZ RODRIGUEZ, S.A. DE C.V.	SUAREZ	EL MAIZAL	307	HACIENDA SAN MIGUEL	67113		2	19	973		8181311100					DDD@JJ.COM		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SS	SS						1	0	0														0	0	0								1	1	f	2014-12-19 05:13:58.229361-05	2016-08-15 22:03:27.072272-04	\N	1	1	0	0	0	0	0	0	f
+2	2	OOPS631111741		SALVADOR ORDOÑEZ PEÑA	SALVADOR	JOSE MARIANO SLAS	506	REGINA	64290		2	19	986		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:04:16.414042-04	\N	1	1	0	0	0	0	0	0	f
+3	3	BANM810417643		MANUEL BAUTISTA NOGALES	MANUEL	AV. PEDRERAS	103	SANTA MARIA	66368		2	19	995		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:06:36.529614-04	\N	1	1	0	0	0	0	0	0	f
+10	10	VID050520755		VIDEMONT, S.A. DE C.V.	VIDE	RIO CAURA	350	DEL VALLE	66220		2	19	965		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:18:52.506841-04	\N	1	1	0	0	0	0	0	0	f
+7	7	PMO0212117P6		PALACIOS MORENO, S.A. DE C.V.	PALACIOS	PRIV. PRIMERA	S/N	LOS RODRIGUEZ	67300		2	19	996		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:13:25.299936-04	\N	1	1	0	0	0	0	0	0	f
+8	8	GBI921016985		GASOLINERA BALLESTEROA IBARRA, S.A. DE C.V.	GAS_BALLES	EMPACADORAS	S/N	CENTRO	67500		2	19	985		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:13:39.467306-04	\N	1	1	0	0	0	0	0	0	f
+9	9	SCT8411179Q4		SOCIEDAD COOPERATIVA TRABAJADORES DE PASCUAL, S.C.L.	TRA_PAS	CLAVIJERO	60	TRANSITO	06820		2	9	279		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:16:29.612829-04	\N	1	1	0	0	0	0	0	0	f
+11	11	FERE9412086C6		JOSE ELIAS FERNANDEZ RIOS	FER_RIOS	BLOCK	K-6	CENTRAL DE ABASTOS	20280		2	1	1		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:19:36.654806-04	\N	1	1	0	0	0	0	0	0	f
+12	12	CAMP8502017C2		MARCO ANTONIO CAMARENA PADILLA	CAMARENA	COLON	386	CENTRO	47600		2	14	624		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:21:18.681457-04	\N	1	1	0	0	0	0	0	0	f
+18	18	EOC1303232N8		EXPRESS OCA, S.A. DE C.V.	EXPRESS	LOS ANGELES	1000	GARZA CANTU	66480		2	19	993		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:24:22.579712-04	\N	1	1	0	0	0	0	0	0	f
+17	17	FUGA490413B41		ARMANDINA GLORIA FUENTES GARZA	ARMANDINA	ESCOBEDO	106	CENTRO	67500		2	19	985		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:25:44.279908-04	\N	1	1	0	0	0	0	0	0	f
+13	13	HRL1309192M5		HEINIX RUAN LABELS, S.A. DE C.V.	HEINIX	VENUSTIANO CARRANZA	203-A	CENTRO	67350		2	19	951		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:31:08.479886-04	\N	1	1	0	0	0	0	0	0	f
+15	15	CCA0108206P8		CANTU CEPEDA Y ASOCIADOS, S.C.	CANTU	PRIV. MARIANO ESCOBEDO	810	FRACC. LOS SAUCES 2O. SECTOR	66237		2	19	965		8183324193			8116658702		mcantudiaz@hotmail.com		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:43:08.383451-04	\N	1	1	0	0	0	0	0	0	f
+14	14	IAS140311699		IASERO, S.A. DE C.V.	IASERO	ZARAGOZA	805	VALLE DORADO	67350		2	19	951		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:45:41.946569-04	\N	1	1	0	0	0	0	0	0	f
+16	16	SES1408145U3		SOLUCIONES EN EMPAQUE Y SUMINISTROS, S.A. DE C.V.	EMPAQUES	BLVD. JOSE MARIA GONZALEZ	221	JARDINES DE CAPELLANIA	67484		2	19	956		6188126638					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 23:09:57.888621-04	\N	1	1	0	0	0	0	0	0	f
+20	20	CDN150527MQ8		COMERCIO DINAMICO DEL NORESTE, S.A. DE C.V.	DINAMICO	AV. HUMBERTO LOBO	9442	PARQUE INDUSTRIAL MITRAS	66000		2	19	965		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:00:06.683281-04	\N	1	1	0	0	0	0	0	0	f
+19	19	LOTG750911887		GENARO DE JESUS LOPEZ TAMEZ	GENARO	JOSE MARIA PINO SUAREZ	603	CENTRO	67700		2	19	980		6188126639					nobody@usa.net		1	1	1	1	1	1	1	1	0	t	0	1	0	3	0	t			SIN CONTACTO	SIN PUESTO						1	0	0														0	0	0								1	1	f	\N	2016-08-15 22:23:36.598134-04	\N	1	1	0	0	0	0	0	0	f
 \.
 
 
@@ -6090,6 +7300,26 @@ SELECT pg_catalog.setval('cxp_prov_clases_id_seq', 1, false);
 --
 
 COPY cxp_prov_contactos (id, contacto, proveedor_id, telefono, email, fax) FROM stdin;
+1	aaaa	1	8126639	nobody@gmail.com	\N
+2	bbbb	2	8126639	nobody@gmail.com	\N
+3	cccc	3	8126639	pianodaemon@gmail.com	\N
+4	dddd	4	8126639	j4nusx@yahoo.com	\N
+5	eeee	5	8126639	j4nusx@excite.com	\N
+6	ffff	6	8126639	plauchu@usa.net	\N
+7	gggg	7	8126639	eplauchu@intel.com	\N
+8	hhhh	8	8126639	otelo@usa.net	\N
+9	iiii	9	8126639	plauchu@gmail.com	\N
+10	jjjj	10	8126639	homero@simpsons.com	\N
+11	kkkk	11	8126639	bart@simpsons.com	\N
+12	llll	12	8126639	lisa@simpsons.com	\N
+13	mmmm	13	8126639	marge@simpson.com	\N
+14	yyyy	14	8126639	maggie@simpsons.com	\N
+15	xxxx	15	8126639	j4nusx@starmedia.com	\N
+16	none	16	8126639	enjoy@thesilence.com	\N
+17	chanfle	17	8126639	chaparron@bonaparte.com	\N
+18	lao tse	18	8126639	tao@filosofo.org	\N
+19	sidartha	19	8126639	buda@panzon.com	\N
+20	sasha	20	8126639	sasha@eres.com	\N
 \.
 
 
@@ -6097,7 +7327,25 @@ COPY cxp_prov_contactos (id, contacto, proveedor_id, telefono, email, fax) FROM 
 -- Name: cxp_prov_contactos_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('cxp_prov_contactos_id_seq', 1, false);
+SELECT pg_catalog.setval('cxp_prov_contactos_id_seq', 20, true);
+
+
+--
+-- Data for Name: cxp_prov_creapar; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY cxp_prov_creapar (id, titulo) FROM stdin;
+1	Fecha de Embarque
+2	Fecha de Recepcion
+3	Fecha de Factura
+\.
+
+
+--
+-- Name: cxp_prov_creapar_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('cxp_prov_creapar_id_seq', 1, false);
 
 
 --
@@ -6160,7 +7408,7 @@ SELECT pg_catalog.setval('cxp_prov_grupos_id_seq', 1, false);
 -- Name: cxp_prov_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('cxp_prov_id_seq', 1, false);
+SELECT pg_catalog.setval('cxp_prov_id_seq', 28, true);
 
 
 --
@@ -6187,6 +7435,7 @@ SELECT pg_catalog.setval('cxp_prov_tipos_embarque_id_seq', 1, false);
 
 COPY cxp_prov_zonas (id, titulo) FROM stdin;
 1	Zona 1
+2	Zona 2
 \.
 
 
@@ -6194,7 +7443,7 @@ COPY cxp_prov_zonas (id, titulo) FROM stdin;
 -- Name: cxp_prov_zonas_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('cxp_prov_zonas_id_seq', 1, true);
+SELECT pg_catalog.setval('cxp_prov_zonas_id_seq', 2, true);
 
 
 --
@@ -6217,6 +7466,41 @@ SELECT pg_catalog.setval('erp_h_facturas_id_seq', 1, false);
 --
 
 COPY erp_mascaras_para_validaciones_por_app (app_id, mask_name, mask_regex, id) FROM stdin;
+4	is_NombreCorrect	^[ a-zA-Z]{1,30}$	17
+4	is_ApellidopaternoCorrect	^[ a-zA-Z]{1,30}$	18
+4	is_CalleCorrect	.{1,45}$	19
+4	is_AddressNumberCorrect	^.{1,5}$	20
+4	is_ColoniaCorrect	.{1,45}$	21
+4	is_CorreopersonalCorrect	^[^@ ]+@[^@ ]+.[^@ .]+$	22
+4	is_CpCorrect	^[0-9]{5}$	23
+4	is_CurpCorrect	^[A-Za-z]{4}[0-9]{6}[A-Za-z]{6}[A-Za-z0-9]{1}[0-9]{1}$	24
+4	is_RFCCorrect	^[A-Za-z0-9&]{3,4}[0-9]{6}[A-Za-z0-9]{0,3}$	25
+4	is_FechaNacIngCorrect	^[0-9]{4}[-]{1}[0-9]{2}[-]{1}[0-9]{2}$	26
+4	is_ImssCorrect	^[0-9]{11}$	27
+4	is_PhoneCorrect	^[0-9]{10}$	28
+2	is_CurpCorrect	^[A-Za-z]{4}[0-9]{6}[A-Za-z]{6}[A-Za-z0-9]{1}[0-9]{1}$	72
+2	is_RazonSocialCorrect	.{1,100}	15
+2	is_ContactoCorrect	.{1,45}	14
+2	is_EmailCorrect	^[^@ ]+@[^@ ]+.[^@ .]+$	13
+2	is_PhoneCorrect	^[0-9]{10}$	12
+2	is_RFCCorrect	^[A-Za-z0-9&]{3,4}[0-9]{6}[A-Za-z0-9]{3}$	11
+2	is_CalleCorrect	.{1,45}$	10
+2	is_ColoniaCorrect	.{1,45}$	9
+2	is_AddressNumberCorrect	^.{1,5}$	7
+2	is_TituloCorrerct	^.{1,25}$	6
+2	is_CodigoPostalCorrect	^[0-9]{5,6}$	8
+4	is_InfonavitCorrect	^[0-9]{11}$	86
+4	is_UserCorrect	[A-Za-z0-9]{1,5}	87
+4	is_PasswordCorrect	[A-Za-z0-9]{1,5}	88
+4	is_ComisionCorrect	^([0-9]){1,12}[.]?[0-9]*$	89
+4	is_Comision2Correct	^([0-9]){1,12}[.]?[0-9]*$	90
+4	is_Comision3Correct	^([0-9]){1,12}[.]?[0-9]*$	91
+4	is_Comision4Correct	^([0-9]){1,12}[.]?[0-9]*$	92
+4	is_DiascomisionCorrect	^([0-9]){1,12}[.]?[0-9]*$	93
+4	is_Diascomision2Correct	^([0-9]){1,12}[.]?[0-9]*$	94
+4	is_DiasComision3Correct	^([0-9]){1,12}[.]?[0-9]*$	95
+4	is_FechaInicioCorrect	^[0-9]{4}[-]{1}[0-9]{2}[-]{1}[0-9]{2}$	96
+4	is_ApellidomaternoCorrect	^[ a-zA-Z]{1,30}$	97
 \.
 
 
@@ -6238,6 +7522,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 4	18.3478999999999992	2016-08-11 12:18:21.565737-04	2	DOF
 5	18.2678000000000011	2016-08-12 23:22:45.78109-04	2	DOF
 6	18.2678000000000011	2016-08-13 10:23:34.936361-04	2	DOF
+7	18.2454999999999998	2016-08-15 20:25:09.535235-04	2	DOF
 \.
 
 
@@ -6245,7 +7530,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 -- Name: erp_monedavers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_monedavers_id_seq', 6, true);
+SELECT pg_catalog.setval('erp_monedavers_id_seq', 7, true);
 
 
 --
@@ -6284,6 +7569,30 @@ COPY erp_parametros_generales (id, variable, valor) FROM stdin;
 --
 
 SELECT pg_catalog.setval('erp_parametros_generales_id_seq', 1, false);
+
+
+--
+-- Data for Name: erp_tiempos_entrega; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY erp_tiempos_entrega (id, descripcion) FROM stdin;
+1	12 hrs
+2	24 hrs
+3	36 hrs
+4	48 hrs
+5	72 hrs
+6	1 semana
+7	2 semanas
+8	3 semanas
+9	1 mes
+\.
+
+
+--
+-- Name: erp_tiempos_entrega_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('erp_tiempos_entrega_id_seq', 9, true);
 
 
 --
@@ -6569,7 +7878,7 @@ SELECT pg_catalog.setval('gral_emails_id_seq', 1, false);
 --
 
 COPY gral_emp (id, titulo, colonia, cp, calle, rfc, numero_interior, numero_exterior, momento_creacion, momento_actualizacion, momento_baja, telefono, borrado_logico, estado_id, municipio_id, pais_id, regimen_fiscal, incluye_produccion, email_compras, pass_email_compras, pagina_web, incluye_contabilidad, nivel_cta, incluye_crm, encluye_envasado, control_exis_pres, lista_precio_clientes, tipo_facturacion, pac_facturacion, ambiente_facturacion, gral_impto_id, transportista, tasa_retencion, nomina, no_id, incluye_log, gral_tc_url_id) FROM stdin;
-1	EXPORTACIONES SUMAR S.A. DE C.V.	CENTRO	64000	ISAAC GARZA	ESU131122SZ6	1810	\N	2016-08-10 00:00:00-04	2016-08-10 00:00:00-04	\N	8112345678	f	19	986	2	REGIMEN GENERAL DE LEY PERSONAS MORALES	f			www.exportacionessumar.com	f	5	f	f	t	f	cfditf	2	f	1	f	4	f	1	f	0
+1	EXPORTACIONES SUMAR S.A. DE C.V.	CENTRO	64000	ISAAC GARZA	ESU131122SZ6	1810	\N	2016-08-10 00:00:00-04	2016-08-10 00:00:00-04	\N	8112345678	f	19	986	2	REGIMEN GENERAL DE LEY PERSONAS MORALES	f			www.exportacionessumar.com	f	5	f	f	t	f	cfditf	2	f	1	f	4	t	1	f	0
 \.
 
 
@@ -6632,7 +7941,11 @@ SELECT pg_catalog.setval('gral_empleado_percep_id_seq', 1, true);
 --
 
 COPY gral_empleados (id, clave, nombre_pila, apellido_paterno, apellido_materno, imss, infonavit, curp, rfc, fecha_nacimiento, fecha_ingreso, gral_escolaridad_id, gral_sexo_id, gral_civil_id, gral_religion_id, gral_sangretipo_id, gral_puesto_id, gral_categ_id, gral_suc_id_empleado, telefono, telefono_movil, correo_personal, gral_pais_id, gral_edo_id, gral_mun_id, calle, numero, colonia, cp, contacto_emergencia, telefono_emergencia, enfermedades, alergias, comentarios, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id, gralsuc_id, comision_agen, region_id_agen, comision2_agen, comision3_agen, comision4_agen, dias_tope_comision, dias_tope_comision2, dias_tope_comision3, monto_tope_comision, monto_tope_comision2, monto_tope_comision3, correo_empresa, tipo_comision, no_int, nom_regimen_contratacion_id, nom_periodicidad_pago_id, nom_riesgo_puesto_id, nom_tipo_contrato_id, nom_tipo_jornada_id, tes_ban_id, clabe, salario_base, salario_integrado, registro_patronal, genera_nomina, gral_depto_id) FROM stdin;
-1	1	JUAN ARTURO	RIOS	VARGAS	43008368748	\N	RIVJ830922HNLSRN06	\N	1983-09-22	2016-04-01	3	1	1	1	1	1	1	1				2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	0	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+2	2	GASPAR\n	TAMEZ\n	GARZA\n	43806183124\n	\N	TAGG610726HNLMRS04\n	TAGG610726	1961-07-26	2016-04-15	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+3	3	JOSE LUIS\n	TAMEZ	TAMEZ	43038202081\n	\N	TATL820816HNLMMS07\n	TATL820816\n	1982-08-16	2016-07-19	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+5	5	ALBERTO JORGE	SUAREZ	CAVAZOS	3967836382	\N	SUCA780502HNLRVL00	SUCA780502	1980-05-02	2016-04-01	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+4	4	JUAN EDGAR	BALBOA	RIVERA	43048719199	\N	BARJ870708HNLLVN02	NARJ870708	1983-09-22	2016-05-05	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+1	1	JUAN ARTURO	RIOS	VARGAS	43008368748	\N	RIVJ830922HNLSRN06	RIVJ830922\n	1983-09-22	2016-04-01	3	1	1	1	1	1	1	1				2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
 \.
 
 
@@ -6640,7 +7953,7 @@ COPY gral_empleados (id, clave, nombre_pila, apellido_paterno, apellido_materno,
 -- Name: gral_empleados_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_empleados_id_seq', 2, true);
+SELECT pg_catalog.setval('gral_empleados_id_seq', 6, true);
 
 
 --
@@ -9503,7 +10816,7 @@ SELECT pg_catalog.setval('gral_tc_url_id_seq', 1, false);
 --
 
 COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id) FROM stdin;
-1	admin	123qwe	t	2016-08-13 12:18:31.194419-04	1
+1	admin	123qwe	t	2016-08-16 09:37:56.575239-04	1
 \.
 
 
@@ -9511,7 +10824,7 @@ COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id
 -- Name: gral_usr_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_usr_id_seq', 1, true);
+SELECT pg_catalog.setval('gral_usr_id_seq', 2, true);
 
 
 --
@@ -9543,7 +10856,7 @@ COPY gral_usr_suc (id, gral_usr_id, gral_suc_id) FROM stdin;
 -- Name: gral_usr_suc_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_usr_suc_id_seq', 1, false);
+SELECT pg_catalog.setval('gral_usr_suc_id_seq', 1, true);
 
 
 --
@@ -9597,6 +10910,24 @@ SELECT pg_catalog.setval('inv_clas_id_seq', 1, false);
 
 
 --
+-- Data for Name: inv_mar; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_mar (id, titulo, url, estatus, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja) FROM stdin;
+1	COCA COLA	http://www.agnux.com	t	f	2016-08-13 00:00:00-04	\N	\N	1	1	1	0	0
+2	PEPSI	\N	t	f	2016-08-13 00:00:00-04	\N	\N	1	1	1	0	0
+3	JOYA	\N	t	f	2016-08-13 00:00:00-04	\N	\N	1	1	1	0	0
+\.
+
+
+--
+-- Name: inv_mar_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_mar_id_seq', 1, false);
+
+
+--
 -- Data for Name: inv_mov_tipos; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -9633,7 +10964,11 @@ COPY inv_prod (id, sku, descripcion, codigo_barras, tentrega, inv_clas_id, inv_s
 --
 
 COPY inv_prod_familias (id, identificador_familia_padre, titulo, descripcion, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, inv_prod_tipo_id) FROM stdin;
-1	1	QUIMICOS	QUIMICOS	f	1980-01-09 19:00:00-05	\N	\N	1	1	1	0	0	0
+1	1	COCACOLA	COCACOLA	f	2016-08-12 00:00:00-04	\N	\N	1	1	1	0	0	0
+2	2	MANZANA	MANZANA	f	2016-08-12 00:00:00-04	\N	\N	1	1	1	0	0	0
+3	3	TORONJA	TORONJA	f	2016-08-16 00:00:00-04	\N	\N	1	1	1	0	0	0
+4	4	SPRITE	SPRITE	f	2016-08-12 00:00:00-04	\N	\N	1	1	1	0	0	0
+5	5	YOLI	YOLI	f	2016-08-12 00:00:00-04	\N	\N	1	1	1	0	0	0
 \.
 
 
@@ -9649,7 +10984,7 @@ SELECT pg_catalog.setval('inv_prod_familias_id_seq', 1, true);
 --
 
 COPY inv_prod_grupos (id, titulo, descripcion, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja) FROM stdin;
-1	GPO1	GRUPO 1	f	2012-06-28 16:19:34.528647-04	\N	\N	1	1	1	0	0
+1	GPO1	REFRESCOS	f	2016-08-13 00:00:00-04	\N	\N	1	1	1	0	0
 \.
 
 
@@ -9665,6 +11000,47 @@ SELECT pg_catalog.setval('inv_prod_grupos_id_seq', 1, true);
 --
 
 SELECT pg_catalog.setval('inv_prod_id_seq', 1, false);
+
+
+--
+-- Data for Name: inv_prod_lineas; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod_lineas (id, titulo, descripcion, inv_seccion_id, borrado_logico, momento_actualizacion, momento_creacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja) FROM stdin;
+1	12 OZ	12 OZ.	1	f	1980-01-09 19:00:00-05	\N	\N	1	1	1	0	0
+2	16 OZ	16 OZ.	1	f	1980-01-09 19:00:00-05	\N	\N	1	1	1	0	0
+3	2 L	2 LTS.	1	f	1980-01-09 19:00:00-05	\N	\N	1	1	1	0	0
+4	2.5 L	2.5 LTS.	1	f	1980-01-09 19:00:00-05	\N	\N	1	1	1	0	0
+5	3 L	3 LTS.	1	f	1980-01-09 19:00:00-05	\N	\N	1	1	1	0	0
+\.
+
+
+--
+-- Name: inv_prod_lineas_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_lineas_id_seq', 5, true);
+
+
+--
+-- Data for Name: inv_prod_presentaciones; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod_presentaciones (id, titulo, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, cantidad) FROM stdin;
+6	MAQUILA	f	2012-09-21 09:25:21.742205-04	2015-05-20 05:02:42.82295-04	2012-09-24 05:10:19.796988-04	1	1	1	1	1	1
+5	LIBRAS	f	2012-07-31 18:22:16.558238-04	2012-07-31 18:22:27.656364-04	2012-09-24 05:14:13.599269-04	1	1	1	1	1	1
+4	CAJA	f	\N	2012-08-27 08:21:11.814283-04	\N	1	1	1	1	1	1
+3	PIEZA	f	\N	2012-08-27 08:21:05.255844-04	\N	1	1	1	1	1	1
+2	KILO	f	\N	2012-08-27 08:20:58.471273-04	\N	1	1	1	1	1	1
+1	LITRO	f	\N	2012-08-27 08:20:51.299995-04	\N	1	1	1	1	1	1
+\.
+
+
+--
+-- Name: inv_prod_presentaciones_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_presentaciones_id_seq', 1, false);
 
 
 --
@@ -9710,6 +11086,38 @@ COPY inv_prod_unidades (id, titulo, borrado_logico, titulo_abr, decimales) FROM 
 --
 
 SELECT pg_catalog.setval('inv_prod_unidades_id_seq', 1, false);
+
+
+--
+-- Data for Name: inv_secciones; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_secciones (id, titulo, borrado_logico, activa, momento_creacion, momento_actualizacion, momento_baja, descripcion, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja) FROM stdin;
+1	SEC1	f	t	1979-12-31 19:00:00-05	\N	\N	SECCION 1	1	1	1	0	0
+\.
+
+
+--
+-- Name: inv_secciones_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_secciones_id_seq', 1, true);
+
+
+--
+-- Data for Name: inv_stock_clasificaciones; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_stock_clasificaciones (id, titulo, descripcion, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_emp_id, gral_suc_id, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja) FROM stdin;
+1	CLAS1	CLASIFICACION STOCK1	f	\N	\N	\N	1	1	1	0	0
+\.
+
+
+--
+-- Name: inv_stock_clasificaciones_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_stock_clasificaciones_id_seq', 1, true);
 
 
 --
@@ -10038,6 +11446,22 @@ SELECT pg_catalog.setval('tes_ban_id_seq', 1, false);
 
 
 --
+-- Name: ctb_may_clases_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY ctb_may_clases
+    ADD CONSTRAINT ctb_may_clases_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ctb_may_clases_titulo_key; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY ctb_may_clases
+    ADD CONSTRAINT ctb_may_clases_titulo_key UNIQUE (titulo);
+
+
+--
 -- Name: cxc_clie_clas1_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -10174,6 +11598,14 @@ ALTER TABLE ONLY cxp_prov_clas3
 
 
 --
+-- Name: cxp_prov_creapar_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov_creapar
+    ADD CONSTRAINT cxp_prov_creapar_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: cxp_prov_credias_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -10259,6 +11691,14 @@ ALTER TABLE ONLY erp_monedavers
 
 ALTER TABLE ONLY erp_pagos_formas
     ADD CONSTRAINT erp_pagos_formas_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: erp_tiempos_entrega_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_tiempos_entrega
+    ADD CONSTRAINT erp_tiempos_entrega_pkey PRIMARY KEY (id);
 
 
 --
@@ -10646,6 +12086,14 @@ ALTER TABLE ONLY cxc_clie_descto
 
 
 --
+-- Name: inv_mar_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_mar
+    ADD CONSTRAINT inv_mar_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: inv_mov_tipos_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -10667,6 +12115,14 @@ ALTER TABLE ONLY inv_prod_familias
 
 ALTER TABLE ONLY inv_prod_grupos
     ADD CONSTRAINT inv_prod_grupos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_prod_lineas_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_lineas
+    ADD CONSTRAINT inv_prod_lineas_pkey PRIMARY KEY (id);
 
 
 --
@@ -10699,6 +12155,22 @@ ALTER TABLE ONLY inv_prod_unidades
 
 ALTER TABLE ONLY inv_prod_unidades
     ADD CONSTRAINT inv_prod_unidades_titulo_key UNIQUE (titulo);
+
+
+--
+-- Name: inv_secciones_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_secciones
+    ADD CONSTRAINT inv_secciones_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_stock_clasificaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_stock_clasificaciones
+    ADD CONSTRAINT inv_stock_clasificaciones_pkey PRIMARY KEY (id);
 
 
 --
@@ -10835,6 +12307,14 @@ ALTER TABLE ONLY erp_parametros_generales
 
 ALTER TABLE ONLY erp_parametros_generales
     ADD CONSTRAINT parametros_generales_variable_key UNIQUE (variable);
+
+
+--
+-- Name: presentaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_presentaciones
+    ADD CONSTRAINT presentaciones_pkey PRIMARY KEY (id);
 
 
 --
@@ -11105,6 +12585,14 @@ ALTER TABLE ONLY cxp_prov
 
 
 --
+-- Name: fk8970x; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY cxp_prov
+    ADD CONSTRAINT fk8970x FOREIGN KEY (dias_credito_id) REFERENCES cxp_prov_credias(id);
+
+
+--
 -- Name: fk_alm00001; Type: FK CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -11193,6 +12681,14 @@ ALTER TABLE ONLY gral_cons
 
 
 --
+-- Name: fk_nom_deduc_00001; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_empleado_deduc
+    ADD CONSTRAINT fk_nom_deduc_00001 FOREIGN KEY (nom_deduc_id) REFERENCES nom_deduc(id);
+
+
+--
 -- Name: fk_nom_percep_00001; Type: FK CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -11238,6 +12734,14 @@ ALTER TABLE ONLY gral_suc
 
 ALTER TABLE ONLY gral_usr_rol
     ADD CONSTRAINT fk_usr FOREIGN KEY (gral_usr_id) REFERENCES gral_usr(id);
+
+
+--
+-- Name: inv_prod_lineas_inv_seccion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_lineas
+    ADD CONSTRAINT inv_prod_lineas_inv_seccion_id_fkey FOREIGN KEY (inv_seccion_id) REFERENCES inv_secciones(id);
 
 
 --
