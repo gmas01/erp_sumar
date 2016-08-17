@@ -605,6 +605,232 @@ BEGIN
 	END IF; --TERMINA VALIDACION Catalogo de empleados
 
 
+	-- INICIA VALIDACION Catalogo de Clientes
+	IF id_app=5 THEN
+		
+		--rfc
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_RFCCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[6]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'rfc:El RFC ingresado NO es valido___';
+		END IF;
+		
+		--curp
+		IF str_data[7]!='' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CurpCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[7]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'curp:La curp ingresada no es valida___';
+			END IF;
+		END IF;
+
+		--razon social
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_RazonsocialCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[8]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := 'razonsocial:Razon social no No Valido___';
+		END IF;
+		
+		--clave comercial
+		IF str_data[9] = '' OR str_data[9] = ' ' THEN
+			valor_retorno := ''||valor_retorno||'clavecomercial:La Clave Comercial es incorrecta___';
+		END IF;
+		
+		--calle
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CalleCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[10]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'calle:Calle No Valida___';
+		END IF;
+		
+		--num calle
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_AddressNumberCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[11]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'numeroint:Numero de Calle No Valida___';
+		END IF;
+
+		
+		--colonia
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_ColoniaCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[14]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'colonia:Colonia No Valido___';
+		END IF;
+		
+		--codigo postal
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CpCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[15]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'cp:Codigo postal No Valido___';
+		END IF;
+		
+		--pais
+		IF str_data[16]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'pais:Es necesario seleccionar el Pais del Cliente___';
+		END IF;
+		
+		--estado
+		IF str_data[17]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'estado:Es necesario seleccionar el Estado del Cliente___';
+		END IF;
+		
+		--municipio
+		IF str_data[18]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'municipio:Es necesario seleccionar el Municipio del Cliente___';
+		END IF;
+		
+		--telefono 1
+		IF trim(str_data[6])<>'XEXX010101000' THEN 
+			IF str_data[20]='' OR str_data[20]=' ' THEN
+				valor_retorno := ''||valor_retorno||'tel1:Es necesario ingresar el numero de Teléfono___';
+			ELSE
+				--telefono
+				EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_PhoneCorrect'';' INTO mask_general;
+				EXECUTE 'select '''||str_data[20]||''' ~ '''||mask_general||''';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'tel1:El numero telefonico no es valido. Debe ser de 10 digitos___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--FAX, utiliza la misma mascara que telefono
+		IF str_data[22]!='' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_PhoneCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[22]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'fax:El numero de Fax no es valido. Debe ser 10 digitos___';
+			END IF;
+		END IF;
+	
+
+		--email
+		IF str_data[25]!='' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CorreoCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[25]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'email:Correo No Valido___';
+			END IF;
+		END IF;
+		
+		--str_data[26] id agente
+		IF str_data[26] = '0' THEN
+			valor_retorno := ''||valor_retorno||'agente:Es necesario selecionar un Agente de Ventas para el cliente___';
+		END IF;
+
+		--zona
+		IF str_data[28] = '0' THEN
+			valor_retorno := ''||valor_retorno||'zona:Es necesario selecionar una Zona para el cliente___';
+		END IF;
+
+		--grupo
+		IF str_data[29] = '0' THEN
+			valor_retorno := ''||valor_retorno||'grupo:Es necesario selecionar un Grupo para el cliente___';
+		END IF;
+
+		--tipo CLIENTE
+		IF str_data[30] = '0' THEN
+			valor_retorno := ''||valor_retorno||'tipocliente:Es necesario selecionar el tipo de cliente___';
+		END IF;
+
+		--clasificacion 1
+		IF str_data[31] = '0' THEN
+			valor_retorno := ''||valor_retorno||'clasif1:Es necesario selecionar una Clasificacion para el cliente___';
+		END IF;
+
+		--clasificacion 2
+		IF str_data[32] = '0' THEN
+			valor_retorno := ''||valor_retorno||'clasif2:Es necesario selecionar una Clasificacion para el cliente___';
+		END IF;
+
+		--clasificacion 3
+		IF str_data[33] = '0' THEN
+			valor_retorno := ''||valor_retorno||'clasif3:Es necesario selecionar una Clasificacion para el cliente___';
+		END IF;
+
+		--moneda
+		IF str_data[34] = '0' THEN
+			valor_retorno := ''||valor_retorno||'moneda:Es necesario selecionar una Moneda para el cliente___';
+		END IF;
+
+		IF str_data[39] = '0' THEN
+			valor_retorno := ''||valor_retorno||'diascredito:Es necesario selecionar los dias de Credito para el cliente___';
+		END IF;
+		
+		--inicio de credito
+		IF str_data[41]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'inicred:Es necesario seleccionar el Inicio del Crédito___';
+		END IF;
+		
+		--e-mail contacto compras
+		IF str_data[61] != '' AND str_data[61] != ' ' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CorreoCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[61]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'cemail:E-mail del Contacto No Valido___';
+			END IF;
+		END IF;
+		
+		--e-mail contacto pagos
+		IF str_data[77] != '' AND str_data[77] != ' ' THEN
+			EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_CorreoCorrect'';' INTO mask_general;
+			EXECUTE 'select '''||str_data[77]||''' ~ '''||mask_general||''';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'pemail:E-mail del Contacto No Valido___';
+			END IF;
+		END IF;
+		
+		
+		IF str_data[78]::boolean=true THEN
+			IF str_data[79]='' OR str_data[79]=' ' THEN
+				valor_retorno := ''||valor_retorno||'retimmex:Es necesario ingresar la Tasa de Retenci&oacute;n IMMEX.___';
+			ELSE
+				IF str_data[79]::double precision > 100 THEN
+					valor_retorno := ''||valor_retorno||'retimmex:La Tasa de Retenci&oacute;n IMMEX debe ser menor o igual a 100%.___';
+				END IF;
+				IF str_data[79]::double precision < 1 THEN
+					valor_retorno := ''||valor_retorno||'retimmex:La Tasa de Retenci&oacute;n IMMEX debe ser mayor o igual a 1%.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		
+		IF validaListaPrecioCliente THEN 
+			--str_data[89] 	select_lista de precio
+			IF str_data[89]='0' THEN
+				valor_retorno := ''||valor_retorno||'lp:Es necesario seleccionar una Lista de Precio para el Cliente___';
+			END IF;
+		END IF;
+		
+		--str_data[90] 	select_metodo_pago
+		IF str_data[90]='0' THEN
+			valor_retorno := ''||valor_retorno||'metodopago:Es necesario seleccionar un M&eacute;todo de Pago para el Cliente___';
+		END IF;
+		
+		IF str_data[4] = '0' THEN
+
+			valida_integridad:=0;
+			IF trim(str_data[6])<>'XEXX010101000' THEN 
+				EXECUTE 'select count(id) from cxc_clie where rfc ilike '''||str_data[6]||''' AND borrado_logico=false AND empresa_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'rfc:El RFC ingresado ya se encuentra en uso.___';
+				END IF;
+			END IF;
+			
+			valida_integridad:=0;
+			EXECUTE 'select count(id) from cxc_clie where razon_social ilike '''||str_data[8]||''' AND borrado_logico=false AND empresa_id='||emp_id||';' INTO valida_integridad;
+			IF valida_integridad > 0 THEN
+				valor_retorno := ''||valor_retorno||'razonsocial:La razon social ingresada ya se encuentra en uso___';
+			END IF;
+			
+			valida_integridad:=0;
+			EXECUTE 'select count(id) from cxc_clie where clave_comercial ilike '''||str_data[9]||''' AND borrado_logico=false AND empresa_id='||emp_id||';' INTO valida_integridad;
+			IF valida_integridad > 0 THEN
+				valor_retorno := ''||valor_retorno||'clavecomercial:La Clave Comercial ingresada ya se encuentra en uso___';
+			END IF;
+
+		END IF;
+	END IF; --TERMINA VALIDACION validacion de clientes
 
 	
 	IF valor_retorno = '' THEN
@@ -639,6 +865,9 @@ DECLARE
     command_selected text;
     valor_retorno character varying;
     usuario_id integer;
+    emp_id integer;
+    suc_id integer;
+    id_almacen integer=0;
     ultimo_id integer;
     espacio_tiempo_ejecucion timestamp with time zone = now();
     ano_actual integer;
@@ -670,6 +899,13 @@ BEGIN
     
     -- usuario que utiliza el aplicativo
     usuario_id := str_data[3]::integer;
+
+    --obtiene empresa_id, sucursal_id y sucursal_id
+    SELECT gral_suc.empresa_id, gral_usr_suc.gral_suc_id,inv_suc_alm.almacen_id FROM gral_usr_suc 
+    JOIN gral_suc ON gral_suc.id = gral_usr_suc.gral_suc_id
+    JOIN inv_suc_alm ON inv_suc_alm.sucursal_id = gral_suc.id
+    WHERE gral_usr_suc.gral_usr_id=usuario_id
+    INTO emp_id, suc_id, id_almacen;
 
     SELECT EXTRACT(YEAR FROM espacio_tiempo_ejecucion) INTO ano_actual;
     SELECT EXTRACT(MONTH FROM espacio_tiempo_ejecucion) INTO mes_actual;
@@ -1054,6 +1290,356 @@ BEGIN
     END IF;--termina catalogo de empleados
 
 
+    -- Catalogo de Clientes
+    IF app_selected = 5 THEN
+		IF command_selected = 'new' THEN
+
+			id_tipo_consecutivo:=1;--Folio de proveedor
+			
+			--aqui entra para tomar el consecutivo del folio  la sucursal actual
+			UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+			WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+			
+			--concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio 
+			nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+			
+			INSERT INTO cxc_clie(
+					numero_control,--nuevo_folio
+					rfc,--str_data[6]
+					curp,--str_data[7]
+					razon_social,--str_data[8]
+					clave_comercial,--str_data[9]
+					calle,--str_data[10]
+					numero,--str_data[11]
+					entre_calles,--str_data[12]
+					numero_exterior,--str_data[13]
+					colonia,--str_data[14]
+					cp,--str_data[15]
+					pais_id,--str_data[16]::integer
+					estado_id,--str_data[17]::integer
+					municipio_id,--str_data[18]::integer
+					localidad_alternativa,--str_data[19]
+					telefono1,--str_data[20]
+					extension1,--str_data[21]
+					fax,--str_data[22]
+					telefono2,--str_data[23]
+					extension2,--str_data[24]
+					email,--str_data[25]
+					cxc_agen_id,--str_data[26]::integer
+					contacto,--str_data[27]
+					zona_id,--str_data[28]::integer
+					cxc_clie_grupo_id,--str_data[29]::integer
+					clienttipo_id,--str_data[30]::integer
+					clasif_1,--str_data[31]::integer
+					clasif_2,--str_data[32]::integer
+					clasif_3,--str_data[33]::integer
+					moneda,--str_data[34]::integer
+					filial,--str_data[35]::boolean
+					estatus,--str_data[36]::boolean
+					gral_imp_id,--str_data[37]::integer
+					limite_credito,--str_data[38]::double precision
+					dias_credito_id,--str_data[39]::integer
+					credito_suspendido,--str_data[40]::boolean
+					credito_a_partir,--str_data[41]::integer
+					cxp_prov_tipo_embarque_id,--str_data[42]::integer
+					dias_caducidad_cotizacion,--str_data[43]::integer
+					condiciones,--str_data[44]
+					observaciones,--str_data[45]
+					contacto_compras_nombre,--str_data[46]
+					contacto_compras_puesto,--str_data[47]
+					contacto_compras_calle,--str_data[48]
+					contacto_compras_numero,--str_data[49]
+					contacto_compras_colonia,--str_data[50]
+					contacto_compras_cp,--str_data[51]
+					contacto_compras_entre_calles,--str_data[52]
+					contacto_compras_pais_id,--str_data[53]::integer
+					contacto_compras_estado_id,--str_data[54]::integer
+					contacto_compras_municipio_id,--str_data[55]::integer
+					contacto_compras_telefono1,--str_data[56]
+					contacto_compras_extension1,--str_data[57]
+					contacto_compras_fax,--str_data[58]
+					contacto_compras_telefono2,--str_data[59]
+					contacto_compras_extension2,--str_data[60]
+					contacto_compras_email,--str_data[61]
+					contacto_pagos_nombre,--str_data[62]
+					contacto_pagos_puesto,--str_data[63]
+					contacto_pagos_calle,--str_data[64]
+					contacto_pagos_numero,--str_data[65]
+					contacto_pagos_colonia,--str_data[66]
+					contacto_pagos_cp,--str_data[67]
+					contacto_pagos_entre_calles,--str_data[68]
+					contacto_pagos_pais_id,--str_data[69]::integer
+					contacto_pagos_estado_id,--str_data[70]::integer
+					contacto_pagos_municipio_id,--str_data[71]::integer
+					contacto_pagos_telefono1,--str_data[72]
+					contacto_pagos_extension1,--str_data[73]
+					contacto_pagos_fax,--str_data[74]
+					contacto_pagos_telefono2,--str_data[75]
+					contacto_pagos_extension2,--str_data[76]
+					contacto_pagos_email,--str_data[77]
+					empresa_immex,--str_data[78]::boolean,
+					tasa_ret_immex,--str_data[79]::double precision,
+					dia_revision,--str_data[80]::smallint,
+					dia_pago,--str_data[81]::smallint,
+					cta_pago_mn,--str_data[82],
+					cta_pago_usd,--str_data[83],
+					ctb_cta_id_activo,--str_data[84]::integer,
+					ctb_cta_id_ingreso,--str_data[85]::integer,
+					ctb_cta_id_ietu,--str_data[86]::integer,
+					ctb_cta_id_comple,--str_data[87]::integer,
+					ctb_cta_id_activo_comple,--str_data[88]::integer,
+					lista_precio,--str_data[89]::integer,
+					fac_metodos_pago_id,--str_data[90]::integer,
+					empresa_id,--emp_id
+					sucursal_id,--suc_id
+					borrado_logico,--false
+					momento_creacion,--now()
+					id_usuario_creacion--usuario_id
+				)VALUES (
+					nuevo_folio,
+					str_data[6],
+					str_data[7],
+					str_data[8],
+					str_data[9],
+					str_data[10],
+					str_data[11],
+					str_data[12],
+					str_data[13],
+					str_data[14],
+					str_data[15],
+					str_data[16]::integer,
+					str_data[17]::integer,
+					str_data[18]::integer,
+					str_data[19],
+					str_data[20],
+					str_data[21],
+					str_data[22],
+					str_data[23],
+					str_data[24],
+					str_data[25],
+					str_data[26]::integer,
+					str_data[27],
+					str_data[28]::integer,
+					str_data[29]::integer,
+					str_data[30]::integer,
+					str_data[31]::integer,
+					str_data[32]::integer,
+					str_data[33]::integer,
+					str_data[34]::integer,
+					str_data[35]::boolean,
+					str_data[36]::boolean,
+					str_data[37]::integer,
+					str_data[38]::double precision,
+					str_data[39]::integer,
+					str_data[40]::boolean,
+					str_data[41]::integer,
+					str_data[42]::integer,
+					str_data[43]::integer,
+					str_data[44],
+					str_data[45],
+					str_data[46],
+					str_data[47],
+					str_data[48],
+					str_data[49],
+					str_data[50],
+					str_data[51],
+					str_data[52],
+					str_data[53]::integer,
+					str_data[54]::integer,
+					str_data[55]::integer,
+					str_data[56],
+					str_data[57],
+					str_data[58],
+					str_data[59],
+					str_data[60],
+					str_data[61],
+					str_data[62],
+					str_data[63],
+					str_data[64],
+					str_data[65],
+					str_data[66],
+					str_data[67],
+					str_data[68],
+					str_data[69]::integer,
+					str_data[70]::integer,
+					str_data[71]::integer,
+					str_data[72],
+					str_data[73],
+					str_data[74],
+					str_data[75],
+					str_data[76],
+					str_data[77],
+					str_data[78]::boolean,
+					str_data[79]::double precision,
+					str_data[80]::smallint,
+					str_data[81]::smallint,
+					str_data[82],
+					str_data[83],
+					str_data[84]::integer,
+					str_data[85]::integer,
+					str_data[86]::integer,
+					str_data[87]::integer,
+					str_data[88]::integer,
+					str_data[89]::integer,
+					str_data[90]::integer,
+					emp_id,
+					suc_id,
+					false,
+					now(),
+					usuario_id
+				)RETURNING id INTO ultimo_id;
+			
+				
+			
+			total_filas:= array_length(extra_data,1);--obtiene total de elementos del arreglo
+			cont_fila:=1;
+			
+			IF extra_data[1] != 'sin datos' THEN
+				FOR cont_fila IN 1 .. total_filas LOOP
+					SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+					--str_filas[1] calle
+					--str_filas[2] numero
+					--str_filas[3] colonia
+					--str_filas[4] idpais
+					--str_filas[5] identidad
+					--str_filas[6] idlocalidad
+					--str_filas[7] codigop
+					--str_filas[8] localternativa
+					--str_filas[9] telefono
+					--str_filas[10] numfax
+					
+					INSERT INTO erp_clients_consignacions(cliente_id, calle, numero, colonia, pais_id, estado_id, municipio_id, cp, localidad_alternativa, telefono, fax, momento_creacion)
+					VALUES(ultimo_id, str_filas[1], str_filas[2], str_filas[3], str_filas[4]::integer, str_filas[5]::integer, str_filas[6]::integer, str_filas[7], str_filas[8], str_filas[9], str_filas[10], now());
+					
+				END LOOP;
+				
+			END IF;
+			
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'edit' THEN
+
+			UPDATE cxc_clie SET 
+					rfc=str_data[6],
+					curp=str_data[7],
+					razon_social=str_data[8],
+					clave_comercial=str_data[9],
+					calle=str_data[10],
+					numero=str_data[11],
+					entre_calles=str_data[12],
+					numero_exterior=str_data[13],
+					colonia=str_data[14],
+					cp=str_data[15],
+					pais_id=str_data[16]::integer,
+					estado_id=str_data[17]::integer,
+					municipio_id=str_data[18]::integer,
+					localidad_alternativa=str_data[19],
+					telefono1=str_data[20],
+					extension1=str_data[21],
+					fax=str_data[22],
+					telefono2=str_data[23],
+					extension2=str_data[24],
+					email=str_data[25],
+					cxc_agen_id=str_data[26]::integer,
+					contacto=str_data[27],
+					zona_id=str_data[28]::integer,
+					cxc_clie_grupo_id=str_data[29]::integer,
+					clienttipo_id=str_data[30]::integer,
+					clasif_1=str_data[31]::integer,
+					clasif_2=str_data[32]::integer,
+					clasif_3=str_data[33]::integer,
+					moneda=str_data[34]::integer,
+					filial=str_data[35]::boolean,
+					estatus=str_data[36]::boolean,
+					gral_imp_id=str_data[37]::integer,
+					limite_credito=str_data[38]::double precision,
+					dias_credito_id=str_data[39]::integer,
+					credito_suspendido=str_data[40]::boolean,
+					credito_a_partir=str_data[41]::integer,
+					cxp_prov_tipo_embarque_id=str_data[42]::integer,
+					dias_caducidad_cotizacion=str_data[43]::integer,
+					condiciones=str_data[44],
+					observaciones=str_data[45],
+					contacto_compras_nombre=str_data[46],
+					contacto_compras_puesto=str_data[47],
+					contacto_compras_calle=str_data[48],
+					contacto_compras_numero=str_data[49],
+					contacto_compras_colonia=str_data[50],
+					contacto_compras_cp=str_data[51],
+					contacto_compras_entre_calles=str_data[52],
+					contacto_compras_pais_id=str_data[53]::integer,
+					contacto_compras_estado_id=str_data[54]::integer,
+					contacto_compras_municipio_id=str_data[55]::integer,
+					contacto_compras_telefono1=str_data[56],
+					contacto_compras_extension1=str_data[57],
+					contacto_compras_fax=str_data[58],
+					contacto_compras_telefono2=str_data[59],
+					contacto_compras_extension2=str_data[60],
+					contacto_compras_email=str_data[61],
+					contacto_pagos_nombre=str_data[62],
+					contacto_pagos_puesto=str_data[63],
+					contacto_pagos_calle=str_data[64],
+					contacto_pagos_numero=str_data[65],
+					contacto_pagos_colonia=str_data[66],
+					contacto_pagos_cp=str_data[67],
+					contacto_pagos_entre_calles=str_data[68],
+					contacto_pagos_pais_id=str_data[69]::integer,
+					contacto_pagos_estado_id=str_data[70]::integer,
+					contacto_pagos_municipio_id=str_data[71]::integer,
+					contacto_pagos_telefono1=str_data[72],
+					contacto_pagos_extension1=str_data[73],
+					contacto_pagos_fax=str_data[74],
+					contacto_pagos_telefono2=str_data[75],
+					contacto_pagos_extension2=str_data[76],
+					contacto_pagos_email=str_data[77],
+					empresa_immex=str_data[78]::boolean,
+					tasa_ret_immex=str_data[79]::double precision,
+					dia_revision=str_data[80]::smallint,
+					dia_pago=str_data[81]::smallint,
+					cta_pago_mn=str_data[82],
+					cta_pago_usd=str_data[83],
+					ctb_cta_id_activo=str_data[84]::integer,
+					ctb_cta_id_ingreso=str_data[85]::integer,
+					ctb_cta_id_ietu=str_data[86]::integer,
+					ctb_cta_id_comple=str_data[87]::integer,
+					ctb_cta_id_activo_comple=str_data[88]::integer,
+					lista_precio=str_data[89]::integer,
+					fac_metodos_pago_id=str_data[90]::integer,
+					momento_actualizacion = now(),
+					id_usuario_actualizacion = usuario_id,
+					empresa_id=emp_id,
+					sucursal_id=suc_id
+			WHERE id=str_data[4]::integer;
+			
+			--eliminar direcciones de este cliente en la tabla clients_consignacions
+			DELETE FROM erp_clients_consignacions WHERE cliente_id = str_data[4]::integer;
+			
+			total_filas:= array_length(extra_data,1);--obtiene total de elementos del arreglo
+			cont_fila:=1;
+			
+			IF extra_data[1] != 'sin datos' THEN
+				FOR cont_fila IN 1 .. total_filas LOOP
+					SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+					--aqui se vuelven a crear los registros
+					INSERT INTO erp_clients_consignacions(cliente_id,calle,numero,colonia,pais_id,estado_id,municipio_id,cp,localidad_alternativa,telefono,fax,momento_creacion)
+					VALUES(str_data[3]::integer,str_filas[1],str_filas[2],str_filas[3],str_filas[4]::integer,str_filas[5]::integer,str_filas[6]::integer,str_filas[7],str_filas[8],str_filas[9],str_filas[10],now());
+					
+				END LOOP;
+				
+			END IF;
+			
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'delete' THEN
+			UPDATE cxc_clie SET borrado_logico=true, momento_baja=now(),id_usuario_baja = str_data[3]::integer WHERE id = str_data[4]::integer;
+			valor_retorno := '1';
+		END IF;
+
+    END IF;--termina catalogo de clientes
+	
+
     -- Catalogo de Proveedores
     IF app_selected = 2 THEN
 		IF command_selected = 'new' THEN
@@ -1240,6 +1826,7 @@ DECLARE
 	total_items  int:=0;
 
         cadena_where text;
+        f_final character varying;
 	
 	ano_actual integer;
 	mes_actual integer;
@@ -1474,6 +2061,59 @@ BEGIN
 		     WHERE titulo ILIKE '''||str_data[3]||''' and borrado_logico=false and gral_emp_id='||emp_id||';';
 		--RAISE EXCEPTION '%',sql_query;							
 	END IF;	--termina buscador  de clasificacion stock
+
+
+	--buscador de pedidos de clientes
+	IF app_selected = 64 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	folio
+		--str_data[4]	cliente
+		--str_data[5]	fecha_inicial
+		--str_data[6]	fecha_final
+		--str_data[7]	codigo
+		--str_data[8]	descripcion producto
+		--str_data[9]	Agente
+		
+		IF str_data[3] != '%%' THEN
+			cadena_where:= cadena_where ||' AND poc_pedidos.folio ilike  '''||str_data[3]||'''';
+		END IF;
+
+		
+		IF str_data[4] != '%%' THEN
+			cadena_where:= cadena_where ||' AND cxc_clie.razon_social ilike  '''||str_data[4]||'''';
+		END IF;
+		
+		--busqueda por fecha creacion
+		IF str_data[5] != '' THEN
+			IF str_data[6] = '' THEN
+				f_final:=str_data[5];
+			ELSE
+				f_final:=str_data[6];
+			END IF;
+			cadena_where:=cadena_where||' AND to_char(poc_pedidos.momento_creacion, ''yyyymmdd'')::integer between (to_char('''||str_data[5]||'''::timestamp with time zone,''yyyymmdd'')::integer) and (to_char('''||f_final||'''::timestamp with time zone,''yyyymmdd'')::integer)';
+		END IF;
+
+		IF str_data[7] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.sku ilike  '''||str_data[7]||'''';
+		END IF;
+		
+		IF str_data[8] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.descripcion ilike  '''||str_data[8]||'''';
+		END IF;
+
+		IF str_data[9]::integer != 0 THEN
+			cadena_where:= cadena_where ||' AND poc_pedidos.cxc_agen_id='||str_data[9];
+		END IF;
+		sql_query := 'SELECT DISTINCT poc_pedidos.id 
+				FROM poc_pedidos 
+				LEFT JOIN poc_pedidos_detalle ON poc_pedidos_detalle.poc_pedido_id = poc_pedidos.id  
+				LEFT JOIN inv_prod ON inv_prod.id = poc_pedidos_detalle.inv_prod_id  
+				JOIN erp_proceso ON erp_proceso.id = poc_pedidos.proceso_id
+				LEFT JOIN cxc_clie ON cxc_clie.id = poc_pedidos.cxc_clie_id  
+				WHERE erp_proceso.empresa_id='||emp_id||' AND  erp_proceso.sucursal_id='||suc_id||' AND poc_pedidos.borrado_logico=FALSE  '||cadena_where;
+		--RAISE EXCEPTION '%' ,sql_query;
+	END IF;	--termina buscador de pedidos de clientes
 
         
 	--buscador del catalogo de PUESTOS
@@ -3139,6 +3779,53 @@ ALTER SEQUENCE cxp_prov_zonas_id_seq OWNED BY cxp_prov_zonas.id;
 
 
 --
+-- Name: erp_clients_consignacions; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE erp_clients_consignacions (
+    id integer NOT NULL,
+    cliente_id integer NOT NULL,
+    calle character varying NOT NULL,
+    numero character varying NOT NULL,
+    colonia character varying NOT NULL,
+    pais character varying,
+    entidad character varying,
+    localidad character varying,
+    cp character varying NOT NULL,
+    localidad_alternativa character varying,
+    telefono character varying,
+    fax character varying,
+    momento_creacion timestamp with time zone NOT NULL,
+    pais_id integer,
+    estado_id integer,
+    municipio_id integer
+);
+
+
+ALTER TABLE erp_clients_consignacions OWNER TO sumar;
+
+--
+-- Name: erp_clients_consignacions_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE erp_clients_consignacions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE erp_clients_consignacions_id_seq OWNER TO sumar;
+
+--
+-- Name: erp_clients_consignacions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE erp_clients_consignacions_id_seq OWNED BY erp_clients_consignacions.id;
+
+
+--
 -- Name: erp_h_facturas; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -3362,6 +4049,312 @@ ALTER SEQUENCE erp_parametros_generales_id_seq OWNED BY erp_parametros_generales
 
 
 --
+-- Name: erp_prefacturas; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE erp_prefacturas (
+    id integer NOT NULL,
+    cliente_id integer NOT NULL,
+    moneda_id integer,
+    observaciones text,
+    subtotal double precision,
+    impuesto double precision,
+    total double precision,
+    proceso_id integer NOT NULL,
+    borrado_logico boolean DEFAULT false,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    tipo_cambio double precision DEFAULT 0,
+    id_usuario_creacion integer DEFAULT 0,
+    id_usuario_actualizacion integer DEFAULT 0,
+    id_usuario_baja integer DEFAULT 0,
+    empleado_id integer DEFAULT 0,
+    terminos_id integer DEFAULT 0,
+    orden_compra character varying DEFAULT ''::character varying,
+    factura_sai character varying DEFAULT ''::character varying,
+    factura_id integer,
+    refacturar boolean DEFAULT false,
+    fac_metodos_pago_id integer DEFAULT 0,
+    no_cuenta character varying DEFAULT ''::character varying,
+    monto_retencion double precision DEFAULT 0,
+    tasa_retencion_immex double precision DEFAULT 0,
+    tipo_documento smallint DEFAULT 0,
+    folio_pedido character varying DEFAULT ''::character varying,
+    enviar_ruta boolean DEFAULT false,
+    inv_alm_id smallint DEFAULT 0,
+    id_moneda_pedido integer DEFAULT 0,
+    cxc_clie_df_id integer DEFAULT 0,
+    fac_subtotal double precision DEFAULT 0 NOT NULL,
+    fac_impuesto double precision DEFAULT 0 NOT NULL,
+    fac_monto_retencion double precision DEFAULT 0 NOT NULL,
+    fac_total double precision DEFAULT 0 NOT NULL,
+    monto_ieps double precision DEFAULT 0,
+    fac_monto_ieps double precision DEFAULT 0,
+    monto_descto double precision DEFAULT 0 NOT NULL,
+    fac_monto_descto double precision DEFAULT 0 NOT NULL,
+    motivo_descto character varying DEFAULT ''::character varying,
+    ctb_tmov_id integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE erp_prefacturas OWNER TO sumar;
+
+--
+-- Name: COLUMN erp_prefacturas.tipo_documento; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.tipo_documento IS '1=Factura, 2=Remision, 3=Factura de Remision';
+
+
+--
+-- Name: COLUMN erp_prefacturas.enviar_ruta; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.enviar_ruta IS 'True=Debe aparecer en la busqueda de facturas para agregar a la ruta. False=No debe aparecer en la busqueda.';
+
+
+--
+-- Name: COLUMN erp_prefacturas.inv_alm_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.inv_alm_id IS 'Almacen de donde se le dara salida los productos al facturar';
+
+
+--
+-- Name: COLUMN erp_prefacturas.id_moneda_pedido; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.id_moneda_pedido IS 'Moneda original con el que se hizo el pedido, puede ser diferente a la moneda de la factura';
+
+
+--
+-- Name: COLUMN erp_prefacturas.cxc_clie_df_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.cxc_clie_df_id IS 'ID de la Direccion Fiscal(cxc_clie_df) para la Facturacion. Si el valor de este campo es 0, entonces por default toma la direccion de la tabla de Clientes (cxc_clie)';
+
+
+--
+-- Name: COLUMN erp_prefacturas.fac_subtotal; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.fac_subtotal IS 'Subtotal a Facturar o Remisionar, una vez finalizado en proceso este campo se queda en cero.';
+
+
+--
+-- Name: COLUMN erp_prefacturas.fac_impuesto; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.fac_impuesto IS 'Impuesto de la Factura o Remision, una vez finalizado en proceso este campo se queda en cero.';
+
+
+--
+-- Name: COLUMN erp_prefacturas.fac_monto_retencion; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.fac_monto_retencion IS 'Monto de la retencion de la Factura o Remision, una vez finalizado en proceso este campo se queda en cero.';
+
+
+--
+-- Name: COLUMN erp_prefacturas.fac_total; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas.fac_total IS 'Total de la Factura o Remision, una vez finalizado en proceso este campo se queda en cero.';
+
+
+--
+-- Name: erp_prefacturas_detalles; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE erp_prefacturas_detalles (
+    id integer NOT NULL,
+    prefacturas_id integer,
+    producto_id integer NOT NULL,
+    presentacion_id integer NOT NULL,
+    tipo_impuesto_id integer DEFAULT 0,
+    cantidad double precision,
+    precio_unitario double precision NOT NULL,
+    momento_creacion timestamp with time zone,
+    valor_imp double precision DEFAULT 0,
+    costo_promedio double precision DEFAULT 0,
+    reservado double precision DEFAULT 0,
+    costo_referencia double precision DEFAULT 0,
+    cant_facturado double precision DEFAULT 0 NOT NULL,
+    facturado boolean DEFAULT false NOT NULL,
+    cant_facturar double precision DEFAULT 0 NOT NULL,
+    inv_prod_unidad_id integer DEFAULT 0 NOT NULL,
+    gral_ieps_id integer DEFAULT 0,
+    valor_ieps double precision DEFAULT 0,
+    descto double precision DEFAULT 0,
+    fac_rem_det_id integer DEFAULT 0,
+    gral_imptos_ret_id integer DEFAULT 0 NOT NULL,
+    tasa_ret double precision DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE erp_prefacturas_detalles OWNER TO sumar;
+
+--
+-- Name: COLUMN erp_prefacturas_detalles.costo_promedio; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas_detalles.costo_promedio IS 'El costo promedio solo se guarda en esta tabla cuando la prefactura viene de una o varias Remisiones.';
+
+
+--
+-- Name: COLUMN erp_prefacturas_detalles.reservado; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas_detalles.reservado IS 'Cantidad que se reservo en inv_exi al crear el pedido';
+
+
+--
+-- Name: COLUMN erp_prefacturas_detalles.costo_referencia; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas_detalles.costo_referencia IS 'El costo referencia solo se guarda en esta tabla cuando la prefactura viene de una o varias Remisiones.';
+
+
+--
+-- Name: COLUMN erp_prefacturas_detalles.cant_facturado; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas_detalles.cant_facturado IS 'Cantidad que se ha facturado de esta partida';
+
+
+--
+-- Name: COLUMN erp_prefacturas_detalles.facturado; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas_detalles.facturado IS 'Este campo indica cuando la partida ha sido facturado totalmente. TRUE=La partida esta facturada completamente, FALSE=La partida no se ha facturado en su totalidad.';
+
+
+--
+-- Name: COLUMN erp_prefacturas_detalles.cant_facturar; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas_detalles.cant_facturar IS 'Cantidad a Facturar o Remisionar, una vez realizado el proceso, este campo debe quedar en cero.';
+
+
+--
+-- Name: COLUMN erp_prefacturas_detalles.inv_prod_unidad_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN erp_prefacturas_detalles.inv_prod_unidad_id IS 'Id de la unidad de medida de venta, puede ser diferente a la unidad de medida en el catalogo de productos.';
+
+
+--
+-- Name: erp_prefacturas_detalles_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE erp_prefacturas_detalles_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE erp_prefacturas_detalles_id_seq OWNER TO sumar;
+
+--
+-- Name: erp_prefacturas_detalles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE erp_prefacturas_detalles_id_seq OWNED BY erp_prefacturas_detalles.id;
+
+
+--
+-- Name: erp_prefacturas_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE erp_prefacturas_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE erp_prefacturas_id_seq OWNER TO sumar;
+
+--
+-- Name: erp_prefacturas_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE erp_prefacturas_id_seq OWNED BY erp_prefacturas.id;
+
+
+--
+-- Name: erp_proceso; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE erp_proceso (
+    id integer NOT NULL,
+    proceso_flujo_id integer NOT NULL,
+    empresa_id integer DEFAULT 0,
+    sucursal_id integer DEFAULT 0
+);
+
+
+ALTER TABLE erp_proceso OWNER TO sumar;
+
+--
+-- Name: erp_proceso_flujo; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE erp_proceso_flujo (
+    id integer NOT NULL,
+    titulo character varying NOT NULL
+);
+
+
+ALTER TABLE erp_proceso_flujo OWNER TO sumar;
+
+--
+-- Name: erp_proceso_flujo_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE erp_proceso_flujo_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE erp_proceso_flujo_id_seq OWNER TO sumar;
+
+--
+-- Name: erp_proceso_flujo_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE erp_proceso_flujo_id_seq OWNED BY erp_proceso_flujo.id;
+
+
+--
+-- Name: erp_proceso_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE erp_proceso_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE erp_proceso_id_seq OWNER TO sumar;
+
+--
+-- Name: erp_proceso_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE erp_proceso_id_seq OWNED BY erp_proceso.id;
+
+
+--
 -- Name: erp_tiempos_entrega; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -3530,6 +4523,48 @@ ALTER SEQUENCE fac_cfds_conf_id_seq OWNED BY fac_cfds_conf.id;
 
 
 --
+-- Name: fac_metodos_pago; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_metodos_pago (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    borrado_logico boolean DEFAULT false,
+    clave_sat character varying DEFAULT ''::character varying NOT NULL,
+    momento_creacion timestamp with time zone DEFAULT now() NOT NULL,
+    momento_actualiza timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0,
+    gral_emp_id integer DEFAULT 0
+);
+
+
+ALTER TABLE fac_metodos_pago OWNER TO sumar;
+
+--
+-- Name: fac_metodos_pago_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_metodos_pago_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_metodos_pago_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_metodos_pago_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_metodos_pago_id_seq OWNED BY fac_metodos_pago.id;
+
+
+--
 -- Name: fac_nomina; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -3585,6 +4620,158 @@ ALTER TABLE fac_nomina_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE fac_nomina_id_seq OWNED BY fac_nomina.id;
+
+
+--
+-- Name: fac_nomina_par; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_nomina_par (
+    id integer NOT NULL,
+    gral_emp_id integer NOT NULL,
+    gral_suc_id integer NOT NULL,
+    tipo_comprobante character varying DEFAULT ''::character varying,
+    forma_pago character varying DEFAULT ''::character varying,
+    no_cuenta_pago character varying DEFAULT ''::character varying,
+    gral_mon_id integer DEFAULT 1 NOT NULL,
+    gral_isr_id integer DEFAULT 0 NOT NULL,
+    motivo_descuento character varying DEFAULT ''::character varying,
+    concepto_unidad character varying DEFAULT ''::character varying,
+    leyenda character varying DEFAULT ''::character varying
+);
+
+
+ALTER TABLE fac_nomina_par OWNER TO sumar;
+
+--
+-- Name: COLUMN fac_nomina_par.gral_mon_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_nomina_par.gral_mon_id IS 'Moneda para la Nomina';
+
+
+--
+-- Name: COLUMN fac_nomina_par.concepto_unidad; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_nomina_par.concepto_unidad IS 'Unidad que se debe mostrar por default para el concepto';
+
+
+--
+-- Name: fac_nomina_par_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_nomina_par_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_nomina_par_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_nomina_par_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_nomina_par_id_seq OWNED BY fac_nomina_par.id;
+
+
+--
+-- Name: fac_par; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_par (
+    id integer NOT NULL,
+    gral_suc_id integer NOT NULL,
+    cxc_mov_tipo_id integer NOT NULL,
+    inv_alm_id integer NOT NULL,
+    permitir_pedido boolean DEFAULT true,
+    permitir_remision boolean DEFAULT true,
+    permitir_cambio_almacen boolean DEFAULT true,
+    permitir_servicios boolean DEFAULT true,
+    permitir_articulos boolean DEFAULT true,
+    permitir_kits boolean DEFAULT true,
+    gral_suc_id_consecutivo integer NOT NULL,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone NOT NULL,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0,
+    gral_emp_id integer NOT NULL,
+    formato_pedido smallint DEFAULT 1 NOT NULL,
+    formato_factura smallint DEFAULT 1 NOT NULL,
+    validar_pres_pedido boolean DEFAULT true NOT NULL,
+    cambiar_unidad_medida boolean DEFAULT false NOT NULL,
+    incluye_adenda boolean DEFAULT false NOT NULL,
+    gral_emails_id_envio integer DEFAULT 0,
+    gral_emails_id_cco integer DEFAULT 0,
+    permitir_descto boolean DEFAULT false NOT NULL,
+    permitir_req_com boolean DEFAULT false NOT NULL,
+    aut_precio_menor_cot boolean DEFAULT false NOT NULL,
+    aut_precio_menor_ped boolean DEFAULT false NOT NULL
+);
+
+
+ALTER TABLE fac_par OWNER TO sumar;
+
+--
+-- Name: TABLE fac_par; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON TABLE fac_par IS 'Aqui se definen los parametros para la facturacion. La definicion de parametros es por Sucursal.';
+
+
+--
+-- Name: COLUMN fac_par.gral_suc_id_consecutivo; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_par.gral_suc_id_consecutivo IS 'Aqui se guarda el id de la sucursal del que se tomara el consecutivo para generar el folio del pedido.';
+
+
+--
+-- Name: COLUMN fac_par.formato_pedido; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_par.formato_pedido IS '1=Formato 1(Hoja completa), 2=Formato 2(Media hoja)';
+
+
+--
+-- Name: COLUMN fac_par.validar_pres_pedido; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_par.validar_pres_pedido IS 'TRUE=Validar Existencias de Presentaciones al Crear el Pedido, FALSE=No validar existencia de Presentaciones al crear y confirmar el pedido.';
+
+
+--
+-- Name: COLUMN fac_par.cambiar_unidad_medida; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_par.cambiar_unidad_medida IS 'Indica si se debe permitir al usuario cambiar la unidad de medida del producto al momento de crear el pedido.';
+
+
+--
+-- Name: fac_par_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_par_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_par_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_par_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_par_id_seq OWNED BY fac_par.id;
 
 
 --
@@ -5152,6 +6339,104 @@ ALTER SEQUENCE inv_clas_id_seq OWNED BY inv_clas.id;
 
 
 --
+-- Name: inv_exi; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_exi (
+    id integer NOT NULL,
+    inv_prod_id integer NOT NULL,
+    inv_alm_id integer NOT NULL,
+    ano smallint NOT NULL,
+    transito double precision DEFAULT 0 NOT NULL,
+    reservado double precision DEFAULT 0,
+    exi_inicial double precision DEFAULT 0 NOT NULL,
+    entradas_1 double precision DEFAULT 0 NOT NULL,
+    salidas_1 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_1 double precision DEFAULT 0 NOT NULL,
+    entradas_2 double precision DEFAULT 0 NOT NULL,
+    salidas_2 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_2 double precision DEFAULT 0 NOT NULL,
+    entradas_3 double precision DEFAULT 0 NOT NULL,
+    salidas_3 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_3 double precision DEFAULT 0 NOT NULL,
+    entradas_4 double precision DEFAULT 0 NOT NULL,
+    salidas_4 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_4 double precision DEFAULT 0 NOT NULL,
+    entradas_5 double precision DEFAULT 0 NOT NULL,
+    salidas_5 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_5 double precision DEFAULT 0 NOT NULL,
+    entradas_6 double precision DEFAULT 0 NOT NULL,
+    salidas_6 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_6 double precision DEFAULT 0 NOT NULL,
+    entradas_7 double precision DEFAULT 0 NOT NULL,
+    salidas_7 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_7 double precision DEFAULT 0 NOT NULL,
+    entradas_8 double precision DEFAULT 0 NOT NULL,
+    salidas_8 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_8 double precision DEFAULT 0 NOT NULL,
+    entradas_9 double precision DEFAULT 0 NOT NULL,
+    salidas_9 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_9 double precision DEFAULT 0 NOT NULL,
+    entradas_10 double precision DEFAULT 0 NOT NULL,
+    salidas_10 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_10 double precision DEFAULT 0 NOT NULL,
+    entradas_11 double precision DEFAULT 0 NOT NULL,
+    salidas_11 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_11 double precision DEFAULT 0 NOT NULL,
+    entradas_12 double precision DEFAULT 0 NOT NULL,
+    salidas_12 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_12 double precision DEFAULT 0 NOT NULL,
+    momento_entrada_1 timestamp with time zone,
+    momento_salida_1 timestamp with time zone,
+    momento_entrada_2 timestamp with time zone,
+    momento_salida_2 timestamp with time zone,
+    momento_entrada_3 timestamp with time zone,
+    momento_salida_3 timestamp with time zone,
+    momento_entrada_4 timestamp with time zone,
+    momento_salida_4 timestamp with time zone,
+    momento_entrada_5 timestamp with time zone,
+    momento_salida_5 timestamp with time zone,
+    momento_entrada_6 timestamp with time zone,
+    momento_salida_6 timestamp with time zone,
+    momento_entrada_7 timestamp with time zone,
+    momento_salida_7 timestamp with time zone,
+    momento_entrada_8 timestamp with time zone,
+    momento_salida_8 timestamp with time zone,
+    momento_entrada_9 timestamp with time zone,
+    momento_salida_9 timestamp with time zone,
+    momento_entrada_10 timestamp with time zone,
+    momento_salida_10 timestamp with time zone,
+    momento_entrada_11 timestamp with time zone,
+    momento_salida_11 timestamp with time zone,
+    momento_entrada_12 timestamp with time zone,
+    momento_salida_12 timestamp with time zone
+);
+
+
+ALTER TABLE inv_exi OWNER TO sumar;
+
+--
+-- Name: inv_exi_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_exi_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_exi_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_exi_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_exi_id_seq OWNED BY inv_exi.id;
+
+
+--
 -- Name: inv_mar; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -6268,6 +7553,187 @@ ALTER SEQUENCE nom_tipo_jornada_id_seq OWNED BY nom_tipo_jornada.id;
 
 
 --
+-- Name: poc_pedidos; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE poc_pedidos (
+    id integer NOT NULL,
+    folio character varying DEFAULT ''::character varying,
+    cxc_clie_id integer NOT NULL,
+    moneda_id integer,
+    observaciones text,
+    subtotal double precision,
+    impuesto double precision,
+    monto_retencion double precision DEFAULT 0,
+    total double precision,
+    tasa_retencion_immex double precision DEFAULT 0,
+    tipo_cambio double precision DEFAULT 0,
+    cxc_agen_id integer DEFAULT 0,
+    cxp_prov_credias_id integer DEFAULT 0,
+    orden_compra character varying DEFAULT ''::character varying,
+    proceso_id integer NOT NULL,
+    fecha_compromiso date,
+    lugar_entrega character varying DEFAULT ''::character varying,
+    transporte character varying DEFAULT ''::character varying,
+    cancelado boolean DEFAULT false,
+    borrado_logico boolean DEFAULT false,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_cancelacion timestamp with time zone,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_cancelacion integer DEFAULT 0,
+    tipo_documento integer DEFAULT 0,
+    gral_usr_id_autoriza integer DEFAULT 0,
+    momento_autorizacion timestamp with time zone,
+    fac_metodos_pago_id integer DEFAULT 0,
+    no_cuenta character varying DEFAULT ''::character varying,
+    enviar_ruta boolean DEFAULT false,
+    inv_alm_id smallint DEFAULT 0,
+    cxc_clie_df_id integer DEFAULT 0,
+    enviar_obser_fac boolean DEFAULT false,
+    flete boolean DEFAULT false NOT NULL,
+    monto_ieps double precision DEFAULT 0,
+    monto_descto double precision DEFAULT 0 NOT NULL,
+    motivo_descto character varying DEFAULT ''::character varying,
+    porcentaje_descto double precision DEFAULT 0,
+    folio_cot character varying DEFAULT ''::character varying
+);
+
+
+ALTER TABLE poc_pedidos OWNER TO sumar;
+
+--
+-- Name: COLUMN poc_pedidos.enviar_ruta; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos.enviar_ruta IS 'True=Despues de facturar el pedido debe aparecer en la busqueda de facturas para agregar a la ruta. False=No debe aparecer en la busqueda.';
+
+
+--
+-- Name: COLUMN poc_pedidos.inv_alm_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos.inv_alm_id IS 'Almacen de donde se toma los productos y se reserva para el pedido';
+
+
+--
+-- Name: COLUMN poc_pedidos.cxc_clie_df_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos.cxc_clie_df_id IS 'ID de la Direccion Fiscal(cxc_clie_df) para la Facturacion del Pedido. Si el valor de este campo es 0, entonces por default toma la direccion de la tabla de Clientes (cxc_clie)';
+
+
+--
+-- Name: COLUMN poc_pedidos.enviar_obser_fac; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos.enviar_obser_fac IS 'TRUE=Indica que las observaciones capturadas en el pedido se enviaran a la Facturacion';
+
+
+--
+-- Name: poc_pedidos_detalle; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE poc_pedidos_detalle (
+    id integer NOT NULL,
+    poc_pedido_id integer,
+    inv_prod_id integer NOT NULL,
+    presentacion_id integer NOT NULL,
+    cantidad double precision,
+    precio_unitario double precision,
+    gral_imp_id integer DEFAULT 0,
+    valor_imp double precision DEFAULT 0,
+    facturado boolean DEFAULT false,
+    reservado double precision DEFAULT 0,
+    backorder boolean DEFAULT false,
+    inv_prod_unidad_id integer DEFAULT 0 NOT NULL,
+    gral_ieps_id integer DEFAULT 0,
+    valor_ieps double precision DEFAULT 0,
+    descto double precision DEFAULT 0,
+    requisicion boolean DEFAULT false,
+    requiere_aut boolean DEFAULT false NOT NULL,
+    autorizado boolean DEFAULT false NOT NULL,
+    precio_aut double precision DEFAULT 0 NOT NULL,
+    gral_usr_id_aut integer DEFAULT 0 NOT NULL,
+    gral_imptos_ret_id integer DEFAULT 0 NOT NULL,
+    tasa_ret double precision DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE poc_pedidos_detalle OWNER TO sumar;
+
+--
+-- Name: COLUMN poc_pedidos_detalle.reservado; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos_detalle.reservado IS 'Almacena la cantidad que reservó en inv_exi';
+
+
+--
+-- Name: COLUMN poc_pedidos_detalle.backorder; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos_detalle.backorder IS 'TRUE=Generó BackOrder, FALSE=No generó BackOrder';
+
+
+--
+-- Name: COLUMN poc_pedidos_detalle.inv_prod_unidad_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos_detalle.inv_prod_unidad_id IS 'Id de la unidad de medida de venta, puede ser diferente a la unidad de medida en el catalogo de productos.';
+
+
+--
+-- Name: COLUMN poc_pedidos_detalle.requisicion; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN poc_pedidos_detalle.requisicion IS 'TRUE=Indica si genero una orden de requision de compra';
+
+
+--
+-- Name: poc_pedidos_detalle_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE poc_pedidos_detalle_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE poc_pedidos_detalle_id_seq OWNER TO sumar;
+
+--
+-- Name: poc_pedidos_detalle_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE poc_pedidos_detalle_id_seq OWNED BY poc_pedidos_detalle.id;
+
+
+--
+-- Name: poc_pedidos_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE poc_pedidos_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE poc_pedidos_id_seq OWNER TO sumar;
+
+--
+-- Name: poc_pedidos_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE poc_pedidos_id_seq OWNED BY poc_pedidos.id;
+
+
+--
 -- Name: tes_ban; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -6503,6 +7969,13 @@ ALTER TABLE ONLY cxp_prov_zonas ALTER COLUMN id SET DEFAULT nextval('cxp_prov_zo
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY erp_clients_consignacions ALTER COLUMN id SET DEFAULT nextval('erp_clients_consignacions_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY erp_h_facturas ALTER COLUMN id SET DEFAULT nextval('erp_h_facturas_id_seq'::regclass);
 
 
@@ -6538,6 +8011,34 @@ ALTER TABLE ONLY erp_parametros_generales ALTER COLUMN id SET DEFAULT nextval('e
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY erp_prefacturas ALTER COLUMN id SET DEFAULT nextval('erp_prefacturas_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_prefacturas_detalles ALTER COLUMN id SET DEFAULT nextval('erp_prefacturas_detalles_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_proceso ALTER COLUMN id SET DEFAULT nextval('erp_proceso_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_proceso_flujo ALTER COLUMN id SET DEFAULT nextval('erp_proceso_flujo_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY erp_tiempos_entrega ALTER COLUMN id SET DEFAULT nextval('erp_tiempos_entrega_id_seq'::regclass);
 
 
@@ -6552,7 +8053,28 @@ ALTER TABLE ONLY fac_cfds_conf ALTER COLUMN id SET DEFAULT nextval('fac_cfds_con
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY fac_metodos_pago ALTER COLUMN id SET DEFAULT nextval('fac_metodos_pago_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY fac_nomina ALTER COLUMN id SET DEFAULT nextval('fac_nomina_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_par ALTER COLUMN id SET DEFAULT nextval('fac_nomina_par_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_par ALTER COLUMN id SET DEFAULT nextval('fac_par_id_seq'::regclass);
 
 
 --
@@ -6804,6 +8326,13 @@ ALTER TABLE ONLY inv_clas ALTER COLUMN id SET DEFAULT nextval('inv_clas_id_seq':
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY inv_exi ALTER COLUMN id SET DEFAULT nextval('inv_exi_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY inv_mar ALTER COLUMN id SET DEFAULT nextval('inv_mar_id_seq'::regclass);
 
 
@@ -6976,6 +8505,20 @@ ALTER TABLE ONLY nom_tipo_jornada ALTER COLUMN id SET DEFAULT nextval('nom_tipo_
 
 
 --
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY poc_pedidos ALTER COLUMN id SET DEFAULT nextval('poc_pedidos_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY poc_pedidos_detalle ALTER COLUMN id SET DEFAULT nextval('poc_pedidos_detalle_id_seq'::regclass);
+
+
+--
 -- Data for Name: ctb_may_clases; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -7002,7 +8545,7 @@ SELECT pg_catalog.setval('ctb_may_clases_id_seq', 1, false);
 --
 
 COPY cxc_clie (id, numero_control, rfc, curp, razon_social, clave_comercial, calle, numero, entre_calles, numero_exterior, colonia, cp, pais_id, estado_id, municipio_id, localidad_alternativa, telefono1, extension1, fax, telefono2, extension2, email, cxc_agen_id, contacto, zona_id, cxc_clie_grupo_id, clienttipo_id, clasif_1, clasif_2, clasif_3, moneda, filial, estatus, gral_imp_id, limite_credito, dias_credito_id, credito_suspendido, credito_a_partir, cxp_prov_tipo_embarque_id, dias_caducidad_cotizacion, condiciones, observaciones, contacto_compras_nombre, contacto_compras_puesto, contacto_compras_calle, contacto_compras_numero, contacto_compras_colonia, contacto_compras_cp, contacto_compras_entre_calles, contacto_compras_pais_id, contacto_compras_estado_id, contacto_compras_municipio_id, contacto_compras_telefono1, contacto_compras_extension1, contacto_compras_fax, contacto_compras_telefono2, contacto_compras_extension2, contacto_compras_email, contacto_pagos_nombre, contacto_pagos_puesto, contacto_pagos_calle, contacto_pagos_numero, contacto_pagos_colonia, contacto_pagos_cp, contacto_pagos_entre_calles, contacto_pagos_pais_id, contacto_pagos_estado_id, contacto_pagos_municipio_id, contacto_pagos_telefono1, contacto_pagos_extension1, contacto_pagos_fax, contacto_pagos_telefono2, contacto_pagos_extension2, contacto_pagos_email, empresa_id, sucursal_id, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, id_aux, empresa_immex, tasa_ret_immex, dia_revision, dia_pago, cta_pago_mn, cta_pago_usd, ctb_cta_id_activo, ctb_cta_id_ingreso, ctb_cta_id_ietu, ctb_cta_id_comple, ctb_cta_id_activo_comple, lista_precio, fac_metodos_pago_id, cxc_clie_tipo_adenda_id) FROM stdin;
-1	1	XEXX010101000		PRODUMEX, USA	PRODUMEX	E. EXPRESSWAY 83	502		' '	SAN JUAN	78589	1	33	2457		8112345678					compras@produmex.com	4		1	1	1	1	1	1	1	f	t	1	0	1	f	2	0	0										0	0	0														0	0	0							1	1	f	2016-08-10 00:00:00-04	2016-08-10 00:00:00-04	\N	1	1	0	\N	f	0	0	0			0	0	0	0	0	1	1	0
+1	1	XEXX010101000		PRODUMEX, USA	PRODUMEX	E. EXPRESSWAY 83	502			SAN JUAN	78589	1	33	2457		8112345678					compras@produmex.com	4		1	1	1	1	1	1	1	f	t	1	0	1	f	2	0	0										0	0	0														0	0	0							1	1	f	2016-08-10 00:00:00-04	2016-08-16 22:27:04.6372-04	\N	1	1	0	\N	f	0	0	0			0	0	0	0	0	1	1	0
 \.
 
 
@@ -7166,7 +8709,7 @@ SELECT pg_catalog.setval('cxc_clie_grupos_id_seq', 1, false);
 -- Name: cxc_clie_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('cxc_clie_id_seq', 1, false);
+SELECT pg_catalog.setval('cxc_clie_id_seq', 2, true);
 
 
 --
@@ -7447,6 +8990,21 @@ SELECT pg_catalog.setval('cxp_prov_zonas_id_seq', 2, true);
 
 
 --
+-- Data for Name: erp_clients_consignacions; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY erp_clients_consignacions (id, cliente_id, calle, numero, colonia, pais, entidad, localidad, cp, localidad_alternativa, telefono, fax, momento_creacion, pais_id, estado_id, municipio_id) FROM stdin;
+\.
+
+
+--
+-- Name: erp_clients_consignacions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('erp_clients_consignacions_id_seq', 1, false);
+
+
+--
 -- Data for Name: erp_h_facturas; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -7501,6 +9059,17 @@ COPY erp_mascaras_para_validaciones_por_app (app_id, mask_name, mask_regex, id) 
 4	is_DiasComision3Correct	^([0-9]){1,12}[.]?[0-9]*$	95
 4	is_FechaInicioCorrect	^[0-9]{4}[-]{1}[0-9]{2}[-]{1}[0-9]{2}$	96
 4	is_ApellidomaternoCorrect	^[ a-zA-Z]{1,30}$	97
+5	is_RFCCorrect	^[A-Za-z0-9&]{3,4}[0-9]{6}[A-Za-z0-9]{0,3}$	32
+5	is_CalleCorrect	.{1,45}$	33
+5	is_ColoniaCorrect	.{1,45}$	35
+5	is_CpCorrect	^[0-9]{5}$	36
+5	is_PhoneCorrect	^[0-9]{10}$	37
+5	is_CorreoCorrect	^[^@ ]+@[^@ ]+.[^@ .]+$	38
+5	is_NocontrolCorrect	^[a-zA-Z]{1}[0-9]{1,9}$	29
+5	is_RazonsocialCorrect	[\\w .]	30
+5	is_CurpCorrect	^[A-Za-z]{4}[0-9]{6}[A-Za-z]{6}[A-Za-z0-9]{1}[0-9]{1}$	31
+5	is_AddressNumberCorrect	[A-Za-z0-9]{1,5}	34
+5	is_LegacyidCorrect	^[0-9]+$	66
 \.
 
 
@@ -7523,6 +9092,8 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 5	18.2678000000000011	2016-08-12 23:22:45.78109-04	2	DOF
 6	18.2678000000000011	2016-08-13 10:23:34.936361-04	2	DOF
 7	18.2454999999999998	2016-08-15 20:25:09.535235-04	2	DOF
+8	18.0363000000000007	2016-08-16 15:10:37.367853-04	2	DOF
+9	17.9868999999999986	2016-08-17 09:49:07.721927-04	2	DOF
 \.
 
 
@@ -7530,7 +9101,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 -- Name: erp_monedavers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_monedavers_id_seq', 7, true);
+SELECT pg_catalog.setval('erp_monedavers_id_seq', 9, true);
 
 
 --
@@ -7569,6 +9140,74 @@ COPY erp_parametros_generales (id, variable, valor) FROM stdin;
 --
 
 SELECT pg_catalog.setval('erp_parametros_generales_id_seq', 1, false);
+
+
+--
+-- Data for Name: erp_prefacturas; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY erp_prefacturas (id, cliente_id, moneda_id, observaciones, subtotal, impuesto, total, proceso_id, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, tipo_cambio, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, empleado_id, terminos_id, orden_compra, factura_sai, factura_id, refacturar, fac_metodos_pago_id, no_cuenta, monto_retencion, tasa_retencion_immex, tipo_documento, folio_pedido, enviar_ruta, inv_alm_id, id_moneda_pedido, cxc_clie_df_id, fac_subtotal, fac_impuesto, fac_monto_retencion, fac_total, monto_ieps, fac_monto_ieps, monto_descto, fac_monto_descto, motivo_descto, ctb_tmov_id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: erp_prefacturas_detalles; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY erp_prefacturas_detalles (id, prefacturas_id, producto_id, presentacion_id, tipo_impuesto_id, cantidad, precio_unitario, momento_creacion, valor_imp, costo_promedio, reservado, costo_referencia, cant_facturado, facturado, cant_facturar, inv_prod_unidad_id, gral_ieps_id, valor_ieps, descto, fac_rem_det_id, gral_imptos_ret_id, tasa_ret) FROM stdin;
+\.
+
+
+--
+-- Name: erp_prefacturas_detalles_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('erp_prefacturas_detalles_id_seq', 1, false);
+
+
+--
+-- Name: erp_prefacturas_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('erp_prefacturas_id_seq', 1, false);
+
+
+--
+-- Data for Name: erp_proceso; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY erp_proceso (id, proceso_flujo_id, empresa_id, sucursal_id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: erp_proceso_flujo; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY erp_proceso_flujo (id, titulo) FROM stdin;
+1	COTIZACION
+3	FACTURADO
+4	PEDIDO
+2	FACTURACION
+5	REMISION
+6	ORDEN SALIDA
+7	FAC PARCIAL
+8	REM PARCIAL
+\.
+
+
+--
+-- Name: erp_proceso_flujo_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('erp_proceso_flujo_id_seq', 1, false);
+
+
+--
+-- Name: erp_proceso_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('erp_proceso_id_seq', 1, false);
 
 
 --
@@ -7612,6 +9251,28 @@ SELECT pg_catalog.setval('fac_cfds_conf_id_seq', 1, true);
 
 
 --
+-- Data for Name: fac_metodos_pago; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_metodos_pago (id, titulo, borrado_logico, clave_sat, momento_creacion, momento_actualiza, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id) FROM stdin;
+2	TARJETA CREDITO	f	04	2016-07-14 14:22:35.326858-04	2016-07-14 15:32:37.553596-04	\N	\N	1	\N	1
+3	TARJETA DEBITO	f	28	2016-07-14 14:22:35.326858-04	2016-07-14 15:32:58.824791-04	\N	\N	1	\N	1
+7	OTROS	f	99	2016-07-14 14:22:35.326858-04	2016-07-14 15:33:21.478416-04	\N	\N	1	\N	1
+6	MONEDEROS ELECTRÓNICOS	f	05	2016-07-14 14:22:35.326858-04	2016-07-14 15:33:41.761163-04	\N	\N	1	\N	1
+1	EFECTIVO	f	01	2016-07-14 14:22:35.326858-04	2016-07-14 14:36:15.772894-04	\N	\N	1	\N	1
+4	CHEQUE NOMINATIVO	f	02	2016-07-14 14:22:35.326858-04	2016-07-14 15:31:58.715889-04	\N	\N	1	\N	1
+5	TRANSFERENCIA ELECTRONICA DE FONDOS	f	03	2016-07-14 14:22:35.326858-04	2016-07-14 15:32:18.792891-04	\N	\N	1	\N	1
+\.
+
+
+--
+-- Name: fac_metodos_pago_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_metodos_pago_id_seq', 1, false);
+
+
+--
 -- Data for Name: fac_nomina; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -7624,6 +9285,38 @@ COPY fac_nomina (id, tipo_comprobante, forma_pago, tipo_cambio, no_cuenta, fecha
 --
 
 SELECT pg_catalog.setval('fac_nomina_id_seq', 1, false);
+
+
+--
+-- Data for Name: fac_nomina_par; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_nomina_par (id, gral_emp_id, gral_suc_id, tipo_comprobante, forma_pago, no_cuenta_pago, gral_mon_id, gral_isr_id, motivo_descuento, concepto_unidad, leyenda) FROM stdin;
+1	1	1	EGRESO	PAGO EN UNA SOLA EXIBICION		1	1	DEDUCCIONES DE NOMINA	SERVICIO	Recibí de "x" la cantidad especificada como neto a pagar por concepto de mí sueldo y demas prestaciones correspondientes al periodo indicado. Estando conforme con las deducciones aplicadas. Ademas certifico que a la fecha no se me adeuda ninguna cantidad por ningun concepto relacionado con el desarrollo de mí trabajo.
+\.
+
+
+--
+-- Name: fac_nomina_par_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_nomina_par_id_seq', 1, false);
+
+
+--
+-- Data for Name: fac_par; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_par (id, gral_suc_id, cxc_mov_tipo_id, inv_alm_id, permitir_pedido, permitir_remision, permitir_cambio_almacen, permitir_servicios, permitir_articulos, permitir_kits, gral_suc_id_consecutivo, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id, formato_pedido, formato_factura, validar_pres_pedido, cambiar_unidad_medida, incluye_adenda, gral_emails_id_envio, gral_emails_id_cco, permitir_descto, permitir_req_com, aut_precio_menor_cot, aut_precio_menor_ped) FROM stdin;
+1	1	1	1	t	t	t	t	t	t	1	f	2015-06-08 20:00:00-04	2016-03-09 07:18:26.349635-05	\N	0	1	0	1	1	1	f	t	f	1	1	f	f	f	f
+\.
+
+
+--
+-- Name: fac_par_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_par_id_seq', 1, false);
 
 
 --
@@ -7941,10 +9634,10 @@ SELECT pg_catalog.setval('gral_empleado_percep_id_seq', 1, true);
 --
 
 COPY gral_empleados (id, clave, nombre_pila, apellido_paterno, apellido_materno, imss, infonavit, curp, rfc, fecha_nacimiento, fecha_ingreso, gral_escolaridad_id, gral_sexo_id, gral_civil_id, gral_religion_id, gral_sangretipo_id, gral_puesto_id, gral_categ_id, gral_suc_id_empleado, telefono, telefono_movil, correo_personal, gral_pais_id, gral_edo_id, gral_mun_id, calle, numero, colonia, cp, contacto_emergencia, telefono_emergencia, enfermedades, alergias, comentarios, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id, gralsuc_id, comision_agen, region_id_agen, comision2_agen, comision3_agen, comision4_agen, dias_tope_comision, dias_tope_comision2, dias_tope_comision3, monto_tope_comision, monto_tope_comision2, monto_tope_comision3, correo_empresa, tipo_comision, no_int, nom_regimen_contratacion_id, nom_periodicidad_pago_id, nom_riesgo_puesto_id, nom_tipo_contrato_id, nom_tipo_jornada_id, tes_ban_id, clabe, salario_base, salario_integrado, registro_patronal, genera_nomina, gral_depto_id) FROM stdin;
-2	2	GASPAR\n	TAMEZ\n	GARZA\n	43806183124\n	\N	TAGG610726HNLMRS04\n	TAGG610726	1961-07-26	2016-04-15	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
-3	3	JOSE LUIS\n	TAMEZ	TAMEZ	43038202081\n	\N	TATL820816HNLMMS07\n	TATL820816\n	1982-08-16	2016-07-19	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
-5	5	ALBERTO JORGE	SUAREZ	CAVAZOS	3967836382	\N	SUCA780502HNLRVL00	SUCA780502	1980-05-02	2016-04-01	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
-4	4	JUAN EDGAR	BALBOA	RIVERA	43048719199	\N	BARJ870708HNLLVN02	NARJ870708	1983-09-22	2016-05-05	3	1	1	1	1	1	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+2	2	GASPAR\n	TAMEZ\n	GARZA\n	43806183124\n	\N	TAGG610726HNLMRS04\n	TAGG610726	1961-07-26	2016-04-15	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+3	3	JOSE LUIS\n	TAMEZ	TAMEZ	43038202081\n	\N	TATL820816HNLMMS07\n	TATL820816\n	1982-08-16	2016-07-19	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+4	4	JUAN EDGAR	BALBOA	RIVERA	43048719199	\N	BARJ870708HNLLVN02	NARJ870708	1983-09-22	2016-05-05	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+5	5	ALBERTO JORGE	SUAREZ	CAVAZOS	3967836382	\N	SUCA780502HNLRVL00	SUCA780502	1980-05-02	2016-04-01	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
 1	1	JUAN ARTURO	RIOS	VARGAS	43008368748	\N	RIVJ830922HNLSRN06	RIVJ830922\n	1983-09-22	2016-04-01	3	1	1	1	1	1	1	1				2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
 \.
 
@@ -10816,7 +12509,11 @@ SELECT pg_catalog.setval('gral_tc_url_id_seq', 1, false);
 --
 
 COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id) FROM stdin;
-1	admin	123qwe	t	2016-08-16 09:37:56.575239-04	1
+2	user2	123qwe	t	\N	2
+3	user3	123qwe	t	\N	3
+4	user4	123qwe	t	\N	4
+5	user5	123qwe	t	\N	5
+1	admin	123qwe	t	2016-08-17 09:49:21.887786-04	1
 \.
 
 
@@ -10824,7 +12521,7 @@ COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id
 -- Name: gral_usr_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_usr_id_seq', 2, true);
+SELECT pg_catalog.setval('gral_usr_id_seq', 4, true);
 
 
 --
@@ -10849,6 +12546,10 @@ SELECT pg_catalog.setval('gral_usr_rol_id_seq', 1, false);
 
 COPY gral_usr_suc (id, gral_usr_id, gral_suc_id) FROM stdin;
 1	1	1
+2	2	1
+3	3	1
+4	4	1
+5	5	1
 \.
 
 
@@ -10856,7 +12557,7 @@ COPY gral_usr_suc (id, gral_usr_id, gral_suc_id) FROM stdin;
 -- Name: gral_usr_suc_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_usr_suc_id_seq', 1, true);
+SELECT pg_catalog.setval('gral_usr_suc_id_seq', 5, true);
 
 
 --
@@ -10907,6 +12608,21 @@ COPY inv_clas (id, titulo, stock_seguridad, factor_maximo, borrado_logico, momen
 --
 
 SELECT pg_catalog.setval('inv_clas_id_seq', 1, false);
+
+
+--
+-- Data for Name: inv_exi; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_exi (id, inv_prod_id, inv_alm_id, ano, transito, reservado, exi_inicial, entradas_1, salidas_1, costo_ultimo_1, entradas_2, salidas_2, costo_ultimo_2, entradas_3, salidas_3, costo_ultimo_3, entradas_4, salidas_4, costo_ultimo_4, entradas_5, salidas_5, costo_ultimo_5, entradas_6, salidas_6, costo_ultimo_6, entradas_7, salidas_7, costo_ultimo_7, entradas_8, salidas_8, costo_ultimo_8, entradas_9, salidas_9, costo_ultimo_9, entradas_10, salidas_10, costo_ultimo_10, entradas_11, salidas_11, costo_ultimo_11, entradas_12, salidas_12, costo_ultimo_12, momento_entrada_1, momento_salida_1, momento_entrada_2, momento_salida_2, momento_entrada_3, momento_salida_3, momento_entrada_4, momento_salida_4, momento_entrada_5, momento_salida_5, momento_entrada_6, momento_salida_6, momento_entrada_7, momento_salida_7, momento_entrada_8, momento_salida_8, momento_entrada_9, momento_salida_9, momento_entrada_10, momento_salida_10, momento_entrada_11, momento_salida_11, momento_entrada_12, momento_salida_12) FROM stdin;
+\.
+
+
+--
+-- Name: inv_exi_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_exi_id_seq', 1, false);
 
 
 --
@@ -11417,6 +13133,36 @@ SELECT pg_catalog.setval('nom_tipo_jornada_id_seq', 1, false);
 
 
 --
+-- Data for Name: poc_pedidos; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY poc_pedidos (id, folio, cxc_clie_id, moneda_id, observaciones, subtotal, impuesto, monto_retencion, total, tasa_retencion_immex, tipo_cambio, cxc_agen_id, cxp_prov_credias_id, orden_compra, proceso_id, fecha_compromiso, lugar_entrega, transporte, cancelado, borrado_logico, momento_creacion, momento_actualizacion, momento_cancelacion, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_cancelacion, tipo_documento, gral_usr_id_autoriza, momento_autorizacion, fac_metodos_pago_id, no_cuenta, enviar_ruta, inv_alm_id, cxc_clie_df_id, enviar_obser_fac, flete, monto_ieps, monto_descto, motivo_descto, porcentaje_descto, folio_cot) FROM stdin;
+\.
+
+
+--
+-- Data for Name: poc_pedidos_detalle; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY poc_pedidos_detalle (id, poc_pedido_id, inv_prod_id, presentacion_id, cantidad, precio_unitario, gral_imp_id, valor_imp, facturado, reservado, backorder, inv_prod_unidad_id, gral_ieps_id, valor_ieps, descto, requisicion, requiere_aut, autorizado, precio_aut, gral_usr_id_aut, gral_imptos_ret_id, tasa_ret) FROM stdin;
+\.
+
+
+--
+-- Name: poc_pedidos_detalle_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('poc_pedidos_detalle_id_seq', 1, false);
+
+
+--
+-- Name: poc_pedidos_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('poc_pedidos_id_seq', 1, false);
+
+
+--
 -- Data for Name: tes_ban; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -11443,6 +13189,14 @@ COPY tes_ban (id, titulo, descripcion, borrado_logico, momento_creacion, momento
 --
 
 SELECT pg_catalog.setval('tes_ban_id_seq', 1, false);
+
+
+--
+-- Name: clients_consignacions_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_clients_consignacions
+    ADD CONSTRAINT clients_consignacions_pkey PRIMARY KEY (id);
 
 
 --
@@ -11694,6 +13448,38 @@ ALTER TABLE ONLY erp_pagos_formas
 
 
 --
+-- Name: erp_prefacturas_detalles_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_prefacturas_detalles
+    ADD CONSTRAINT erp_prefacturas_detalles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: erp_prefacturas_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_prefacturas
+    ADD CONSTRAINT erp_prefacturas_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: erp_proceso_flujo_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_proceso_flujo
+    ADD CONSTRAINT erp_proceso_flujo_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: erp_proceso_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY erp_proceso
+    ADD CONSTRAINT erp_proceso_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: erp_tiempos_entrega_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -11718,11 +13504,35 @@ ALTER TABLE ONLY fac_cfds_conf
 
 
 --
+-- Name: fac_metodos_pago_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_metodos_pago
+    ADD CONSTRAINT fac_metodos_pago_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_nomina_par_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_par
+    ADD CONSTRAINT fac_nomina_par_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fac_nomina_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
 ALTER TABLE ONLY fac_nomina
     ADD CONSTRAINT fac_nomina_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_par_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_par
+    ADD CONSTRAINT fac_par_pkey PRIMARY KEY (id);
 
 
 --
@@ -12086,6 +13896,14 @@ ALTER TABLE ONLY cxc_clie_descto
 
 
 --
+-- Name: inv_exi_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi
+    ADD CONSTRAINT inv_exi_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: inv_mar_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -12310,6 +14128,22 @@ ALTER TABLE ONLY erp_parametros_generales
 
 
 --
+-- Name: poc_pedidos_detalle_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY poc_pedidos_detalle
+    ADD CONSTRAINT poc_pedidos_detalle_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: poc_pedidos_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY poc_pedidos
+    ADD CONSTRAINT poc_pedidos_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: presentaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -12395,6 +14229,14 @@ ALTER TABLE ONLY gral_usr_suc
 
 ALTER TABLE ONLY gral_tc_url
     ADD CONSTRAINT unique_institucion UNIQUE (institucion);
+
+
+--
+-- Name: unique_inv_exi; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi
+    ADD CONSTRAINT unique_inv_exi UNIQUE (inv_prod_id, inv_alm_id, ano);
 
 
 --
@@ -12665,6 +14507,22 @@ ALTER TABLE ONLY gral_cons
 
 
 --
+-- Name: fk_gral_suc; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_par
+    ADD CONSTRAINT fk_gral_suc FOREIGN KEY (gral_suc_id) REFERENCES gral_suc(id);
+
+
+--
+-- Name: fk_gral_suc; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_par
+    ADD CONSTRAINT fk_gral_suc FOREIGN KEY (gral_suc_id) REFERENCES gral_suc(id);
+
+
+--
 -- Name: fk_gral_suc_id; Type: FK CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -12734,6 +14592,22 @@ ALTER TABLE ONLY gral_suc
 
 ALTER TABLE ONLY gral_usr_rol
     ADD CONSTRAINT fk_usr FOREIGN KEY (gral_usr_id) REFERENCES gral_usr(id);
+
+
+--
+-- Name: inv_exi_inv_alm_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi
+    ADD CONSTRAINT inv_exi_inv_alm_id_fkey FOREIGN KEY (inv_alm_id) REFERENCES inv_alm(id);
+
+
+--
+-- Name: inv_prod_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi
+    ADD CONSTRAINT inv_prod_id_fkey FOREIGN KEY (inv_prod_id) REFERENCES inv_prod(id);
 
 
 --
