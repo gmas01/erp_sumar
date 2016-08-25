@@ -35,7 +35,7 @@ SET search_path = public, pg_catalog;
 
 CREATE FUNCTION erp_fn_validaciones_por_aplicativo(campos_data text, id_app integer, arreglo text[]) RETURNS text
     LANGUAGE plpgsql
-    AS $$
+    AS $_$
 
 DECLARE
 
@@ -82,9 +82,35 @@ DECLARE
 	
         -- # General purpose variables related with 
         -- # store procedure purpose
+        record1 record;
+        str_filas text[];
+        str_filas2 text[];
+        total_filas integer;--total de elementos de arreglo
+        total_filas2 integer;--total de elementos de arreglo
+        titulo_mask character varying;
 	mask_general character varying;
 	match_cadena boolean=false;
 	valida_integridad integer;
+        sql_select text;
+        cadena character varying:='';
+        exis integer:=0;
+        cont_fila integer;--contador de filas o posiciones del arreglo
+        cont_fila2 integer;--contador de filas o posiciones del arreglo
+
+
+	--Estas  se utilizan para la nomina
+	str_percep text[];
+--	str_deduc text[];
+--	str_hrs_extras text[];
+--	str_incapa text[];
+		
+	--str_filas2 text[];
+--	total_filas2 integer;--total de elementos de arreglo
+	--cont_fila2 integer;--contador de filas o posiciones del arreglo
+
+--	id_banco integer;
+	
+
 
 BEGIN
 
@@ -832,6 +858,716 @@ BEGIN
 		END IF;
 	END IF; --TERMINA VALIDACION validacion de clientes
 
+
+	-- INICIAA VALIDACION de Productos
+	IF id_app=8 THEN
+
+		--query para verificar si la Empresa actual incluye Modulo de Produccion
+		SELECT incluye_produccion, control_exis_pres FROM gral_emp WHERE id=emp_id INTO incluye_modulo_produccion, controlExisPres;
+		
+		--codigo producto,--str_data[31]
+		IF str_data[31]='' OR str_data[31]=' ' THEN
+			valor_retorno := ''||valor_retorno||'codigo:Es necesario C&oacute;digo del Producto.___';
+		END IF;
+		
+		--descripcion,--str_data[5]
+		EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_TituloenCorrect'';' INTO mask_general;
+		EXECUTE 'select '''||str_data[5]||''' ~ '''||mask_general||''';' INTO match_cadena;
+		IF match_cadena = false THEN
+			valor_retorno := ''||valor_retorno||'descripcion:La Descripcion igresada no es valida___';
+		END IF;
+		
+		--tipo_de_producto_id,--str_data[18]::integer
+		IF str_data[18]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'prodtipo:Es necesario seleccionar el Tipo de Producto.___';
+		END IF;
+		
+		--str_data[20] 	unidad
+		IF str_data[20]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'unidad:Es necesario seleccionar la Unidad de Mendida para el Producto.___';
+		END IF;
+		
+		--Si el tiopo de producto es diferente de 3 y 4, hay que validar
+		--tipo=3 Kit
+		--tipo=4 Servicios
+		IF str_data[18]::integer<>3 AND str_data[18]::integer<>4 THEN
+			--inv_clas_id,--str_data[8]::integer
+			IF str_data[8]::integer = 0 THEN
+				valor_retorno := ''||valor_retorno||'clase:Clasificaci&oacute;n no valida.___';
+			END IF;
+			
+			--inv_stock_clasif_id,--str_data[9]::integer
+			IF str_data[9]::integer = 0 THEN
+				valor_retorno := ''||valor_retorno||'stock:Es necesario seleecionar una Clasificaci&oacute;n de Stock.___';
+			END IF;
+			
+			--inv_prod_familia_id,--str_data[11]::integer
+			--IF str_data[11]::integer = 0 THEN
+			--	valor_retorno := ''||valor_retorno||'familia:Es necesario seleccionar una Familia para el Producto.___';
+			--END IF;
+			
+			--subfamilia_id,--str_data[12]::integer
+			--IF str_data[12]::integer = 0 THEN
+			--	valor_retorno := ''||valor_retorno||'subfamilia:Es necesario seleccionar una Subfamilia para el Producto.___';
+			--END IF;
+			
+			--inv_prod_grupo_id,--str_data[13]::integer
+			IF str_data[13]::integer = 0 THEN
+				valor_retorno := ''||valor_retorno||'grupo:Es necesario seleccionar un Grupo para el Producto.___';
+			END IF;
+			
+			/*
+			--meta_impuesto,--str_data[15]::integer
+			IF str_data[15]::integer = 0 THEN
+				valor_retorno := ''||valor_retorno||'iva:Es necesario seleccionar el Impuesto para el Producto.___';
+			END IF;
+			*/
+			--inv_prod_linea_id,--str_data[16]::integer
+			IF str_data[16]::integer = 0 THEN
+				valor_retorno := ''||valor_retorno||'linea:Es necesario seleccionar la L&iacute;nea para el Producto.___';
+			END IF;
+			
+			--inv_mar_id,--str_data[17]::integer
+			IF str_data[17]::integer = 0 THEN
+				valor_retorno := ''||valor_retorno||'marca:Es necesario seleccionar la Marca para el Producto.___';
+			END IF;
+			
+			--inv_seccion_id,--str_data[19]::integer
+			IF str_data[19]::integer = 0 THEN
+				valor_retorno := ''||valor_retorno||'seccion:Es necesario seleccionar la Secci&oacute;n para el Producto.___';
+			END IF;
+			
+			--str_data[28] 	presentaciones del producto
+			IF trim(str_data[28]) = '' THEN
+				valor_retorno := ''||valor_retorno||'seleccionados:Es necesario seleccionar al menos una Presentaci&oacute;n para el Producto___';
+			END IF;
+			
+			IF str_data[30]::double precision = 0 then 
+				valor_retorno := ''|| valor_retorno||'densidad:Densidad debe ser mayor que 0___';
+			END IF;
+		END IF;
+		
+		--Presentacion Default--str_data[42]::integer
+		IF str_data[42]::integer = 0 THEN
+			valor_retorno := ''||valor_retorno||'presdefault:Es necesario seleccionar la Presentaci&oacute;n Default.___';
+		END IF;
+		
+		IF str_data[4] = '0' THEN
+			IF str_data[31]!='' AND str_data[31]!=' ' THEN
+				EXECUTE 'SELECT count(id) FROM inv_prod WHERE sku='''||str_data[31]||''' AND borrado_logico=FALSE  AND empresa_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'codigo:El C&oacute;digo del Producto ya se encuentra registrado.___';
+				END IF;
+			END IF;
+			
+			IF str_data[5] != '' THEN
+				EXECUTE 'SELECT count(id) FROM inv_prod WHERE descripcion = '''||str_data[5]||''' AND borrado_logico=FALSE  AND empresa_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'descripcion:La Descripci&oacute;n Ingresada ya se encuentra en uso.___';
+				END IF;
+			END IF;
+						
+		ELSE
+			EXECUTE 'SELECT sku, id FROM inv_prod WHERE sku='''||str_data[31]||''' AND borrado_logico=FALSE  AND empresa_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'codigo:El C&oacute;digo del Producto ya se encuentra registrado.___';
+			END IF;
+
+
+			--RAISE EXCEPTION '%','controlExisPres: '||controlExisPres;
+			--Verificar si hay que validar existencias de Presentaciones
+			IF controlExisPres=true THEN 
+				IF str_data[18]::integer<>3 AND str_data[18]::integer<>4 THEN
+					IF trim(str_data[28]) <> '' THEN
+						--convertir en arreglo los id de presentaciones de producto
+						SELECT INTO str_filas2 string_to_array(str_data[28],',');
+						
+						--obtiene numero de elementos del arreglo str_pres
+						total_filas2:= array_length(str_filas2,1);
+						
+						sql_select:='
+						SELECT 
+							presentacion_id,
+							presentacion,
+							sum(existencia) AS existencia
+						FROM (
+							SELECT 
+								inv_prod_pres_x_prod.presentacion_id,
+								inv_prod_presentaciones.titulo  AS presentacion,
+								inv_exi_pres.inv_alm_id,
+								(inv_exi_pres.inicial + inv_exi_pres.entradas - inv_exi_pres.reservado - inv_exi_pres.salidas) AS existencia
+							FROM inv_prod_pres_x_prod 
+							JOIN inv_exi_pres ON (inv_exi_pres.inv_prod_id=inv_prod_pres_x_prod.producto_id AND inv_exi_pres.inv_prod_presentacion_id=inv_prod_pres_x_prod.presentacion_id)
+							JOIN inv_prod_presentaciones ON inv_prod_presentaciones.id=inv_prod_pres_x_prod.presentacion_id
+							WHERE inv_prod_pres_x_prod.producto_id='||str_data[4]::integer||' 
+						) AS sbt WHERE existencia>0
+						GROUP BY presentacion_id, presentacion';
+
+						--En esta cadena se almacenan las presentaciones que fueron eliminados y que tienen existencia
+						cadena := '';
+						
+						FOR record1 IN EXECUTE(sql_select) LOOP
+							exis:=0;
+							cont_fila2:=1;
+							FOR cont_fila2 IN 1 .. total_filas2 LOOP
+								IF record1.presentacion_id=str_filas2[cont_fila2]::integer THEN 
+									exis:= exis + 1;
+								END IF;
+							END LOOP;
+							
+							IF exis=0 THEN 
+								cadena := cadena || record1.presentacion||',';
+							END IF;
+						END LOOP;
+						
+						IF trim(cadena)<>'' THEN
+							valor_retorno := ''||valor_retorno||'seleccionados:Estas presentaciones('||cadena||') no se Pueden eliminar, tienen existencia.___';
+						END IF;
+						
+					END IF;
+				END IF;
+			END IF;
+
+		END IF;
+	END IF;--TERMINA VALIDACION validacion de productos
+
+
+	--Validacion de Catalogo Percepciones
+        IF id_app=170 THEN
+                --str_data[4]   id
+		--str_data clave nuevo_folio
+		--str_data[5]	titulo
+		--str_data[6]	activo
+		--str_data[7]	tipopercepciones
+                               
+		--titulo
+		IF trim(str_data[5]) = '' THEN
+			valor_retorno := ''||valor_retorno||'titulo:Es necesario ingresar un Titulo a la Percepci&oacute;n.___';
+		END IF;
+
+           
+                --tipopercepciones
+		IF str_data[7]::integer =0 THEN
+			valor_retorno := ''||valor_retorno||'percepcion:Es necesario seleccionar un tipo de Percepci&oacute;n.___';
+		END IF;
+		
+		IF str_data[4] = '0' THEN
+			--titulo
+			IF str_data[5] != '' THEN
+				EXECUTE 'SELECT count(id) FROM nom_percep WHERE titulo = '''||str_data[5]||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'titulo:El Titulo de la Percepci&oacute;n ya se encuentra registrada.___';
+				END IF;
+			END IF;
+		ELSE
+			EXECUTE 'SELECT titulo, id FROM nom_percep WHERE titulo='''||str_data[5]||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'titulo:El Titulo de la Percepci&oacute;n ya se encuentra registrada.___';
+			END IF;
+		END IF;
+                        
+        END IF;--Termina Validacion Catalogo Percepciones
+
+
+        --Validacion de Catalogo Deducciones
+        IF id_app=171 THEN
+                --str_data[4]   id
+		--str_data clave nuevo_folio
+		--str_data[5]	titulo
+		--str_data[6]	activo
+		--str_data[7]	tipodeducciones
+		
+                --titulo
+		IF trim(str_data[5]) = '' THEN
+			valor_retorno := ''||valor_retorno||'titulo:Es necesario ingresar un Titulo a la Deducci&oacute;n.___';
+		END IF;
+
+           
+                --tipodeducciones
+		IF str_data[7]::integer =0 THEN
+			valor_retorno := ''||valor_retorno||'deduccion:Es necesario seleccionar un tipo de Deducci&oacute;n.___';
+		END IF;
+		
+		IF str_data[4] = '0' THEN
+			--titulo
+			IF str_data[5] != '' THEN
+				EXECUTE 'SELECT count(id) FROM nom_deduc WHERE titulo = '''||str_data[5]||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'titulo:El Titulo de la Percepci&oacute;n ya se encuentra registrada.___';
+				END IF;
+			END IF;
+			--titulo			
+		ELSE
+			EXECUTE 'SELECT titulo, id FROM nom_deduc WHERE titulo='''||str_data[5]||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'titulo:El Titulo de la Percepci&oacute;n ya se encuentra registrada.___';
+			END IF;
+		END IF;
+                        
+        END IF;
+        --Termina Validacion Catalogo Deducciones
+
+	
+	
+	--validacion de Catalogo Periodicidad de Pago
+        IF id_app=172 THEN
+                --str_data[4]  id
+                --str_data[5]  titulo 
+                --str_data[6]  no_periodos
+		--str_data[7]  activo
+		
+                 --titulo
+		IF trim(str_data[5]) = '' THEN
+			valor_retorno := ''||valor_retorno||'titulo:Es necesario ingresar el Titulo de la Periodicidad de Pago.___';
+		END IF;
+		
+		--no_periodos
+		IF trim(str_data[6]) = '' THEN
+			valor_retorno := ''||valor_retorno||'periodos:Es necesario ingresar el N&uacute;mero del Peridodo.___';
+		END IF;
+		
+		IF str_data[4] = '0' THEN
+			--no_periodos
+			IF str_data[6]!='' AND str_data[6]!=' ' THEN
+				
+			EXECUTE 'SELECT count(id) FROM nom_periodicidad_pago WHERE no_periodos = '''||str_data[6]::integer||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'periodos:El N&uacute;mero del Periodo ya se encuentra registrada.___'; 
+				END IF;
+			END IF;
+			
+			--titulo
+			IF str_data[5] != '' THEN
+
+			EXECUTE 'SELECT count(id) FROM nom_periodicidad_pago WHERE titulo='''||str_data[5]||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'titulo:El Titulo de la Periodicidad de Pago ya se encuentra registrada.___';
+				
+				END IF;
+			END IF;
+			--titulo			
+		ELSE
+			EXECUTE 'SELECT titulo, id FROM nom_periodicidad_pago WHERE titulo='''||str_data[5]||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'titulo:El Titulo de la Periodicidad de Pago ya se encuentra registrada.___';
+			END IF;
+			--no_periodos
+			EXECUTE 'SELECT no_periodos, id FROM nom_periodicidad_pago WHERE no_periodos='''||str_data[6]::integer||''' AND borrado_logico=FALSE  AND gral_emp_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'periodos:El N&uacute;mero del Periodo ya se encuentra registrada.___';
+			END IF;
+		END IF;
+        END IF;
+        --Termina validacion Periodicidad de Pago
+
+
+
+	
+	--Validacion de Facturacion de Nomina
+        IF id_app=173 THEN
+		IF command_selected='new' OR command_selected='edit' THEN 
+			--str_data[1]	app_selected
+			--str_data[2]	command_selected
+			--str_data[3]	id_usuario
+			--str_data[4]	identificador
+			--str_data[5]	comp_tipo
+			--str_data[6]	comp_forma_pago
+			--str_data[7]	comp_tc
+			--str_data[8]	comp_no_cuenta
+			--str_data[9]	fecha_pago
+			--str_data[10]	select_comp_metodo_pago
+			--str_data[11]	select_comp_moneda
+			--str_data[12]	select_comp_periodicidad
+			--str_data[13]	select_no_periodo
+
+
+			 --str_data[5]	comp_tipo
+			IF trim(str_data[5]) = '' THEN
+				valor_retorno := ''||valor_retorno||'comptipo: Se requiere el Tipo de Comprobante.___';
+			END IF;
+			
+			--str_data[6]	comp_forma_pago
+			IF trim(str_data[6]) = '' THEN
+				valor_retorno := ''||valor_retorno||'compformapago:Se requiere la Forma de Pago.___';
+			END IF;
+			
+			--str_data[9]	fecha_pago
+			IF trim(str_data[9]) = '' THEN
+				valor_retorno := ''||valor_retorno||'compfechapago:Se requiere la Fecha de Pago.___';
+			END IF;
+
+			--str_data[10]	select_comp_metodo_pago
+			IF trim(str_data[10]) = '' THEN
+				valor_retorno := ''||valor_retorno||'compmetodopago:Se requiere el Metodo de Pago.___';
+			ELSE
+				IF str_data[10]::integer = 0 THEN
+					valor_retorno := ''||valor_retorno||'compmetodopago:Se requiere el Metodo de Pago.___';
+				END IF;
+			END IF;
+
+			
+			--str_data[11]	select_comp_moneda
+			IF trim(str_data[11]) = '' THEN
+				valor_retorno := ''||valor_retorno||'compmoneda:Se requiere la Moneda.___';
+			ELSE
+				IF str_data[11]::integer=0 THEN
+					valor_retorno := ''||valor_retorno||'compmoneda:Se requiere la Moneda.___';
+				END IF;
+			END IF;
+			
+			--str_data[12]	select_comp_periodicidad 
+			IF trim(str_data[12]) <> '' THEN
+				IF str_data[12]::integer = 0 THEN
+					valor_retorno := ''||valor_retorno||'compperiodicidad:Se requiere la Periodicidad de Pago.___';
+				END IF;
+			ELSE
+				valor_retorno := ''||valor_retorno||'compperiodicidad:Se requiere la Periodicidad de Pago.___';
+			END IF;
+			
+			
+			
+			IF str_data[4]='0' THEN
+				--str_data[13]	select_no_periodo
+				IF trim(str_data[13])<>'' AND trim(str_data[13])<>'0' THEN
+					EXECUTE 'SELECT count(id) FROM fac_nomina WHERE nom_periodos_conf_det_id='||str_data[13]::integer||' AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+					IF valida_integridad > 0 THEN
+						valor_retorno := ''||valor_retorno||'compnoperiodo:Ya existe una N&oacute;mina con el N&uacute;mero del Periodo seleccionado.___'; 
+					END IF;
+				END IF;
+			ELSE
+				
+			END IF;
+
+			
+		END IF;
+
+
+
+
+		
+		IF command_selected='new_nomina' OR command_selected='edit_nomina' THEN 
+			--str_data[1]	app_selected
+			--str_data[2]	command_selected
+			--str_data[3]	id_usuario
+			--str_data[4]	identificador
+			--str_data[5]	id_reg
+			--str_data[6]	id_empleado
+			IF trim(str_data[6])='' OR trim(str_data[6])='0'THEN
+				valor_retorno := ''||valor_retorno||'noempleado:Se requiere seleccionar un empleado valido.___';
+			END IF;
+			
+			--str_data[7]	no_empleado
+			IF trim(str_data[7]) = '' THEN
+				valor_retorno := ''||valor_retorno||'noempleado:Se requiere la Clave del Empleado.___';
+			END IF;
+			
+			--str_data[8]	rfc_empleado
+			IF trim(str_data[8]) = '' THEN
+				valor_retorno := ''||valor_retorno||'rfcempleado:Se requiere el RFC del Empleado.___';
+			ELSE
+				EXECUTE 'select '''||str_data[8]||''' ~ ''^[A-Za-z0-9&]{3,4}[0-9]{6}[A-Za-z0-9]{3}$'';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'rfcempleado:RFC No Valido.___';
+				END IF;
+			END IF;
+			
+			--str_data[9]	nombre_empleado
+			IF trim(str_data[9]) = '' THEN
+				valor_retorno := ''||valor_retorno||'nombreempleado:Se requiere el Nombre completo del Empleado.___';
+			END IF;
+			
+			--str_data[10]	select_departamento
+			--str_data[11]	select_puesto
+			--str_data[12]	fecha_contrato
+			
+			--str_data[13]	antiguedad
+			IF trim(str_data[13]) = '' THEN
+				valor_retorno := ''||valor_retorno||'antiguedad:Se requiere la Antig&uuml;edad en n&uacute;mero de semanas.___';
+			ELSE
+				IF str_data[13]::double precision<=0 THEN 
+					valor_retorno := ''||valor_retorno||'antiguedad:La Antig&uuml;edad en n&uacute;mero de semanas debe ser mayor a cero.___';
+				END IF;
+			END IF;
+			
+			--str_data[14]	curp
+			IF trim(str_data[14]) = '' THEN
+				valor_retorno := ''||valor_retorno||'curp:Se requiere la CURP del Empleado.___';
+			ELSE
+				EXECUTE 'select '''||str_data[14]||''' ~ ''^[A-Za-z]{4}[0-9]{6}[A-Za-z]{6}[A-Za-z0-9]{1}[0-9]{1}$'';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'curp:Curp No Valido___';
+				END IF;
+			END IF;
+			
+			--str_data[15]	select_reg_contratacion
+			IF str_data[15]::integer=0 THEN
+				valor_retorno := ''||valor_retorno||'regimencontratacio:Se requiere el R&eacute;gimen de Contrataci&oacute;n del Empleado.___';
+			END IF;
+			
+			--str_data[16]	select_tipo_contrato
+			--str_data[17]	select_tipo_jornada
+			--str_data[18]	select_preriodo_pago
+			IF str_data[18]::integer=0 THEN
+				valor_retorno := ''||valor_retorno||'periodicidadpago:Se requiere la Periodicidad del Pago.___';
+			END IF;
+			
+			--str_data[19]	clabe
+			--str_data[20]	select_banco
+			--str_data[21]	select_riesgo_puesto
+			--str_data[22]	imss
+			--str_data[23]	reg_patronal
+			--str_data[24]	salario_base
+			--str_data[25]	fecha_ini_pago
+			IF trim(str_data[25])='' THEN
+				valor_retorno := ''||valor_retorno||'fechainipago:Se requiere Fecha Inicial del Periodo de Pago.___';
+			END IF;
+			
+			--str_data[26]	fecha_fin_pago
+			IF trim(str_data[26]) = '' THEN
+				valor_retorno := ''||valor_retorno||'fechafinpago:Se requiere Fecha Final del Periodo de Pago.___';
+			END IF;
+			
+			--str_data[27]	salario_integrado
+			--str_data[28]	no_dias_pago
+			IF trim(str_data[28])='' THEN
+				valor_retorno := ''||valor_retorno||'nodiaspago:Se requiere el N&uacute;mero de D&iacute;as Pagados.___';
+			ELSE
+				IF str_data[28]::integer<=0 THEN
+					valor_retorno := ''||valor_retorno||'nodiaspago:Se requiere el N&uacute;mero de D&iacute;as Pagados.___';
+				END IF;
+			END IF;
+			
+			--str_data[29]	concepto_descripcion
+			IF trim(str_data[29]) = '' THEN
+				valor_retorno := ''||valor_retorno||'grid__concepto_descripcion:Se requiere el Concepto para el Comprobante.___';
+			END IF;
+			
+			--str_data[30]	concepto_unidad
+			IF trim(str_data[30]) = '' THEN
+				valor_retorno := ''||valor_retorno||'grid__concepto_unidad:Se requiere la Unidad.___';
+			END IF;
+			--str_data[31]	concepto_cantidad
+			IF trim(str_data[31]) = '' THEN
+				valor_retorno := ''||valor_retorno||'grid__concepto_cantidad:Se requiere la Cantidad.___';
+			ELSE 
+				IF str_data[31]::double precision <=0 THEN
+					valor_retorno := ''||valor_retorno||'grid__concepto_cantidad:La Cantidad debe ser mayor a cero.___';
+				END IF;
+			END IF;
+			--str_data[32]	concepto_valor_unitario
+			IF trim(str_data[32]) = '' THEN
+				valor_retorno := ''||valor_retorno||'grid__concepto_valor_unitario:Se requiere el Valor Unitario del Concepto.___';
+			ELSE 
+				IF str_data[32]::double precision <=0 THEN
+					valor_retorno := ''||valor_retorno||'grid__concepto_valor_unitario:El Valor Unitario debe ser mayor a cero.___';
+				END IF;
+			END IF;
+			
+			--str_data[33]	concepto_importe
+			IF trim(str_data[33]) = '' THEN
+				valor_retorno := ''||valor_retorno||'grid__concepto_importe:Se requiere el Importe del Concepto.___';
+			ELSE 
+				IF str_data[33]::double precision <=0 THEN
+					valor_retorno := ''||valor_retorno||'grid__concepto_importe:El Importe debe ser mayor a cero.___';
+				END IF;
+			END IF;
+			
+			--str_data[34]	descuento
+			--str_data[35]	motivo_descuento
+			--str_data[36]	select_impuesto_retencion
+			IF str_data[36]::integer=0 THEN
+				valor_retorno := ''||valor_retorno||'selectimpuestoret:Se requiere el impuesto de la retenci&oacute;n.___';
+			END IF;
+			--str_data[37]	importe_retencion
+			IF trim(str_data[37]) = '' THEN
+				valor_retorno := ''||valor_retorno||'importeisr:Se requiere el Monto de la Retenci&oacute;n.___';
+			ELSE
+				IF str_data[37]::double precision<=0 THEN
+					valor_retorno := ''||valor_retorno||'importeisr:Se requiere el Monto de la Retenci&oacute;n.___';
+				END IF;
+			END IF;
+			
+			--str_data[38]	comp_subtotal
+			--str_data[39]	comp_descuento
+			--str_data[40]	comp_retencion
+			--str_data[41]	comp_total
+			--str_data[42]	percep_total_gravado
+			--str_data[43]	percep_total_excento
+			--str_data[44]	deduc_total_gravado
+			--str_data[45]	deduc_total_excento
+			--str_data[46]	percepciones
+			
+			--str_data[46]	percepciones
+			IF str_data[46] is not null AND str_data[46]<>'' THEN 
+				--Convertir en arreglo la cadena de Percepciones
+				SELECT INTO str_percep string_to_array(str_data[46],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_percep,1) .. array_upper(str_percep,1) LOOP
+					SELECT INTO str_filas string_to_array(str_percep[cont_fila],'|');
+					--str_filas[1]	id_percep
+					--str_filas[2]	noTrPercep
+					--str_filas[3]	percep_monto_gravado
+					--str_filas[4]	percep_monto_excento
+					
+					--str_data[3]	percep_monto_gravado
+					IF trim(str_filas[3]) = '' THEN
+						--valor_retorno := ''||valor_retorno||'grid2__percep_monto_gravado'||str_filas[2]||':Se requiere el Importe del Concepto.___';
+					ELSE 
+						IF str_filas[3]::double precision <=0 THEN
+							--valor_retorno := ''||valor_retorno||'grid2__percep_monto_gravado'||str_filas[2]||':El Importe debe ser mayor a cero.___';
+						END IF;
+					END IF;
+					
+				END LOOP;
+			END IF;
+			--str_data[47]	deducciones
+			--str_data[48]	hrs_extras
+			--str_data[49]	incapacidades
+			
+		END IF;
+        END IF;
+        --Termina validacion Periodicidad de Pago
+
+
+
+
+	--validacion de Catalogo de Configuración Periodicidad de Pago
+        IF id_app=174 THEN
+                --str_data[4]  id
+                --str_data[5]  año 
+                --str_data[6]  periodicidad de pago
+		--str_data[7]  titulo
+
+	      --año
+		IF str_data[5]::integer =0 THEN
+			valor_retorno := ''||valor_retorno||'select_anio:Es necesario seleccionar un A&ntilde;o.___';
+		END IF;
+
+		  --periodicidad de Pago
+		IF str_data[6]::integer =0 THEN
+			valor_retorno := ''||valor_retorno||'periodo:Es necesario seleccionar un tipo de Periodicidad de Pago.___';
+		END IF;
+
+		
+		IF str_data[4] = '0' THEN
+			--anio
+			IF str_data[5] != ' ' THEN
+				EXECUTE 'SELECT count(id) FROM nom_periodos_conf WHERE ano = '''||str_data[5]||''' AND nom_periodicidad_pago_id = '''||str_data[6]||''' AND borrado_logico=FALSE AND gral_suc_id='||str_data[8]||' AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'select_anio:El A&ntilde;o ya se encuentra registrado.___';
+				END IF;
+			END IF;
+		ELSE
+			EXECUTE 'SELECT ano, id FROM nom_periodos_conf WHERE ano='''||str_data[5]||''' AND nom_periodicidad_pago_id = '''||str_data[6]||''' AND borrado_logico=FALSE AND gral_suc_id='||str_data[8]||' AND gral_emp_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'select_anio:El A&ntilde;o ya se encuentra registrado.___';
+			END IF;
+		END IF;
+
+		IF str_data[4] = '0' THEN
+			--periodicidad de pago
+			IF str_data[6] != ' ' THEN
+				EXECUTE 'SELECT count(id) FROM nom_periodos_conf WHERE ano = '''||str_data[5]||''' AND nom_periodicidad_pago_id = '''||str_data[6]||''' AND borrado_logico=FALSE AND gral_suc_id='||str_data[8]||' AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'periodo:La Periodicidad de Pago ya se encuentra registrada.___';
+				END IF;
+			END IF;
+		ELSE
+			EXECUTE 'SELECT nom_periodicidad_pago_id, id FROM nom_periodos_conf WHERE ano = '''||str_data[5]||''' AND nom_periodicidad_pago_id='''||str_data[6]||''' AND borrado_logico=FALSE AND gral_suc_id='||str_data[8]||' AND gral_emp_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'periodo:La Periodicidad de Pago ya se encuentra registrada.___';
+			END IF;
+		END IF;
+
+		
+		IF str_data[4] = '0' THEN
+			--prefijo
+			IF str_data[7] != ' ' THEN
+				EXECUTE 'SELECT count(id) FROM nom_periodos_conf WHERE ano = '''||str_data[5]||''' AND nom_periodicidad_pago_id='''||str_data[6]||''' AND prefijo = '''||str_data[7]||''' AND borrado_logico=FALSE AND gral_suc_id='||str_data[8]||' AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'titulo:EL Prefijo ya se encuentra registrado1.___';
+				END IF;
+			END IF;
+		ELSE
+			EXECUTE 'SELECT prefijo, id FROM nom_periodos_conf WHERE ano = '''||str_data[5]||''' AND nom_periodicidad_pago_id='''||str_data[6]||''' AND prefijo='''||str_data[7]||''' AND borrado_logico=FALSE AND gral_suc_id='||str_data[8]||' AND gral_emp_id='||emp_id||';' INTO titulo_mask, valida_integridad;
+			IF str_data[4]::integer != valida_integridad THEN
+				valor_retorno := ''||valor_retorno||'titulo:EL Prefijo ya se encuentra registrado2.___';
+			END IF;
+		END IF;
+
+		-- validaciones para el grid --
+		IF arreglo[1] <> 'sin datos' THEN
+			total_filas:= array_length(arreglo,1);--obtiene total de elementos del arreglo
+			cont_fila:=1;
+			FOR cont_fila IN 1 .. total_filas LOOP
+				
+				SELECT INTO str_filas string_to_array(arreglo[cont_fila],'___');
+				--str_filas[1]	id_reg 
+				--str_filas[2]	id_periodo 
+				--str_filas[3]	folio 
+				--str_filas[4]	tituloperiodo
+				--str_filas[5]	fecha_inicio 
+				--str_filas[6]	fecha_final
+				--str_filas[7]	noTr
+
+				---VALIDACION PARA  EL GRID
+				IF str_filas[5] = ' ' OR str_filas[5] = '' THEN
+					valor_retorno := ''||valor_retorno||'fechainicial'||str_filas[7]||':Es necesario ingresar la fecha inicial.___';
+				END IF;
+
+				IF str_filas[6] = ' ' OR str_filas[6] = '' THEN
+					valor_retorno := ''||valor_retorno||'fechafinal'||str_filas[7]||':Es necesario ingresar la fecha final.___';
+				END IF;
+				
+				IF trim(str_filas[4])='' THEN 
+					valor_retorno := ''||valor_retorno||'tituloperiodo'||str_filas[7]||':Es necesario ingresar un titulo.___';
+
+				END IF;
+
+				--str_filas[4]	tituloperiodo
+				--str_filas[7]	noTr
+				
+				cont_fila2:=1;
+				FOR cont_fila2 IN 1 .. array_length(arreglo,1) LOOP
+					SELECT INTO str_filas2 string_to_array(arreglo[cont_fila2],'___');
+
+					--str_filas2[4]	tituloperiodo
+					--str_filas2[7]	noTr
+					--Aqui se verifica en el listado si existe un elemento con la misma descripcion
+					IF str_filas[4]=str_filas2[4] THEN
+						--Si existe entra aquí
+						--Hay que verificar que no sea el mismo elemento
+						IF str_filas[7]<>str_filas2[7] THEN
+							valor_retorno := ''||valor_retorno||'tituloperiodo'||str_filas[7]||':Es necesario ingresar un titulo diferente'||str_filas2[4]||'.___';
+
+						END IF;
+					END IF;
+
+				END LOOP;
+
+				IF str_filas[1] = '0' THEN
+				--tituloperiodo
+					IF str_filas[4] != ' ' THEN
+						EXECUTE 'SELECT count(id) FROM nom_periodos_conf_det WHERE titulo = '''||str_filas[4]||''' AND nom_periodos_conf_id = '''||str_filas[2]||''' ;' INTO valida_integridad;
+						IF valida_integridad > 0 THEN
+							valor_retorno := ''||valor_retorno||'tituloperiodo'||str_filas[7]||':El Titulo ya se encuentra en uso.___';
+						END IF;
+					END IF;
+				ELSE
+					EXECUTE 'SELECT titulo, id FROM nom_periodos_conf_det WHERE  titulo='''||str_filas[4]||''' AND nom_periodos_conf_id = '''||str_filas[2]||''' ;' INTO titulo_mask, valida_integridad;
+					IF str_filas[1]::integer != valida_integridad THEN
+						valor_retorno := ''||valor_retorno||'tituloperiodo'||str_filas[7]||':El Titulo ya se encuentra registrado.___';
+					END IF;
+				END IF;
+				
+			END LOOP;
+		
+		END IF;
+		
+        END IF;
+        --validacion de Catalogo de Configuración Periodicidad de Pago
+
+        
 	
 	IF valor_retorno = '' THEN
 		valor_retorno := 'true';
@@ -842,10 +1578,656 @@ BEGIN
 	
 END;
 
-$$;
+$_$;
 
 
 ALTER FUNCTION public.erp_fn_validaciones_por_aplicativo(campos_data text, id_app integer, arreglo text[]) OWNER TO sumar;
+
+--
+-- Name: fac_adm_procesos(text, text[]); Type: FUNCTION; Schema: public; Owner: sumar
+--
+
+CREATE FUNCTION fac_adm_procesos(campos_data text, extra_data text[]) RETURNS character varying
+    LANGUAGE plpgsql
+    AS $$
+
+
+DECLARE
+	str_data text[];
+	str_filas text[];
+	--Total de elementos de arreglo
+	total_filas integer;
+	--Contador de filas o posiciones del arreglo
+	cont_fila integer;
+	--Estas  se utilizan para la nomina
+	str_percep text[];
+	str_deduc text[];
+	str_hrs_extras text[];
+	str_incapa text[];
+	refId character varying:='';
+	
+	valor_retorno character varying = '';
+	ultimo_id integer:=0;
+	ultimo_id_det integer:=0;
+	id_tipo_consecutivo integer=0;
+	prefijo_consecutivo character varying = '';
+	nuevo_consecutivo bigint=0;
+	nuevo_folio character varying = '';
+	ultimo_id_proceso integer =0;
+
+	tipo_de_documento integer =0;
+	fila_fac_rem_doc record;
+	
+	app_selected integer;
+	command_selected text;
+	usuario_ejecutor integer:=0;
+	emp_id integer:=0;
+	suc_id integer:=0;
+	suc_id_consecutivo integer:=0; --sucursal de donde se tomara el consecutivo
+	id_almacen integer;
+	espacio_tiempo_ejecucion timestamp with time zone = now();
+	ano_actual integer:=0;
+	mes_actual integer:=0;
+	factura_fila record;
+	prefactura_fila record;
+	prefactura_detalle record;
+	factura_detalle record;
+	formulacion record;
+	tiene_pagos integer:=0;
+	identificador_nuevo_movimiento integer;
+	tipo_movimiento_id integer:=0;
+	exis integer:=0;
+	sql_insert text;
+	sql_update text;
+	sql_select text;
+	sql_select2 character varying:='';
+	cantidad_porcentaje double precision:=0;
+	id_proceso integer;
+	bandera_tipo_4 boolean;--bandera que identifica si el producto es tipo 4, true=tipo 4, false=No es tipo4
+	serie_folio_fac character varying:='';
+	refact character varying :='';
+	tipo_cam double precision := 0;
+	
+	numero_dias_credito integer:=0;
+	fecha_de_vencimiento timestamp with time zone;
+	
+	importe_del_descto_partida double precision := 0;
+	importe_partida_con_descto double precision := 0;
+	suma_descuento double precision := 0;
+	suma_subtotal_con_descuento double precision := 0;
+	
+	importe_partida double precision := 0;
+	importe_ieps_partida double precision := 0;
+	impuesto_partida double precision := 0;
+	monto_subtotal double precision := 0;
+	suma_ieps double precision := 0;
+	suma_total double precision := 0;
+	monto_impuesto double precision := 0;
+	total_retencion double precision := 0;
+	retener_iva boolean := false;
+	tasa_retencion double precision := 0;
+	retencion_partida double precision := 0;
+	suma_retencion_de_partidas double precision := 0;
+	suma_retencion_de_partidas_globlal double precision:= 0;
+	
+	--Estas variables se utilizan en caso de que se facture un pedido en otra moneda
+	suma_descuento_global double precision := 0;
+	suma_subtotal_con_descuento_global double precision := 0;
+	monto_subtotal_global double precision := 0;
+	suma_ieps_global double precision := 0;
+	monto_impuesto_global double precision := 0;
+	total_retencion_global double precision := 0;
+	suma_total_global double precision := 0;
+	cant_original double precision := 0;
+	
+	serie_folio_nota_credito  character varying:='';
+	fecha_nota_credito timestamp with time zone;
+	concepto_nota_credito character varying:='';
+	aplicativo_id integer := 0; --aqui se guarda el id del aplicativo que genero la nota de credito
+	
+	total_factura double precision;
+	id_moneda_factura integer:=0;
+	suma_pagos double precision:=0;
+	suma_notas_credito double precision:=0;
+	nuevacantidad_monto_pago double precision:=0;
+	nuevo_saldo_factura double precision:=0;
+	
+	costo_promedio_actual double precision:=0;
+	costo_referencia_actual double precision:=0;
+	
+	id_osal integer := 0;
+	nuevo_folio_osal character varying:='';
+	fila record;
+	fila_detalle record;
+	facpar record;--parametros de Facturacion
+	
+	id_df integer:=0;--id de la direccion fiscal
+	result character varying:='';
+
+	noDecUnidad integer:=0;--numero de decimales permitidos para la unidad
+	exisActualPres double precision:=0;--existencia actual de la presentacion
+	equivalenciaPres double precision:=0; --equivalencia de la presentacion en la unidad del producto
+	cantPres double precision:=0; --Cantidad que se esta Intentando traspasar
+	cantPresAsignado double precision:=0;
+	cantPresReservAnterior double precision:=0;
+	
+	controlExisPres boolean; --Variable que indica  si se debe controlar Existencias por Presentacion
+	partida_facturada boolean;--Variable que indica si la cantidad de la partida ya fue facturada en su totalidad
+	actualizar_proceso boolean; --Indica si hay que actualizar el flujo del proceso. El proceso se debe actualizar cuando ya no quede partidas vivas
+	id_pedido integer;--Id del Pedido que se esta facturando
+	--Id de la unidad de medida del producto
+	idUnidadMedida integer:=0;
+	--Nombre de la unidad de medida del producto
+	nombreUnidadMedida character varying:=0;
+	--Densidad del producto
+	densidadProd double precision:=0;
+	--Cantidad en la unidad del producto
+	cantUnidadProd double precision:=0;
+	--Id de la unidad de Medida de la Venta
+	idUnidadMedidaVenta integer:=0;
+	--Cantidad en la unidad de Venta, esto se utiliza cuando la unidad del producto es diferente a la de venta
+	cantUnidadVenta double precision:=0;
+	--Cantidad de la existencia convertida a la unidad de venta, esto se utiliza cuando la unidad del producto es diferente a la de venta
+	cantExisUnidadVenta double precision:=0;
+	match_cadena boolean:=false;
+	
+	--Numero de Adenda
+	idAdenda integer:=0;
+	moneda_iso_4217 character varying:='';
+	valor_campo1 character varying:='';
+	id2 integer:=0;
+BEGIN
+	-- convertir cadena en arreglo
+	SELECT INTO str_data string_to_array(''||campos_data||'','___');
+	
+	-- aplicativo que manda a llamar este procedimiento almacenado
+	app_selected := str_data[1]::integer;
+	
+	-- comando que desea ejecutar el aplicativo que llamo el procedimiento almacenado
+	command_selected := str_data[2];
+	
+	-- usuario que utiliza el aplicativo
+	usuario_ejecutor := str_data[3]::integer;
+	
+	SELECT EXTRACT(YEAR FROM espacio_tiempo_ejecucion) INTO ano_actual;
+	SELECT EXTRACT(MONTH FROM espacio_tiempo_ejecucion) INTO mes_actual;
+	
+	--obtener id de empresa, sucursal
+  	SELECT gral_suc.empresa_id, gral_usr_suc.gral_suc_id
+  	FROM gral_usr_suc 
+	JOIN gral_suc ON gral_suc.id = gral_usr_suc.gral_suc_id
+	WHERE gral_usr_suc.gral_usr_id = usuario_ejecutor
+	INTO emp_id, suc_id;
+	
+	--Obtener parametros para la facturacion
+	SELECT * FROM fac_par WHERE gral_suc_id=suc_id INTO facpar;
+	
+	--tomar el id del almacen para ventas
+	id_almacen := facpar.inv_alm_id;
+	
+	--éste consecutivo es para el folio de Remisión y folio para BackOrder(poc_ped_bo)
+	suc_id_consecutivo := facpar.gral_suc_id_consecutivo;
+
+	--query para verificar si la Empresa actual incluye Modulo de Produccion y control de Existencias por Presentacion
+	SELECT control_exis_pres FROM gral_emp WHERE id=emp_id INTO controlExisPres;
+	
+	--Inicializar en cero
+	id_pedido:=0;
+	
+	-- Factura de NOMINA
+	IF app_selected = 173 THEN
+		--Aqui entra para crear el nuevo registro del Header de la Nomina
+		IF command_selected = 'new' THEN 
+			--str_data[1]	app_selected
+			--str_data[2]	command_selected
+			--str_data[3]	id_usuario
+			--str_data[4]	identificador
+			--str_data[5]	comp_tipo
+			--str_data[6]	comp_forma_pago
+			--str_data[7]	comp_tc
+			--str_data[8]	comp_no_cuenta
+			--str_data[9]	fecha_pago
+			--str_data[10]	select_comp_metodo_pago
+			--str_data[11]	select_comp_moneda
+			--str_data[12]	select_comp_periodicidad
+			--str_data[13]	select_no_periodo
+			
+			IF trim(str_data[7])='' THEN str_data[7]:='0'; END IF;
+			
+			INSERT INTO fac_nomina(
+				id, --str_data[4]::integer,
+				tipo_comprobante, --str_data[5],
+				forma_pago, --str_data[6],
+				tipo_cambio, --str_data[7]::double precision,
+				no_cuenta, --str_data[8],
+				fecha_pago, --str_data[9]::date,
+				fac_metodos_pago_id, --str_data[10]::integer,
+				gral_mon_id, --str_data[11]::integer,
+				nom_periodicidad_pago_id, --str_data[12]::integer,
+				nom_periodos_conf_det_id, --str_data[13]::integer,
+				momento_creacion,--espacio_tiempo_ejecucion,
+				gral_usr_id_creacion,--usuario_ejecutor,
+				gral_emp_id, --emp_id,
+				gral_suc_id --suc_id
+			)VALUES(str_data[4]::integer, str_data[5], str_data[6], str_data[7]::double precision, str_data[8], str_data[9]::date, str_data[10]::integer, str_data[11]::integer, str_data[12]::integer, str_data[13]::integer, espacio_tiempo_ejecucion, usuario_ejecutor, emp_id, suc_id)
+			RETURNING id INTO ultimo_id;
+			
+			total_filas:= array_length(extra_data,1);
+			cont_fila:=1;
+			
+			IF extra_data[1]<>'sin datos' THEN
+				FOR cont_fila IN 1 .. total_filas LOOP
+					SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+					--str_filas[1]	elim 
+					--str_filas[2]	noTr 
+					--str_filas[3]	id_reg 
+					--str_filas[4]	id_empleado
+					--str_filas[5]	total_percep
+					--str_filas[6]	total_deduc
+					--str_filas[7]	pago_neto
+					
+					IF str_filas[1]::integer<>0 THEN --1: no esta esta Eliminado, 0:Si esta Eliminado
+						--Crear registro en fac_nomina_det
+						INSERT INTO fac_nomina_det(fac_nomina_id, gral_empleado_id )
+						VALUES(ultimo_id,str_filas[4]::integer);
+					END IF;
+				END LOOP;
+			END IF;
+			
+			--valor_actualizado||id_registro||codigo_error||mensaje
+			valor_retorno := '1:'||ultimo_id||':'||'0'||':Los datos se guardaron con exito.';
+		END IF;
+		--Termina new Nomina
+		
+		
+		IF command_selected = 'edit' THEN 
+			--str_data[1]	app_selected
+			--str_data[2]	command_selected
+			--str_data[3]	id_usuario
+			--str_data[4]	identificador
+			--str_data[5]	comp_tipo
+			--str_data[6]	comp_forma_pago
+			--str_data[7]	comp_tc
+			--str_data[8]	comp_no_cuenta
+			--str_data[9]	fecha_pago
+			--str_data[10]	select_comp_metodo_pago
+			--str_data[11]	select_comp_moneda
+			--str_data[12]	select_comp_periodicidad
+			--str_data[13]	select_no_periodo
+			
+			IF trim(str_data[7])='' THEN str_data[7]:='0'; END IF;
+			
+			UPDATE fac_nomina SET tipo_comprobante=str_data[5], forma_pago=str_data[6], tipo_cambio=str_data[7]::double precision, no_cuenta=str_data[8], fecha_pago=str_data[9]::date, fac_metodos_pago_id=str_data[10]::integer, gral_mon_id=str_data[11]::integer, nom_periodicidad_pago_id=str_data[12]::integer, nom_periodos_conf_det_id=str_data[13]::integer, momento_actualizacion=espacio_tiempo_ejecucion, gral_usr_id_actualizacion=usuario_ejecutor 
+			WHERE id=str_data[4]::integer
+			RETURNING id INTO ultimo_id;
+			
+			IF extra_data[1]<>'sin datos' THEN
+				total_filas:= array_length(extra_data,1);
+				cont_fila:=1;
+				FOR cont_fila IN 1 .. total_filas LOOP
+					SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+					--str_filas[1]	elim 
+					--str_filas[2]	noTr 
+					--str_filas[3]	id_reg 
+					--str_filas[4]	id_empleado
+					--str_filas[5]	total_percep
+					--str_filas[6]	total_deduc
+					--str_filas[7]	pago_neto
+
+					IF str_filas[3]::integer > 0 THEN 
+						IF str_filas[1]::integer=0 THEN --1: no esta esta Eliminado, 0:Si esta Eliminado
+							DELETE FROM fac_nomina_det WHERE id=str_filas[3]::integer;
+							DELETE FROM fac_nomina_det_deduc WHERE fac_nomina_det_id=str_filas[3]::integer;
+							DELETE FROM fac_nomina_det_percep WHERE fac_nomina_det_id=str_filas[3]::integer;
+							DELETE FROM fac_nomina_det_hrs_extra WHERE fac_nomina_det_id=str_filas[3]::integer;
+							DELETE FROM fac_nomina_det_incapa WHERE fac_nomina_det_id=str_filas[3]::integer;
+						END IF;
+					ELSE
+						IF str_filas[3]::integer=0 THEN 
+							--Aqui se verifica si el id del registro viene en cero
+							SELECT id::character varying FROM fac_nomina_det WHERE fac_nomina_id=str_data[4]::integer AND gral_empleado_id=str_filas[4]::integer 
+							INTO str_filas[3];
+							
+							IF str_filas[3] IS NULL THEN str_filas[3]:='0'; END IF;
+						END IF;
+						IF str_filas[3]::integer<=0 THEN 
+							--Crear registro en fac_nomina_det
+							INSERT INTO fac_nomina_det(fac_nomina_id, gral_empleado_id )VALUES(str_data[4]::integer,str_filas[4]::integer);
+						END IF;
+					END IF;
+				END LOOP;
+			END IF;
+			
+			--valor_actualizado||id_registro||codigo_error||mensaje
+			valor_retorno := '1:'||ultimo_id||':'||'0'||':Los datos se guardaron con exito.';
+		END IF;
+		--Termina EDIT Nomina
+
+
+
+
+
+		--FACTURAR Nomina por Empleado(Actualizar registros para indicar que ya fue facturado)
+		IF command_selected = 'facturar_nomina' THEN 
+			--str_data[1]	app_selected
+			--str_data[2]	command_selected
+			--str_data[3]	id_usuario
+			--str_data[4]	nom_det_id
+			--str_data[5]	empleado_id
+			--str_data[6]	ref_id
+			--str_data[7]	Serie
+			--str_data[8]	Folio
+			--str_data[9]	cadena_xml
+
+			--Actualiza el registro para indicar que se ha generado CFDi de Nomina
+			UPDATE fac_nomina_det SET facturado=true, serie=str_data[7],folio=str_data[8],ref_id=str_data[6], momento_facturacion=espacio_tiempo_ejecucion, gral_usr_id_facturacion=usuario_ejecutor 
+			WHERE id=str_data[4]::integer AND gral_empleado_id=str_data[5]::integer RETURNING fac_nomina_id INTO ultimo_id;
+			
+			--Guarda la cadena del xml timbrado
+			INSERT INTO fac_cfdis(tipo, ref_id, doc, gral_emp_id, gral_suc_id, fecha_crea, gral_usr_id_crea) VALUES (3,str_data[6],str_data[9]::text,emp_id,suc_id,espacio_tiempo_ejecucion, usuario_ejecutor);
+			
+			--Obtener el ID del numero de periodo
+			SELECT nom_periodos_conf_det_id FROM fac_nomina WHERE id=ultimo_id LIMIT 1 INTO id2;
+			IF id2 IS NULL THEN id2:=0; END IF;
+			
+			IF (SELECT count(id) FROM fac_nomina_det WHERE fac_nomina_id=ultimo_id AND facturado=false)<=0 THEN 
+				--Actualiza para indicar se ha generado CFDI de todos los registros de NOMINA
+				UPDATE fac_nomina SET status=2 WHERE id=ultimo_id;
+			ELSE
+				--Actualiza para indicar se ha generado CFDI de por lo menos un registro de NOMINA
+				UPDATE fac_nomina SET status=1 WHERE id=ultimo_id;
+			END IF;
+			
+			--Actualizar el periodo actual para indicar que ya fue generado la nomina correspondiente
+			UPDATE nom_periodos_conf_det SET estatus=true WHERE id=id2;
+			
+			--Actualiza el consecutivo del folio de Nominas en la tabla fac_cfds_conf_folios. La actualización es por Empresa-sucursal
+			UPDATE fac_cfds_conf_folios SET folio_actual=(folio_actual+1) WHERE id=(SELECT fac_cfds_conf_folios.id FROM fac_cfds_conf JOIN fac_cfds_conf_folios ON fac_cfds_conf_folios.fac_cfds_conf_id=fac_cfds_conf.id WHERE lower(trim(fac_cfds_conf_folios.proposito))='nom' AND fac_cfds_conf.empresa_id=emp_id AND fac_cfds_conf.gral_suc_id=suc_id);
+			
+			--valor_actualizado||id_registro||codigo_error||mensaje
+			valor_retorno := '1:'||ultimo_id||':'||'0'||':Se ha creado el CFDI de Nomina'||str_data[7]||str_data[8]||'.';
+		END IF;
+		--Termina FACTURAR Nomina
+
+
+
+		--CANCELAR CFDI DE NOMINA
+		IF command_selected = 'cancelacion_cfdi_nomina' THEN 
+			--str_data[1]	app_selected
+			--str_data[2]	command_selected
+			--str_data[3]	id_usuario
+			--str_data[4]	id_reg
+			--str_data[5]	id_empleado
+			
+			--Actualiza el registro para indicar que se ha generado CFDi de Nomina
+			UPDATE fac_nomina_det SET cancelado=true, momento_cancelacion=espacio_tiempo_ejecucion, gral_usr_id_cancela=usuario_ejecutor 
+			WHERE id=str_data[4]::integer AND gral_empleado_id=str_data[5]::integer RETURNING ref_id INTO refId;
+			
+			--Actualiza el registro de xmls
+			UPDATE fac_cfdis SET cancelado=true, fecha_cancela=espacio_tiempo_ejecucion, gral_usr_id_cancela=usuario_ejecutor 
+			WHERE tipo=3 AND ref_id=refId AND gral_emp_id=emp_id;
+			
+			--valor_actualizado||id_registro||codigo_error||mensaje
+			valor_retorno := '1:Se ha CANCELADO el CFDI de Nomina '||refId;
+		END IF;
+		--Termina FACTURAR Nomina
+
+
+
+		
+		
+		--Guarda datos de la nomina de un empleado en especifico
+		IF command_selected = 'new_nomina' THEN 
+			--str_data[1]	app_selected
+			--str_data[2]	command_selected
+			--str_data[3]	id_usuario
+			--str_data[4]	identificador
+			--str_data[5]	id_reg
+			--str_data[6]	id_empleado
+			--str_data[7]	no_empleado
+			--str_data[8]	rfc_empleado
+			--str_data[9]	nombre_empleado
+			--str_data[10]	select_departamento
+			--str_data[11]	select_puesto
+			--str_data[12]	fecha_contrato
+			--str_data[13]	antiguedad
+			--str_data[14]	curp
+			--str_data[15]	select_reg_contratacion
+			--str_data[16]	select_tipo_contrato
+			--str_data[17]	select_tipo_jornada
+			--str_data[18]	select_preriodo_pago
+			--str_data[19]	clabe
+			--str_data[20]	select_banco
+			--str_data[21]	select_riesgo_puesto
+			--str_data[22]	imss
+			--str_data[23]	reg_patronal
+			--str_data[24]	salario_base
+			--str_data[25]	fecha_ini_pago
+			--str_data[26]	fecha_fin_pago
+			--str_data[27]	salario_integrado
+			--str_data[28]	no_dias_pago
+			--str_data[29]	concepto_descripcion
+			--str_data[30]	concepto_unidad
+			--str_data[31]	concepto_cantidad
+			--str_data[32]	concepto_valor_unitario
+			--str_data[33]	concepto_importe
+			--str_data[34]	descuento
+			--str_data[35]	motivo_descuento
+			--str_data[36]	select_impuesto_retencion
+			--str_data[37]	importe_retencion
+			--str_data[38]	comp_subtotal
+			--str_data[39]	comp_descuento
+			--str_data[40]	comp_retencion
+			--str_data[41]	comp_total
+			--str_data[42]	percep_total_gravado
+			--str_data[43]	percep_total_excento
+			--str_data[44]	deduc_total_gravado
+			--str_data[45]	deduc_total_excento
+			--str_data[46]	percepciones
+			--str_data[47]	deducciones
+			--str_data[48]	hrs_extras
+			--str_data[49]	incapacidades
+			
+			IF str_data[5]::integer=0 THEN 
+				--Aqui se verifica si el id del registro viene en cero
+				SELECT id::character varying FROM fac_nomina_det WHERE fac_nomina_id=str_data[4]::integer AND gral_empleado_id=str_data[6]::integer 
+				INTO str_data[5];
+				
+				IF str_data[5] IS NULL THEN str_data[5]:='0'; END IF;
+			END IF;
+			
+			IF str_data[5]::integer>0 THEN
+				--Se actualiza porque el registro ya existe
+				UPDATE fac_nomina_det SET gral_empleado_id = str_data[6]::integer, no_empleado = str_data[7], rfc = str_data[8], nombre = str_data[9], curp = str_data[14], gral_depto_id = str_data[10]::integer, gral_puesto_id = str_data[11]::integer, fecha_contrato = str_data[12]::date, antiguedad = str_data[13]::integer, nom_regimen_contratacion_id = str_data[15]::integer, nom_tipo_contrato_id = str_data[16]::integer, nom_tipo_jornada_id = str_data[17]::integer, nom_periodicidad_pago_id = str_data[18]::integer, clabe = str_data[19], tes_ban_id = str_data[20]::integer, nom_riesgo_puesto_id = str_data[21]::integer, imss = str_data[22], reg_patronal = str_data[23], salario_base = str_data[24]::double precision, salario_integrado = str_data[27]::double precision, fecha_ini_pago = str_data[25]::date, fecha_fin_pago = str_data[26]::date, no_dias_pago = str_data[28]::integer, concepto_descripcion = str_data[29], concepto_unidad = str_data[30], concepto_cantidad = str_data[31]::double precision, concepto_valor_unitario = str_data[32]::double precision, concepto_importe = str_data[33]::double precision, descuento = str_data[34]::double precision, motivo_descuento = str_data[35], gral_isr_id = str_data[36]::integer, importe_retencion = str_data[37]::double precision, comp_subtotal = str_data[38]::double precision, comp_descuento = str_data[39]::double precision, comp_retencion = str_data[40]::double precision, comp_total = str_data[41]::double precision, percep_total_gravado = str_data[42]::double precision, percep_total_excento = str_data[43]::double precision, deduc_total_gravado = str_data[44]::double precision, deduc_total_excento = str_data[45]::double precision, validado=true 
+				WHERE id=str_data[5]::integer 
+				RETURNING id INTO ultimo_id;
+				
+				--Se eliminan estos registros porque mas adelante se vuelven a crear
+				DELETE FROM fac_nomina_det_percep WHERE fac_nomina_det_id = ultimo_id;
+				DELETE FROM fac_nomina_det_deduc WHERE fac_nomina_det_id = ultimo_id;
+				DELETE FROM fac_nomina_det_hrs_extra WHERE fac_nomina_det_id = ultimo_id;
+				DELETE FROM fac_nomina_det_incapa WHERE fac_nomina_det_id = ultimo_id;
+			ELSE
+				--Se crea nuevo registro
+				INSERT INTO fac_nomina_det(fac_nomina_id, gral_empleado_id, no_empleado, rfc, nombre, curp, gral_depto_id, gral_puesto_id, fecha_contrato, antiguedad, nom_regimen_contratacion_id, nom_tipo_contrato_id, nom_tipo_jornada_id, nom_periodicidad_pago_id, clabe, tes_ban_id, nom_riesgo_puesto_id, imss, reg_patronal, salario_base, salario_integrado, fecha_ini_pago, fecha_fin_pago, no_dias_pago, concepto_descripcion, concepto_unidad, concepto_cantidad, concepto_valor_unitario, concepto_importe, descuento, motivo_descuento, gral_isr_id, importe_retencion, comp_subtotal, comp_descuento, comp_retencion, comp_total, percep_total_gravado, percep_total_excento, deduc_total_gravado, deduc_total_excento, validado)
+				values(str_data[4]::integer, str_data[6]::integer, str_data[7], str_data[8], str_data[9], str_data[14], str_data[10]::integer, str_data[11]::integer, str_data[12]::date, str_data[13]::integer, str_data[15]::integer, str_data[16]::integer, str_data[17]::integer, str_data[18]::integer, str_data[19], str_data[20]::integer, str_data[21]::integer, str_data[22], str_data[23], str_data[24]::double precision, str_data[27]::double precision, str_data[25]::date, str_data[26]::date, str_data[28]::integer, str_data[29], str_data[30], str_data[31]::double precision, str_data[32]::double precision, str_data[33]::double precision, str_data[34]::double precision, str_data[35], str_data[36]::integer, str_data[37]::double precision, str_data[38]::double precision, str_data[39]::double precision, str_data[40]::double precision, str_data[41]::double precision, str_data[42]::double precision, str_data[43]::double precision, str_data[44]::double precision, str_data[45]::double precision, true)
+				RETURNING id INTO ultimo_id;
+			END IF;
+			
+			--str_data[46]	percepciones
+			IF str_data[46] is not null AND str_data[46]<>'' THEN
+				--Convertir en arreglo la cadena de Percepciones
+				SELECT INTO str_percep string_to_array(str_data[46],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_percep,1) .. array_upper(str_percep,1) LOOP
+					SELECT INTO str_filas string_to_array(str_percep[cont_fila],'|');
+					--str_filas[1]	id_percep
+					--str_filas[2]	noTrPercep
+					--str_filas[3]	percep_monto_gravado
+					--str_filas[4]	percep_monto_excento
+					INSERT INTO fac_nomina_det_percep(fac_nomina_det_id,nom_percep_id,gravado,excento) 
+					VALUES (ultimo_id,str_filas[1]::integer,str_filas[3]::double precision,str_filas[4]::double precision);
+				END LOOP;
+			END IF;
+			
+			--str_data[47]	deducciones
+			IF str_data[47] is not null AND str_data[47]<>'' THEN
+				--Convertir en arreglo la cadena de Deducciones
+				SELECT INTO str_deduc string_to_array(str_data[47],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_deduc,1) .. array_upper(str_deduc,1) LOOP
+					SELECT INTO str_filas string_to_array(str_deduc[cont_fila],'|');
+					--str_filas[1]	id_deduc
+					--str_filas[2]	noTrDeduc
+					--str_filas[3]	deduc_monto_gravado
+					--str_filas[4]	deduc_monto_excento
+					INSERT INTO fac_nomina_det_deduc(fac_nomina_det_id,nom_deduc_id,gravado,excento) 
+					VALUES (ultimo_id,str_filas[1]::integer,str_filas[3]::double precision,str_filas[4]::double precision);
+				END LOOP;
+			END IF;
+			
+			--str_data[48]	hrs_extras
+			IF str_data[48] is not null AND str_data[48]<>'' THEN
+				--Convertir en arreglo la cadena de Horas Extras
+				SELECT INTO str_hrs_extras string_to_array(str_data[48],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_hrs_extras,1) .. array_upper(str_hrs_extras,1) LOOP
+					SELECT INTO str_filas string_to_array(str_hrs_extras[cont_fila],'|');
+					--str_filas[1]	id_he
+					--str_filas[2]	noTrhe
+					--str_filas[3]	select_tipo_he
+					--str_filas[4]	he_no_dias
+					--str_filas[5]	he_no_horas
+					--str_filas[6]	he_importe
+					INSERT INTO fac_nomina_det_hrs_extra(fac_nomina_det_id, nom_tipo_hrs_extra_id ,no_dias, no_hrs, importe) 
+					VALUES (ultimo_id,str_filas[3]::integer,str_filas[4]::double precision,str_filas[5]::double precision, str_filas[6]::double precision);
+				END LOOP;
+			END IF;
+
+			
+			--str_data[49]	incapacidades
+			IF str_data[49] is not null AND str_data[49]<>'' THEN
+				--Convertir en arreglo la cadena de Horas Extras
+				SELECT INTO str_incapa string_to_array(str_data[49],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_incapa,1) .. array_upper(str_incapa,1) LOOP
+					SELECT INTO str_filas string_to_array(str_incapa[cont_fila],'|');
+					--str_filas[1]	id_incapacidad
+					--str_filas[2]	noTrIncapacidad
+					--str_filas[3]	select_tipo_incapacidad
+					--str_filas[4]	incapacidad_no_dias
+					--str_filas[5]	incapacidad_importe
+					INSERT INTO fac_nomina_det_incapa(fac_nomina_det_id, nom_tipo_incapacidad_id, no_dias, importe) 
+					VALUES (ultimo_id, str_filas[3]::integer, str_filas[4]::double precision, str_filas[5]::double precision);
+				END LOOP;
+			END IF;
+			
+			IF ultimo_id IS NULL THEN ultimo_id=0; END IF;
+			
+			--valor_actualizado||id_registro||codigo_error||mensaje
+			valor_retorno := '1:'||ultimo_id||':'||'0'||':Los datos se guardaron con exito.';
+		END IF;
+		--Termina NEW Nomina Empleado
+		
+		
+		
+		--Editar el registro de Nomina de un empleado
+		IF command_selected = 'edit_nomina' THEN 
+			IF str_data[5]::integer=0 THEN 
+				--Aqui se verifica si el id del registro viene en cero
+				SELECT id::character varying FROM fac_nomina_det WHERE fac_nomina_id=str_data[4]::integer AND gral_empleado_id=str_data[6]::integer 
+				INTO str_data[5];
+				
+				IF str_data[5] IS NULL THEN str_data[5]:='0'; END IF;
+			END IF;
+			
+			IF trim(str_data[13])='' THEN str_data[13]:='0'; END IF;
+			
+			UPDATE fac_nomina_det SET gral_empleado_id = str_data[6]::integer, no_empleado = str_data[7], rfc = str_data[8], nombre = str_data[9], curp = str_data[14], gral_depto_id = str_data[10]::integer, gral_puesto_id = str_data[11]::integer, fecha_contrato = str_data[12]::date, antiguedad = str_data[13]::integer, nom_regimen_contratacion_id = str_data[15]::integer, nom_tipo_contrato_id = str_data[16]::integer, nom_tipo_jornada_id = str_data[17]::integer, nom_periodicidad_pago_id = str_data[18]::integer, clabe = str_data[19], tes_ban_id = str_data[20]::integer, nom_riesgo_puesto_id = str_data[21]::integer, imss = str_data[22], reg_patronal = str_data[23], salario_base = str_data[24]::double precision, salario_integrado = str_data[27]::double precision, fecha_ini_pago = str_data[25]::date, fecha_fin_pago = str_data[26]::date, no_dias_pago = str_data[28]::integer, concepto_descripcion = str_data[29], concepto_unidad = str_data[30], concepto_cantidad = str_data[31]::double precision, concepto_valor_unitario = str_data[32]::double precision, concepto_importe = str_data[33]::double precision, descuento = str_data[34]::double precision, motivo_descuento = str_data[35], gral_isr_id = str_data[36]::integer, importe_retencion = str_data[37]::double precision, comp_subtotal = str_data[38]::double precision, comp_descuento = str_data[39]::double precision, comp_retencion = str_data[40]::double precision, comp_total = str_data[41]::double precision, percep_total_gravado = str_data[42]::double precision, percep_total_excento = str_data[43]::double precision, deduc_total_gravado = str_data[44]::double precision, deduc_total_excento = str_data[45]::double precision, validado=true 
+			WHERE id=str_data[5]::integer 
+			RETURNING id INTO ultimo_id;
+			
+			--Eliminar los registros de percepciones de nomina
+			DELETE FROM fac_nomina_det_percep WHERE fac_nomina_det_id = ultimo_id;
+			
+			--str_data[46]	percepciones
+			IF str_data[46] is not null AND str_data[46]<>'' THEN 
+				--Convertir en arreglo la cadena de Percepciones
+				SELECT INTO str_percep string_to_array(str_data[46],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_percep,1) .. array_upper(str_percep,1) LOOP
+					SELECT INTO str_filas string_to_array(str_percep[cont_fila],'|');
+					
+					--Volver a crear los registros de las percepciones de nomina
+					INSERT INTO fac_nomina_det_percep(fac_nomina_det_id,nom_percep_id,gravado,excento) VALUES (ultimo_id,str_filas[1]::integer,str_filas[3]::double precision,str_filas[4]::double precision);
+				END LOOP;
+			END IF;
+
+
+			--Eliminar los registros de Deducciones de nomina
+			DELETE FROM fac_nomina_det_deduc WHERE fac_nomina_det_id = ultimo_id;
+			
+			--str_data[47]	deducciones
+			IF str_data[47] is not null AND str_data[47]<>'' THEN
+				--Convertir en arreglo la cadena de Deducciones
+				SELECT INTO str_deduc string_to_array(str_data[47],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_deduc,1) .. array_upper(str_deduc,1) LOOP
+					SELECT INTO str_filas string_to_array(str_deduc[cont_fila],'|');
+					
+					--Volver a crear los registros de las deducciones de nomina
+					INSERT INTO fac_nomina_det_deduc(fac_nomina_det_id,nom_deduc_id,gravado,excento) VALUES (ultimo_id,str_filas[1]::integer,str_filas[3]::double precision,str_filas[4]::double precision);
+				END LOOP;
+			END IF;
+
+
+			--Eliminar los registros de Horas Extras de nomina
+			DELETE FROM fac_nomina_det_hrs_extra WHERE fac_nomina_det_id = ultimo_id;
+			
+			--str_data[48]	hrs_extras
+			IF str_data[48] is not null AND str_data[48]<>'' THEN
+				--Convertir en arreglo la cadena de Horas Extras
+				SELECT INTO str_hrs_extras string_to_array(str_data[48],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_hrs_extras,1) .. array_upper(str_hrs_extras,1) LOOP
+					SELECT INTO str_filas string_to_array(str_hrs_extras[cont_fila],'|');
+					--Volver a crear los registros de las horas extras de nomina
+					INSERT INTO fac_nomina_det_hrs_extra(fac_nomina_det_id, nom_tipo_hrs_extra_id ,no_dias, no_hrs, importe) 
+					VALUES (ultimo_id,str_filas[3]::integer,str_filas[4]::double precision,str_filas[5]::double precision, str_filas[6]::double precision);
+				END LOOP;
+			END IF;
+			
+			--Eliminar los registros de Incapacidades de nomina
+			DELETE FROM fac_nomina_det_incapa WHERE fac_nomina_det_id = ultimo_id;
+			
+			--str_data[49]	incapacidades
+			IF str_data[49] is not null AND str_data[49]<>'' THEN
+				--Convertir en arreglo la cadena de Horas Extras
+				SELECT INTO str_incapa string_to_array(str_data[49],'&&&');
+				cont_fila=1;
+				FOR cont_fila IN array_lower(str_incapa,1) .. array_upper(str_incapa,1) LOOP
+					SELECT INTO str_filas string_to_array(str_incapa[cont_fila],'|');
+					--Volver a crear los registros de Incapacidades de nomina
+					INSERT INTO fac_nomina_det_incapa(fac_nomina_det_id, nom_tipo_incapacidad_id, no_dias, importe) VALUES (ultimo_id, str_filas[3]::integer, str_filas[4]::double precision, str_filas[5]::double precision);
+				END LOOP;
+			END IF;
+			
+			IF ultimo_id IS NULL THEN ultimo_id=0; END IF;
+			
+			--valor_actualizado||id_registro||codigo_error||mensaje
+			valor_retorno := '1:'||ultimo_id||':'||'0'||':Los datos se guardaron con exito.';
+		END IF;
+		--Termina EDIT Nomina Empleado
+		
+	END IF;
+	--Termina Factura de NOMINA
+	
+	RETURN valor_retorno; 
+
+END;$$;
+
+
+ALTER FUNCTION public.fac_adm_procesos(campos_data text, extra_data text[]) OWNER TO sumar;
 
 --
 -- Name: gral_adm_catalogos(text, text[]); Type: FUNCTION; Schema: public; Owner: sumar
@@ -880,13 +2262,28 @@ DECLARE
     nuevo_consecutivo bigint=0;
     nuevo_folio character varying = '';
 
+    incluye_modulo_produccion boolean;
+    incluye_modulo_envasado boolean;
+    incluye_modulo_contabilidad boolean;
+    controlExisPres boolean = false;--Variable que indica si se debe controlar las existencias por presentaciones
+    incluye_nomina boolean:=false;
+
     str_filas text[];
     total_filas integer;--total de elementos de arreglo
     cont_fila integer;--contador de filas o posiciones del arreglo
     rowCount integer;
 
+    tipo_producto integer;
+    id_producto integer;
+    str_pres text[];
+    tot_filas integer;--total de elementos de arreglo de id de presentaciones
+    meta_imp character varying='';
 
     ultimo_id_usr integer=0;
+    valor1 double precision:=0;
+
+    fila record;
+    fila2 record;
 
 BEGIN
     --convertir cadena en arreglo
@@ -912,6 +2309,9 @@ BEGIN
 	
     valor_retorno:='0';
 
+    --Query para verificar si la empresa actual incluye Control de Existencias por Presentacion
+    SELECT control_exis_pres,nomina,incluye_contabilidad FROM gral_emp WHERE id=emp_id 
+    INTO controlExisPres, incluye_nomina,incluye_modulo_contabilidad;
 
     --Catalogo de Empleados
     IF app_selected = 4 THEN
@@ -1760,6 +3160,453 @@ BEGIN
     END IF;
     --Termina catalogo de proveedores
 
+
+    -- Catalogo de Productos
+    IF app_selected = 8 THEN
+		
+		IF str_data[15]::integer=0 THEN
+			meta_imp:='exento';
+		END IF;
+		IF str_data[15]::integer=1 THEN
+			meta_imp:='iva_1';
+		END IF;
+		IF str_data[15]::integer=2 THEN
+			meta_imp:='tasa_cero';
+		END IF;
+		
+		--query para verificar si la Empresa actual incluye Modulo de Produccion, Modulo de Contabilidad y Modulo de Envasado
+		SELECT incluye_produccion, incluye_contabilidad, encluye_envasado FROM gral_emp WHERE id=emp_id INTO incluye_modulo_produccion, incluye_modulo_contabilidad, incluye_modulo_envasado;
+		
+		IF command_selected = 'new' THEN
+			id_tipo_consecutivo:=3;--Folio de pproducto
+
+			--alter para catalogo productos
+			--ALTER TABLE inv_prod ADD COLUMN archivo_pdf character varying DEFAULT '';
+			
+			--aqui entra para tomar el consecutivo del folio  la sucursal actual
+			--UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+			--WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+			
+			--concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio 
+			--nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+			nuevo_folio := str_data[31];
+			tipo_producto:=str_data[18]::integer;
+			INSERT INTO inv_prod(	
+				sku,--nuevo_folio
+				descripcion,--str_data[5]
+				codigo_barras,--str_data[6]
+				tentrega,--str_data[7]::integer,
+				inv_clas_id,--str_data[8]::integer
+				inv_stock_clasif_id,--str_data[9]::integer
+				estatus,--str_data[10]::boolean
+				inv_prod_familia_id,--str_data[11]::integer
+				subfamilia_id,--str_data[12]::integer
+				inv_prod_grupo_id,--str_data[13]::integer
+				ieps,--str_data[14]::integer
+				--meta_impuesto,--meta_imp
+				gral_impto_id,--str_data[15]::integer,
+				inv_prod_linea_id,--str_data[16]::integer
+				inv_mar_id,--str_data[17]::integer
+				tipo_de_producto_id,--str_data[18]::integer
+				inv_seccion_id,--str_data[19]::integer
+				unidad_id,--str_data[20]::integer
+				requiere_numero_lote,--str_data[21]::boolean
+				requiere_nom,--str_data[22]::boolean
+				requiere_numero_serie,--str_data[23]::boolean
+				requiere_pedimento,--str_data[24]::boolean
+				permitir_stock,--str_data[25]::boolean
+				venta_moneda_extranjera,--str_data[26]::boolean
+				compra_moneda_extranjera,--str_data[27]::boolean
+				cxp_prov_id,--str_data[29]::integer
+				densidad,--str_data[30]::double precision
+				valor_maximo,--str_data[32]::double precision
+				valor_minimo,--str_data[33]::double precision
+				punto_reorden,--str_data[34]::double precision
+				ctb_cta_id_gasto, --str_data[35]::integer,
+				ctb_cta_id_costo_venta, --str_data[36]::integer,
+				ctb_cta_id_venta, --str_data[37]::integer,
+				borrado_logico,--false
+				momento_creacion,--now()
+				id_usuario_creacion,--usuario_id
+				empresa_id,--emp_id
+				sucursal_id,--suc_id
+				descripcion_corta,--str_data[40]
+				descripcion_larga,--str_data[41]
+				archivo_img,--str_data[38]
+				archivo_pdf,--str_data[39]
+				inv_prod_presentacion_id,--str_data[42]::integer
+				flete,--str_data[43]::boolean,
+				no_clie,--str_data[44]
+				gral_mon_id,--str_data[45]::integer
+				gral_imptos_ret_id --str_data[46]::integer
+			) values(
+				nuevo_folio,
+				str_data[5],
+				str_data[6],
+				str_data[7]::integer,
+				str_data[8]::integer,
+				str_data[9]::integer,
+				str_data[10]::boolean,
+				str_data[11]::integer,
+				str_data[12]::integer,
+				str_data[13]::integer,
+				str_data[14]::integer,
+				--meta_imp,
+				str_data[15]::integer,
+				str_data[16]::integer,
+				str_data[17]::integer,
+				str_data[18]::integer,
+				str_data[19]::integer,
+				str_data[20]::integer,
+				str_data[21]::boolean,
+				str_data[22]::boolean,
+				str_data[23]::boolean,
+				str_data[24]::boolean,
+				str_data[25]::boolean,
+				str_data[26]::boolean,
+				str_data[27]::boolean,
+				str_data[29]::integer,
+				str_data[30]::double precision,
+				str_data[32]::double precision,
+				str_data[33]::double precision,
+				str_data[34]::double precision,
+				str_data[35]::integer,
+				str_data[36]::integer,
+				str_data[37]::integer,
+				false,
+				now(),
+				usuario_id,
+				emp_id,
+				suc_id,
+				str_data[40],
+				str_data[41],
+				str_data[38],
+				str_data[39],
+				str_data[42]::integer,
+				str_data[43]::boolean,
+				str_data[44],
+				str_data[45]::integer,
+				str_data[46]::integer
+			)RETURNING id INTO id_producto;
+			
+			--convertir en arreglo los id de presentaciones de producto
+			SELECT INTO str_pres string_to_array(str_data[28],',');
+			
+			--obtiene numero de elementos del arreglo str_pres
+			tot_filas:= array_length(str_pres,1);
+			
+			
+			--Si el tiopo de producto es diferente de 3 y 4, hay que guardar presentaciones
+			--tipo=3 Kit
+			--tipo=4 Servicios
+			--IF str_data[18]::integer!=3 AND str_data[18]::integer!=4 THEN
+				
+				FOR cont_fila_pres IN 1 .. tot_filas LOOP
+					--Crea registros de presentaciones  en tabla inv_prod_pres_x_prod
+					INSERT INTO inv_prod_pres_x_prod(producto_id,presentacion_id) VALUES (id_producto,str_pres[cont_fila_pres]::integer);
+					
+					--Crea registro por cada presentacion en la tabla de precios 
+					INSERT INTO inv_pre (gral_emp_id, inv_prod_id, inv_prod_presentacion_id, momento_creacion,borrado_logico,precio_1, precio_2, precio_3, precio_4, precio_5, precio_6, precio_7, precio_8, precio_9, precio_10, gral_mon_id_pre1, gral_mon_id_pre2, gral_mon_id_pre3, gral_mon_id_pre4, gral_mon_id_pre5, gral_mon_id_pre6, gral_mon_id_pre7, gral_mon_id_pre8, gral_mon_id_pre9, gral_mon_id_pre10, descuento_1,descuento_2,descuento_3,descuento_4,descuento_5,descuento_6,descuento_7,descuento_8,descuento_9,descuento_10,default_precio_1,default_precio_2,default_precio_3,default_precio_4,default_precio_5,default_precio_6,default_precio_7,default_precio_8,default_precio_9,default_precio_10,operacion_precio_1,operacion_precio_2,operacion_precio_3,operacion_precio_4,operacion_precio_5,operacion_precio_6,operacion_precio_7,operacion_precio_8,operacion_precio_9,operacion_precio_10,calculo_precio_1,calculo_precio_2,calculo_precio_3,calculo_precio_4,calculo_precio_5,calculo_precio_6,calculo_precio_7,calculo_precio_8,calculo_precio_9,calculo_precio_10,redondeo_precio_1,redondeo_precio_2,redondeo_precio_3,redondeo_precio_4,redondeo_precio_5,redondeo_precio_6,redondeo_precio_7,redondeo_precio_8,redondeo_precio_9,redondeo_precio_10) 
+					VALUES(emp_id, id_producto,str_pres[cont_fila_pres]::integer, now(), false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,0,0,0,0,0,0,0,0,0 ,0,0,0,0,0,0,0,0,0,0,  1,1,1,1,1,1,1,1,1,1 ,1,1,1,1,1,1,1,1,1,1,  0,0,0,0,0,0,0,0,0,0);
+				END LOOP;
+			--END IF;
+			
+			IF incluye_modulo_produccion=TRUE THEN 
+				--para Producto 3=Kit
+				IF tipo_producto=3 THEN
+					total_filas:= array_length(extra_data,1);
+					cont_fila:=1;
+					IF extra_data[1]<>'sin datos' THEN
+						FOR cont_fila IN 1 .. total_filas LOOP
+							SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+							--str_filas[1] eliminado
+							IF str_filas[1]::integer != 0 THEN--1: no esta eliminado, 0:eliminado
+								--ya no se valida nada
+								--str_filas[1]	producto_ingrediente_id
+								--str_filas[2] 	porcentaje
+								--INSERT INTO inv_prod_formulaciones(producto_formulacion_id,producto_ingrediente_id,porcentaje) VALUES (id_producto,str_filas[1]::integer,str_filas[2]::double precision);
+								INSERT INTO inv_kit(producto_kit_id,producto_elemento_id,cantidad) 
+								VALUES (id_producto,str_filas[1]::integer,str_filas[2]::double precision);
+							END IF;
+						END LOOP;
+					END IF;
+				END IF;	
+			ELSE
+				--para Producto 1=TERMINADO, 2=INTERMEDIO, 3=KIT, 8=DESARROLLO
+				IF tipo_producto=1 OR tipo_producto=2 OR tipo_producto=3 OR tipo_producto=8 THEN 
+					total_filas:= array_length(extra_data,1);
+					cont_fila:=1;
+					IF extra_data[1]<>'sin datos' THEN
+						FOR cont_fila IN 1 .. total_filas LOOP
+							SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+							--str_filas[1] eliminado
+							IF str_filas[1]::integer != 0 THEN--1: no esta eliminado, 0:eliminado
+								--ya no se valida nada
+								--str_filas[1]	producto_ingrediente_id
+								--str_filas[2] 	porcentaje
+								--INSERT INTO inv_prod_formulaciones(producto_formulacion_id,producto_ingrediente_id,porcentaje) VALUES (id_producto,str_filas[1]::integer,str_filas[2]::double precision);
+								INSERT INTO inv_kit(producto_kit_id,producto_elemento_id,cantidad) VALUES(id_producto,str_filas[1]::integer,str_filas[2]::double precision);
+							END IF;
+						END LOOP;
+					END IF;
+				END IF;
+			END IF;
+			
+			
+			--Si el tipo de producto es DIFERENTE DE 3=Kit Y 4=Servicios
+			IF str_data[18]::integer<>3 AND str_data[18]::integer<>4 THEN
+				--Genera registro en la tabla inv_exi
+				FOR fila2 IN EXECUTE('SELECT distinct inv_suc_alm.almacen_id FROM gral_suc JOIN inv_suc_alm ON inv_suc_alm.sucursal_id=gral_suc.id WHERE gral_suc.empresa_id='||emp_id||' ORDER BY inv_suc_alm.almacen_id') LOOP
+					INSERT INTO inv_exi(inv_prod_id, inv_alm_id, ano, exi_inicial, transito) VALUES(id_producto, fila2.almacen_id, ano_actual, 0, 0);
+				END LOOP;
+				
+				if str_data[45]::integer=1 then 
+					--Si es MN, el tipo de cambio es 1
+					valor1:=1;
+				else
+					--Buscar el tipo de cambio del día
+					SELECT valor AS tipo_cambio FROM erp_monedavers WHERE momento_creacion<=now() AND moneda_id=str_data[45]::integer ORDER BY momento_creacion DESC LIMIT 1 into valor1;
+					if valor1 is null then valor1:=1; end if;
+				end if;
+				
+				--Genera registro en la tabla 
+				INSERT INTO inv_prod_cost_prom(inv_prod_id, ano,gral_mon_id_1,gral_mon_id_2,gral_mon_id_3,gral_mon_id_4,gral_mon_id_5,gral_mon_id_6,gral_mon_id_7,gral_mon_id_8,gral_mon_id_9,gral_mon_id_10,gral_mon_id_11,gral_mon_id_12,tipo_cambio_1,tipo_cambio_2,tipo_cambio_3,tipo_cambio_4,tipo_cambio_5,tipo_cambio_6,tipo_cambio_7,tipo_cambio_8,tipo_cambio_9,tipo_cambio_10,tipo_cambio_11,tipo_cambio_12) 
+				VALUES(id_producto, ano_actual,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,str_data[45]::integer,valor1,valor1,valor1,valor1,valor1,valor1,valor1,valor1,valor1,valor1,valor1,valor1);
+			END IF;
+			
+			valor_retorno := '1';
+		END IF;--termina nuevo producto
+		
+		
+		IF command_selected = 'edit' THEN
+			nuevo_folio := str_data[31];
+			tipo_producto:=str_data[18]::integer;
+			UPDATE inv_prod SET 
+				sku=nuevo_folio,--nuevo_folio, 
+				descripcion=str_data[5],
+				codigo_barras=str_data[6],
+				tentrega=str_data[7]::integer,
+				inv_clas_id=str_data[8]::integer,
+				inv_stock_clasif_id=str_data[9]::integer,
+				estatus=str_data[10]::boolean,
+				inv_prod_familia_id=str_data[11]::integer,
+				subfamilia_id=str_data[12]::integer,
+				inv_prod_grupo_id=str_data[13]::integer,
+				ieps=str_data[14]::integer,
+				--meta_impuesto=meta_imp,
+				gral_impto_id=str_data[15]::integer,
+				inv_prod_linea_id=str_data[16]::integer,
+				inv_mar_id=str_data[17]::integer,
+				tipo_de_producto_id=str_data[18]::integer,
+				inv_seccion_id=str_data[19]::integer,
+				unidad_id=str_data[20]::integer,
+				requiere_numero_lote=str_data[21]::boolean,
+				requiere_nom=str_data[22]::boolean,
+				requiere_numero_serie=str_data[23]::boolean,
+				requiere_pedimento=str_data[24]::boolean,
+				permitir_stock=str_data[25]::boolean,
+				venta_moneda_extranjera=str_data[26]::boolean,
+				compra_moneda_extranjera=str_data[27]::boolean,
+				cxp_prov_id=str_data[29]::integer,
+				densidad=str_data[30]::double precision,
+				valor_maximo=str_data[32]::double precision,
+				valor_minimo=str_data[33]::double precision,
+				punto_reorden=str_data[34]::double precision,
+				ctb_cta_id_gasto=str_data[35]::integer,
+				ctb_cta_id_costo_venta=str_data[36]::integer,
+				ctb_cta_id_venta=str_data[37]::integer,
+				momento_actualizacion=now(),
+				id_usuario_actualizacion=usuario_id,
+				descripcion_corta=str_data[40],
+				descripcion_larga=str_data[41],
+				archivo_img=str_data[38],
+				archivo_pdf=str_data[39],
+				inv_prod_presentacion_id=str_data[42]::integer,
+				flete=str_data[43]::boolean,
+				no_clie=str_data[44],
+				gral_mon_id=str_data[45]::integer,
+				gral_imptos_ret_id=str_data[46]::integer 
+			WHERE id=str_data[4]::integer;
+			
+			--convertir en arreglo los id de presentaciones de producto
+			SELECT INTO str_pres string_to_array(str_data[28],',');
+			
+			--obtiene numero de elementos del arreglo str_pres
+			tot_filas:= array_length(str_pres,1);
+			
+			--elimina los registros de las presentaciones del producto
+			DELETE FROM inv_prod_pres_x_prod WHERE producto_id=str_data[4]::integer;
+			
+			--Si el tiopo de producto es diferente de 3 y 4, hay que guardar presentaciones
+			--tipo=3 Kit
+			--tipo=4 Servicios
+			--IF str_data[18]::integer!=3 AND str_data[18]::integer!=4 THEN
+				--aqui se vuelven a crear los registros de las presentaciones del producto
+				FOR cont_fila_pres IN 1 .. tot_filas LOOP
+					INSERT INTO inv_prod_pres_x_prod(producto_id,presentacion_id) VALUES (str_data[4]::integer,str_pres[cont_fila_pres]::integer);
+				END LOOP;
+			--END IF;
+			
+			FOR fila IN EXECUTE('SELECT id, inv_prod_id, inv_prod_presentacion_id FROM inv_prod_costos WHERE inv_prod_id='||str_data[4]::integer||' AND ano=EXTRACT(YEAR FROM now())') LOOP
+				exis:=0;
+				SELECT count(id) FROM inv_prod_pres_x_prod WHERE producto_id=fila.inv_prod_id AND presentacion_id=fila.inv_prod_presentacion_id INTO exis;
+				IF exis<=0 THEN 
+					DELETE FROM inv_prod_costos WHERE id=fila.id;
+				END IF;
+			END LOOP;
+			
+			FOR fila IN EXECUTE('SELECT id, inv_prod_id, inv_prod_presentacion_id FROM inv_pre WHERE inv_prod_id='||str_data[4]::integer||' AND gral_emp_id='||emp_id) LOOP
+				exis:=0;
+				SELECT count(id) FROM inv_prod_pres_x_prod WHERE producto_id=fila.inv_prod_id AND presentacion_id=fila.inv_prod_presentacion_id INTO exis;
+				IF exis<=0 THEN 
+					DELETE FROM inv_pre WHERE id=fila.id;
+				END IF;
+			END LOOP;
+			
+			IF controlExisPres THEN 
+				FOR fila IN EXECUTE('SELECT id, inv_prod_id, inv_prod_presentacion_id FROM inv_exi_pres WHERE inv_prod_id='||str_data[4]::integer) LOOP
+					exis:=0;
+					SELECT count(id) FROM inv_prod_pres_x_prod WHERE producto_id=fila.inv_prod_id AND presentacion_id=fila.inv_prod_presentacion_id INTO exis;
+					IF exis<=0 THEN 
+						DELETE FROM inv_exi_pres WHERE id=fila.id;
+					END IF;
+				END LOOP;
+
+				FOR fila IN EXECUTE('select id, inv_prod_id, inv_prod_presentacion_id from env_conf where inv_prod_id='||str_data[4]::integer) LOOP
+					exis:=0;
+					SELECT count(id) FROM inv_prod_pres_x_prod WHERE producto_id=fila.inv_prod_id AND presentacion_id=fila.inv_prod_presentacion_id INTO exis;
+					IF exis<=0 THEN 
+						DELETE FROM env_conf WHERE id=fila.id;
+						DELETE FROM env_conf_det WHERE env_conf_id=fila.id;
+					END IF;
+				END LOOP;
+			END IF;
+			
+				
+			IF incluye_modulo_produccion=TRUE THEN 
+				--para Producto 3=Kit
+				IF tipo_producto=3 THEN
+					--elimina los prod ingredientes de la tabla inv_kit
+					DELETE FROM inv_kit  WHERE producto_kit_id = str_data[4]::integer;
+					
+					total_filas:= array_length(extra_data,1);
+					cont_fila:=1;
+					IF extra_data[1] != 'sin datos' THEN
+						FOR cont_fila IN 1 .. total_filas LOOP
+							SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+							--str_filas[1] eliminado
+							IF str_filas[1]::integer != 0 THEN--1: no esta eliminado, 0:eliminado
+								--ya no se valida nada
+								--str_filas[1]	producto_elemento_id
+								--str_filas[2] 	cantidad
+								INSERT INTO inv_kit(producto_kit_id,producto_elemento_id,cantidad) VALUES (str_data[4]::integer,str_filas[1]::integer,str_filas[2]::double precision);
+							END IF;
+						END LOOP;
+					END IF;
+				END IF;	
+			ELSE
+				
+				--Para Producto 1=TERMINADO, 2=INTERMEDIO, 3=KIT, 8=DESARROLLO
+				IF tipo_producto=1 OR tipo_producto=2 OR tipo_producto=3 OR tipo_producto=8 THEN 
+					--elimina los prod ingredientes de la tabla inv_kit
+					DELETE FROM inv_kit  WHERE producto_kit_id=str_data[4]::integer;
+
+					--RAISE EXCEPTION '%','extra_data: '||extra_data;
+					
+					total_filas:= array_length(extra_data,1);
+					cont_fila:=1;
+					IF extra_data[1] != 'sin datos' THEN
+						FOR cont_fila IN 1 .. total_filas LOOP
+							SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+							--str_filas[1] eliminado
+							IF str_filas[1]::integer<>0 THEN--1: no esta eliminado, 0:eliminado
+								--str_filas[1]	producto_elemento_id
+								--str_filas[2] 	cantidad
+								INSERT INTO inv_kit(producto_kit_id,producto_elemento_id,cantidad) VALUES (str_data[4]::integer,str_filas[1]::integer,str_filas[2]::double precision);
+							END IF;
+						END LOOP;
+					END IF;
+				END IF;	
+			END IF;
+			
+			valor_retorno := '1';
+		END IF;--termina edit producto
+		
+		
+		
+		IF command_selected = 'delete' THEN
+			valor_retorno := '1';
+			
+			IF incluye_modulo_produccion=TRUE THEN
+				--aqui buscamos si el producto es formulado
+				SELECT count(inv_prod_id) FROM pro_estruc  WHERE inv_prod_id=str_data[4]::integer AND borrado_logico=FALSE INTO exis;
+				IF exis > 0 THEN
+					valor_retorno := '01';
+				ELSE
+					exis:=0; --inicializar variable
+					--aqui buscamos si el producto forma parte de una formula
+					SELECT count(pro_estruc_det.inv_prod_id) FROM pro_estruc_det JOIN pro_estruc ON pro_estruc.id=pro_estruc_det.pro_estruc_id WHERE pro_estruc_det.inv_prod_id=str_data[4]::integer  AND pro_estruc.borrado_logico=FALSE 
+					INTO exis;
+					
+					IF exis > 0 THEN
+						valor_retorno := '02';
+					END IF;
+				END IF;
+				
+				IF valor_retorno='1' THEN 
+					--si el valor retorno sigue igual a 1, entonces tambien buscamos en la tabla de kits
+					SELECT count(producto_elemento_id) FROM inv_kit WHERE producto_elemento_id=str_data[4]::integer INTO exis;
+					IF exis > 0 THEN
+						valor_retorno := '03';
+					END IF;
+				END IF;
+			ELSE
+				SELECT count(producto_elemento_id) FROM inv_kit WHERE producto_elemento_id=str_data[4]::integer INTO exis;
+				IF exis > 0 THEN
+					valor_retorno := '04';
+				END IF;
+			END IF;
+			
+			
+			IF incluye_modulo_envasado=TRUE THEN 
+				--verificamos que el producto no forme parte de una configuracion de envase
+				exis:=0;
+				SELECT count(env_conf_det.inv_prod_id) FROM env_conf JOIN  env_conf_det ON env_conf_det.env_conf_id=env_conf.id WHERE env_conf_det.inv_prod_id=str_data[4]::integer AND env_conf.borrado_logico=FALSE 
+				INTO exis;
+				IF exis > 0 THEN
+					valor_retorno := '05';
+				END IF;
+			END IF;
+
+
+			IF (select sum((inv_exi.exi_inicial - inv_exi.transito - inv_exi.reservado  + inv_exi.entradas_1 - inv_exi.salidas_1 + inv_exi.entradas_2 - inv_exi.salidas_2 + inv_exi.entradas_3 - inv_exi.salidas_3 + inv_exi.entradas_4 - inv_exi.salidas_4 + inv_exi.entradas_5 - inv_exi.salidas_5 + inv_exi.entradas_6 - inv_exi.salidas_6 + inv_exi.entradas_7 - inv_exi.salidas_7 + inv_exi.entradas_8 - inv_exi.salidas_8 + inv_exi.entradas_9 - inv_exi.salidas_9 + inv_exi.entradas_10 - inv_exi.salidas_10 + inv_exi.entradas_11 - inv_exi.salidas_11 + inv_exi.entradas_12 - inv_exi.salidas_12)) AS existencia FROM inv_exi WHERE inv_prod_id=str_data[4]::integer)>0.0001 THEN 
+				--No se puede eliminar porque hay existencia en uno o mas almacenes
+				valor_retorno := '06';
+			END IF;
+			
+			
+			--Si valor retorno es igual a 1, entonces procedemos a eliminar el producto
+			IF valor_retorno='1' THEN 
+				UPDATE inv_prod SET borrado_logico=true, momento_baja=now(), id_usuario_baja = usuario_id
+				WHERE id = str_data[4]::integer;
+				
+				--elimina los registros de las formulacion del producto
+				DELETE FROM inv_kit  WHERE producto_kit_id = str_data[4]::integer;
+				
+				--elimina los registros de las presentaciones del producto
+				DELETE FROM inv_prod_pres_x_prod WHERE producto_id=str_data[4]::integer;
+				
+				DELETE FROM inv_prod_costos WHERE inv_prod_id=str_data[4]::integer AND ano=EXTRACT(YEAR FROM now());
+
+				DELETE FROM inv_pre WHERE inv_prod_id=str_data[4]::integer AND gral_emp_id=emp_id;
+
+				DELETE FROM inv_exi_pres WHERE inv_prod_id=str_data[4]::integer;
+			END IF;
+			
+			--valor_retorno := '1';
+		END IF;
+    END IF;
+    --termina catalogo de productos
 	
         
     --Empieza Job Actualiza Moneda
@@ -1798,6 +3645,186 @@ BEGIN
         
     END IF;--termina Job Actualiza Moneda
     
+
+    -- Catalogo de nomina de  Percepciones
+    IF app_selected = 170 THEN
+		IF command_selected = 'new' THEN
+			id_tipo_consecutivo:=48;--Folio Catalogo de Percepciones
+			
+			--aqui entra para tomar el consecutivo del folio de la Percepcionesactual
+			UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+			WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+			
+			--concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio 
+			nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+			
+			nuevo_folio:= lpad(nuevo_folio, 3, '0');
+			
+			--str_data[4]	id
+			--str_data clave nuevo_folio
+			--str_data[5]	titulo
+			--str_data[6]	activo
+			--str_data[7]	tipopercepciones
+			INSERT INTO nom_percep (clave,titulo,activo,nom_percep_tipo_id,borrado_logico,momento_creacion,gral_usr_id_crea,gral_emp_id,gral_suc_id) 
+			VALUES (nuevo_folio,str_data[5],str_data[6]::boolean,str_data[7]::integer,false,now(),usuario_id,emp_id,suc_id);
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'edit' THEN
+			UPDATE nom_percep SET titulo=str_data[5],activo=str_data[6]::boolean,nom_percep_tipo_id=str_data[7]::integer,momento_actualiza=now(),gral_usr_id_actualiza=usuario_id
+			WHERE nom_percep.id = str_data[4]::integer;
+			valor_retorno := '0';
+		END IF;
+		
+		IF command_selected = 'delete' THEN
+			UPDATE nom_percep SET momento_baja=now(),borrado_logico=true WHERE nom_percep.id = str_data[4]::integer;
+			valor_retorno := '1';
+		END IF;
+    END IF;--termina Catalogo Percepciones
+	
+	
+	
+    -- Catalogo de nomina de  Deducciones
+    IF app_selected = 171 THEN
+		IF command_selected = 'new' THEN
+			id_tipo_consecutivo:=49;--Folio Catalogo de Deducciones
+			
+			--aqui entra para tomar el consecutivo del folio  de Deducciones actual
+			UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+			WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+			
+			--concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio 
+			nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+			nuevo_folio:= lpad(nuevo_folio, 3, '0');
+			
+			--str_data[4]	id
+			--str_data clave nuevo_folio
+			--str_data[5]	titulo
+			--str_data[6]	activo
+			--str_data[7]	tipopercepciones
+			INSERT INTO nom_deduc (clave,titulo,activo,nom_deduc_tipo_id,borrado_logico,momento_creacion,gral_usr_id_crea,gral_emp_id,gral_suc_id) 
+			VALUES (nuevo_folio,str_data[5],str_data[6]::boolean,str_data[7]::integer,false,now(),usuario_id,emp_id,suc_id);
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'edit' THEN
+			UPDATE nom_deduc SET titulo=str_data[5],activo=str_data[6]::boolean,nom_deduc_tipo_id=str_data[7]::integer, momento_actualiza=now(), gral_usr_id_actualiza=usuario_id 
+			WHERE nom_deduc.id = str_data[4]::integer;
+			valor_retorno := '0';
+		END IF;
+		
+		IF command_selected = 'delete' THEN
+			UPDATE nom_deduc SET momento_baja=now(),borrado_logico=true WHERE nom_deduc.id = str_data[4]::integer; 
+			valor_retorno := '1';
+		END IF;
+    END IF;
+    --Termina Catalogo Deducciones
+
+
+	
+    -- Catalogo de nomina de Periodicidad de Pago
+    IF app_selected = 172 THEN
+		IF command_selected = 'new' THEN
+
+			--str_data[4]	id
+			--str_data[5]	titulo
+			--str_data[6]	no_periodos
+			--str_data[7]	activo
+			INSERT INTO nom_periodicidad_pago (titulo,no_periodos,activo,borrado_logico,momento_creacion,gral_usr_id_crea,gral_emp_id,gral_suc_id) 
+			VALUES (str_data[5],str_data[6]::integer,str_data[7]::boolean,false,now(),usuario_id,emp_id,suc_id);
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'edit' THEN
+			UPDATE nom_periodicidad_pago SET titulo=str_data[5],no_periodos=str_data[6]::integer,activo=str_data[7]::boolean,momento_actualiza=now(), gral_usr_id_actualiza=usuario_id 
+			WHERE nom_periodicidad_pago.id = str_data[4]::integer;
+			valor_retorno := '0';
+		END IF;
+		
+		IF command_selected = 'delete' THEN
+			UPDATE nom_periodicidad_pago SET momento_baja=now(),borrado_logico=true, gral_usr_id_baja=usuario_id  WHERE nom_periodicidad_pago.id = str_data[4]::integer; 
+			valor_retorno := '1';
+		END IF;
+    END IF;
+    --Termina Catalogo Periodicidad de Pago
+
+
+
+
+    -- Catalogo de Configuración Periodos
+    IF app_selected = 174 THEN
+		IF command_selected = 'new' THEN
+			--str_data[4]	id
+			--str_data clave nuevo_folio
+			--str_data[5]	año
+			--str_data[6]	tipoperiodicidad
+			--str_data[7]	descripcion
+			
+			INSERT INTO nom_periodos_conf (ano,nom_periodicidad_pago_id,prefijo,borrado_logico,momento_creacion,gral_usr_id_crea,gral_emp_id,gral_suc_id) 
+			VALUES (str_data[5]::integer,str_data[6]::integer,str_data[7],false,now(),usuario_id,emp_id,suc_id)
+			RETURNING id INTO ultimo_id;
+			valor_retorno := '1';
+			
+			total_filas:= array_length(extra_data,1);
+			cont_fila:=1;
+			
+			IF extra_data[1]<>'sin datos' THEN
+				FOR cont_fila IN 1 .. total_filas LOOP
+					SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+					--str_filas[1]	id_reg 
+					--str_filas[2]	id_periodo 
+					--str_filas[3]	folio 
+					--str_filas[4]	tituloperiodo
+					--str_filas[5]	fecha_inicio 
+					--str_filas[6]	fecha_final
+					
+					--crea registro en nom_periodos_conf_det
+					INSERT INTO nom_periodos_conf_det(
+						nom_periodos_conf_id,--str_data[4]::integer,
+						folio,--str_filas[3]	folio 
+						titulo,--str_filas[4]	tituloperiodo 
+						fecha_ini,--str_filas[5]	fecha_inicio
+						fecha_fin--str_filas[6]	fecha_final
+						
+					 ) VALUES(ultimo_id, str_filas[3]::integer, str_filas[4], str_filas[5]::date,str_filas[6]::date);
+					 --RETURNING id INTO ultimo_id;
+					 valor_retorno := '1';
+				END LOOP;
+			END IF;
+			
+		END IF;
+		
+		IF command_selected = 'edit' THEN
+			UPDATE nom_periodos_conf SET ano=str_data[5]::integer,nom_periodicidad_pago_id=str_data[6]::integer,prefijo=str_data[7],momento_actualiza=now(),gral_usr_id_actualiza=usuario_id 
+			WHERE nom_periodos_conf.id = str_data[4]::integer;
+			valor_retorno := '0';
+			
+			total_filas:= array_length(extra_data,1);
+			cont_fila:=1;
+			
+			IF extra_data[1]<>'sin datos' THEN
+				FOR cont_fila IN 1 .. total_filas LOOP 
+					SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+					--str_filas[1]	id_reg 
+					--str_filas[2]	id_periodo 
+					--str_filas[3]	folio 
+					--str_filas[4]	tituloperiodo
+					--str_filas[5]	fecha_inicio 
+					--str_filas[6]	fecha_final
+					
+					UPDATE nom_periodos_conf_det SET folio=str_filas[3]::integer,titulo=str_filas[4],fecha_ini=str_filas[5]::date,fecha_fin=str_filas[6]::date
+					WHERE nom_periodos_conf_det.id = str_filas[1]::integer;
+					valor_retorno := '0';
+				END LOOP;
+			END IF;
+		END IF;
+		
+		IF command_selected = 'delete' THEN
+			UPDATE nom_periodos_conf SET momento_baja=now(),borrado_logico=true 
+			WHERE nom_periodos_conf.id = str_data[4]::integer;
+			valor_retorno := '1';
+		END IF;
+    END IF;-- Catalogo de Configuración Periodos
         
     RETURN valor_retorno;
     
@@ -2352,6 +4379,47 @@ BEGIN
 	END IF;
 	--Termina buscador del catalogo de Periodicidad de Pago
 
+
+	--Buscador para el Aplicativo de Facturacion de Nominas
+	IF app_selected = 173 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	no_periodo
+		--str_data[4]	titulo_periodo
+		--str_data[5]	tipo_periodo
+		--str_data[6]	fecha_inicial
+		--str_data[7]	fecha_final
+		
+		IF str_data[3]<>'%%' THEN
+			cadena_where=' AND (nom_periodos_conf.prefijo||nom_periodos_conf_det.folio) ilike '''||str_data[3]||'''';
+		END IF;
+
+		IF str_data[4]<>'%%' THEN
+			cadena_where=' AND nom_periodos_conf_det.titulo ilike '''||str_data[4]||'''';
+		END IF;
+
+		IF str_data[5]::integer<>0 THEN
+			cadena_where=' AND fac_nomina.nom_periodicidad_pago_id='||str_data[5]||' ';
+		END IF;
+		
+		--Busqueda por Fecha de Pago
+		IF str_data[6]<>'' THEN
+			IF str_data[7]='' THEN
+				f_final:=str_data[6];
+			ELSE
+				f_final:=str_data[7];
+			END IF;
+			cadena_where:=cadena_where||' AND to_char(fac_nomina.fecha_pago::timestamp with time zone, ''yyyymmdd'')::integer between (to_char('''||str_data[6]||'''::timestamp with time zone,''yyyymmdd'')::integer) and (to_char('''||f_final||'''::timestamp with time zone,''yyyymmdd'')::integer)';
+		END IF;
+		
+		sql_query := '
+		SELECT fac_nomina.id FROM fac_nomina 
+		JOIN nom_periodos_conf_det ON nom_periodos_conf_det.id=fac_nomina.nom_periodicidad_pago_id 
+		JOIN nom_periodos_conf ON nom_periodos_conf.id=nom_periodos_conf_det.nom_periodos_conf_id
+		WHERE fac_nomina.gral_emp_id='||emp_id||' '||cadena_where;
+	END IF;
+	--Termina buscador para el Aplicativo de Facturacion de Nominas
+	
 	
 	--Buscador del catalogo de Configuracion de  Periodicidad de Pago
 	IF app_selected = 174 THEN
@@ -2376,6 +4444,7 @@ BEGIN
 	END IF;
 	--Termina buscador para el Aplicativo de Configuracion de  Periodicidad de Pago
 		
+
 
 	--RAISE EXCEPTION '%',sql_query;
 	
@@ -4565,6 +6634,45 @@ ALTER SEQUENCE fac_metodos_pago_id_seq OWNED BY fac_metodos_pago.id;
 
 
 --
+-- Name: fac_namespaces; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_namespaces (
+    id integer NOT NULL,
+    key_xmlns character varying DEFAULT ''::character varying,
+    xmlns character varying DEFAULT ''::character varying,
+    schemalocation character varying DEFAULT ''::character varying,
+    fac boolean DEFAULT false NOT NULL,
+    fac_nomina boolean DEFAULT false NOT NULL,
+    derogado boolean DEFAULT false NOT NULL,
+    fecha_derogacion date
+);
+
+
+ALTER TABLE fac_namespaces OWNER TO sumar;
+
+--
+-- Name: fac_namespaces_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_namespaces_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_namespaces_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_namespaces_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_namespaces_id_seq OWNED BY fac_namespaces.id;
+
+
+--
 -- Name: fac_nomina; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -4599,6 +6707,234 @@ ALTER TABLE fac_nomina OWNER TO sumar;
 --
 
 COMMENT ON COLUMN fac_nomina.status IS '0=No se ha generado CFDI de ningun registro, 1=Se ha generado CFDI de por lo menos un registro, 2=Se han generado CFDI de todos los registros';
+
+
+--
+-- Name: fac_nomina_det; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_nomina_det (
+    id integer NOT NULL,
+    fac_nomina_id integer DEFAULT 0 NOT NULL,
+    gral_empleado_id integer DEFAULT 0 NOT NULL,
+    no_empleado character varying DEFAULT ''::character varying,
+    rfc character varying DEFAULT ''::character varying,
+    nombre character varying DEFAULT ''::character varying,
+    curp character varying DEFAULT ''::character varying,
+    gral_depto_id integer DEFAULT 0,
+    gral_puesto_id integer DEFAULT 0,
+    fecha_contrato date,
+    antiguedad integer DEFAULT 0,
+    nom_regimen_contratacion_id integer DEFAULT 0,
+    nom_tipo_contrato_id integer DEFAULT 0,
+    nom_tipo_jornada_id integer DEFAULT 0,
+    nom_periodicidad_pago_id integer DEFAULT 0,
+    clabe character varying DEFAULT ''::character varying,
+    tes_ban_id integer DEFAULT 0,
+    nom_riesgo_puesto_id integer DEFAULT 0,
+    imss character varying DEFAULT ''::character varying,
+    reg_patronal character varying DEFAULT ''::character varying,
+    salario_base double precision DEFAULT 0,
+    salario_integrado double precision DEFAULT 0,
+    fecha_ini_pago date,
+    fecha_fin_pago date,
+    no_dias_pago integer DEFAULT 0,
+    concepto_descripcion character varying DEFAULT ''::character varying,
+    concepto_unidad character varying DEFAULT ''::character varying,
+    concepto_cantidad double precision DEFAULT 0,
+    concepto_valor_unitario double precision DEFAULT 0,
+    concepto_importe double precision DEFAULT 0,
+    descuento double precision DEFAULT 0,
+    motivo_descuento character varying DEFAULT ''::character varying,
+    gral_isr_id integer DEFAULT 0,
+    importe_retencion double precision DEFAULT 0,
+    comp_subtotal double precision DEFAULT 0,
+    comp_descuento double precision DEFAULT 0,
+    comp_retencion double precision DEFAULT 0,
+    comp_total double precision DEFAULT 0,
+    percep_total_gravado double precision DEFAULT 0,
+    percep_total_excento double precision DEFAULT 0,
+    deduc_total_gravado double precision DEFAULT 0,
+    deduc_total_excento double precision DEFAULT 0,
+    facturado boolean DEFAULT false NOT NULL,
+    momento_facturacion timestamp with time zone,
+    gral_usr_id_facturacion integer,
+    validado boolean DEFAULT false NOT NULL,
+    serie character varying DEFAULT ''::character varying NOT NULL,
+    folio character varying DEFAULT ''::character varying NOT NULL,
+    ref_id character varying DEFAULT ''::character varying NOT NULL,
+    cancelado boolean DEFAULT false NOT NULL,
+    momento_cancelacion timestamp with time zone,
+    gral_usr_id_cancela integer DEFAULT 0
+);
+
+
+ALTER TABLE fac_nomina_det OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_deduc; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_nomina_det_deduc (
+    id integer NOT NULL,
+    fac_nomina_det_id integer NOT NULL,
+    nom_deduc_id integer NOT NULL,
+    gravado double precision,
+    excento double precision
+);
+
+
+ALTER TABLE fac_nomina_det_deduc OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_deduc_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_nomina_det_deduc_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_nomina_det_deduc_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_deduc_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_nomina_det_deduc_id_seq OWNED BY fac_nomina_det_deduc.id;
+
+
+--
+-- Name: fac_nomina_det_hrs_extra; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_nomina_det_hrs_extra (
+    id integer NOT NULL,
+    fac_nomina_det_id integer NOT NULL,
+    nom_tipo_hrs_extra_id integer NOT NULL,
+    no_dias double precision,
+    no_hrs double precision,
+    importe double precision
+);
+
+
+ALTER TABLE fac_nomina_det_hrs_extra OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_hrs_extra_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_nomina_det_hrs_extra_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_nomina_det_hrs_extra_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_hrs_extra_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_nomina_det_hrs_extra_id_seq OWNED BY fac_nomina_det_hrs_extra.id;
+
+
+--
+-- Name: fac_nomina_det_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_nomina_det_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_nomina_det_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_nomina_det_id_seq OWNED BY fac_nomina_det.id;
+
+
+--
+-- Name: fac_nomina_det_incapa; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_nomina_det_incapa (
+    id integer NOT NULL,
+    fac_nomina_det_id integer NOT NULL,
+    nom_tipo_incapacidad_id integer NOT NULL,
+    no_dias double precision,
+    importe double precision
+);
+
+
+ALTER TABLE fac_nomina_det_incapa OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_incapa_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_nomina_det_incapa_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_nomina_det_incapa_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_incapa_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_nomina_det_incapa_id_seq OWNED BY fac_nomina_det_incapa.id;
+
+
+--
+-- Name: fac_nomina_det_percep; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_nomina_det_percep (
+    id integer NOT NULL,
+    fac_nomina_det_id integer NOT NULL,
+    nom_percep_id integer NOT NULL,
+    gravado double precision,
+    excento double precision
+);
+
+
+ALTER TABLE fac_nomina_det_percep OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_percep_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_nomina_det_percep_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_nomina_det_percep_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_nomina_det_percep_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_nomina_det_percep_id_seq OWNED BY fac_nomina_det_percep.id;
 
 
 --
@@ -5544,6 +7880,50 @@ CREATE TABLE gral_escolaridads (
 ALTER TABLE gral_escolaridads OWNER TO sumar;
 
 --
+-- Name: gral_ieps; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE gral_ieps (
+    id integer NOT NULL,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    descripcion character varying NOT NULL,
+    tasa double precision DEFAULT 0,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_crea integer DEFAULT 0,
+    gral_usr_id_actualiza integer DEFAULT 0,
+    gral_usr_id_cancela integer DEFAULT 0,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0
+);
+
+
+ALTER TABLE gral_ieps OWNER TO sumar;
+
+--
+-- Name: gral_ieps_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE gral_ieps_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE gral_ieps_id_seq OWNER TO sumar;
+
+--
+-- Name: gral_ieps_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE gral_ieps_id_seq OWNED BY gral_ieps.id;
+
+
+--
 -- Name: gral_imptos; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -5582,6 +7962,94 @@ ALTER TABLE gral_imptos_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE gral_imptos_id_seq OWNED BY gral_imptos.id;
+
+
+--
+-- Name: gral_imptos_ret; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE gral_imptos_ret (
+    id integer NOT NULL,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    descripcion character varying DEFAULT ''::character varying NOT NULL,
+    tasa double precision DEFAULT 0,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_crea integer DEFAULT 0,
+    gral_usr_id_actualiza integer DEFAULT 0,
+    gral_usr_id_cancela integer DEFAULT 0,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0
+);
+
+
+ALTER TABLE gral_imptos_ret OWNER TO sumar;
+
+--
+-- Name: gral_imptos_ret_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE gral_imptos_ret_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE gral_imptos_ret_id_seq OWNER TO sumar;
+
+--
+-- Name: gral_imptos_ret_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE gral_imptos_ret_id_seq OWNED BY gral_imptos_ret.id;
+
+
+--
+-- Name: gral_isr; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE gral_isr (
+    id integer NOT NULL,
+    titulo character varying DEFAULT ''::character varying NOT NULL,
+    descripcion character varying NOT NULL,
+    tasa double precision DEFAULT 0,
+    borrado_logico boolean DEFAULT false NOT NULL,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    momento_baja timestamp with time zone,
+    gral_usr_id_crea integer DEFAULT 0,
+    gral_usr_id_actualiza integer DEFAULT 0,
+    gral_usr_id_cancela integer DEFAULT 0,
+    gral_emp_id integer DEFAULT 0,
+    gral_suc_id integer DEFAULT 0
+);
+
+
+ALTER TABLE gral_isr OWNER TO sumar;
+
+--
+-- Name: gral_isr_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE gral_isr_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE gral_isr_id_seq OWNER TO sumar;
+
+--
+-- Name: gral_isr_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE gral_isr_id_seq OWNED BY gral_isr.id;
 
 
 --
@@ -6437,6 +8905,41 @@ ALTER SEQUENCE inv_exi_id_seq OWNED BY inv_exi.id;
 
 
 --
+-- Name: inv_kit; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_kit (
+    id integer NOT NULL,
+    producto_kit_id integer NOT NULL,
+    cantidad double precision,
+    producto_elemento_id integer
+);
+
+
+ALTER TABLE inv_kit OWNER TO sumar;
+
+--
+-- Name: inv_kit_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_kit_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_kit_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_kit_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_kit_id_seq OWNED BY inv_kit.id;
+
+
+--
 -- Name: inv_mar; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -6546,6 +9049,128 @@ ALTER SEQUENCE inv_mov_tipos_id_seq OWNED BY inv_mov_tipos.id;
 
 
 --
+-- Name: inv_pre; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_pre (
+    id integer NOT NULL,
+    inv_prod_id integer NOT NULL,
+    precio_1 double precision,
+    precio_2 double precision,
+    precio_3 double precision,
+    precio_4 double precision,
+    precio_5 double precision,
+    precio_6 double precision,
+    precio_7 double precision,
+    precio_8 double precision,
+    precio_9 double precision,
+    precio_10 double precision,
+    descuento_1 double precision,
+    descuento_2 double precision,
+    descuento_3 double precision,
+    descuento_4 double precision,
+    descuento_5 double precision,
+    descuento_6 double precision,
+    descuento_7 double precision,
+    descuento_8 double precision,
+    descuento_9 double precision,
+    descuento_10 double precision,
+    base_precio_1 integer,
+    base_precio_2 integer,
+    base_precio_3 integer,
+    base_precio_4 integer,
+    base_precio_5 integer,
+    base_precio_6 integer,
+    base_precio_7 integer,
+    base_precio_8 integer,
+    base_precio_9 integer,
+    base_precio_10 integer,
+    default_precio_1 double precision,
+    default_precio_2 double precision,
+    default_precio_3 double precision,
+    default_precio_4 double precision,
+    default_precio_5 double precision,
+    default_precio_6 double precision,
+    default_precio_7 double precision,
+    default_precio_8 double precision,
+    default_precio_9 double precision,
+    default_precio_10 double precision,
+    operacion_precio_1 integer,
+    operacion_precio_2 integer,
+    operacion_precio_3 integer,
+    operacion_precio_4 integer,
+    operacion_precio_5 integer,
+    operacion_precio_6 integer,
+    operacion_precio_7 integer,
+    operacion_precio_8 integer,
+    operacion_precio_9 integer,
+    operacion_precio_10 integer,
+    calculo_precio_1 integer,
+    calculo_precio_2 integer,
+    calculo_precio_3 integer,
+    calculo_precio_4 integer,
+    calculo_precio_5 integer,
+    calculo_precio_6 integer,
+    calculo_precio_7 integer,
+    calculo_precio_8 integer,
+    calculo_precio_9 integer,
+    calculo_precio_10 integer,
+    redondeo_precio_1 integer,
+    redondeo_precio_2 integer,
+    redondeo_precio_3 integer,
+    redondeo_precio_4 integer,
+    redondeo_precio_5 integer,
+    redondeo_precio_6 integer,
+    redondeo_precio_7 integer,
+    redondeo_precio_8 integer,
+    redondeo_precio_9 integer,
+    redondeo_precio_10 integer,
+    gral_emp_id integer,
+    borrado_logico boolean NOT NULL,
+    momento_creacion timestamp with time zone NOT NULL,
+    momento_baja timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    gral_usr_id_baja integer DEFAULT 0,
+    gral_mon_id_pre1 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre2 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre3 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre4 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre5 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre6 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre7 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre8 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre9 integer DEFAULT 0 NOT NULL,
+    gral_mon_id_pre10 integer DEFAULT 0 NOT NULL,
+    inv_prod_presentacion_id integer DEFAULT 0
+);
+
+
+ALTER TABLE inv_pre OWNER TO sumar;
+
+--
+-- Name: inv_pre_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_pre_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_pre_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_pre_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_pre_id_seq OWNED BY inv_pre.id;
+
+
+--
 -- Name: inv_prod; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -6649,6 +9274,124 @@ COMMENT ON COLUMN inv_prod.inv_prod_presentacion_id IS 'Id de la Presentacion DE
 --
 
 COMMENT ON COLUMN inv_prod.flete IS 'Indica que el producto es un flete y debe retener impuesto cuando la empresa sea transportista.';
+
+
+--
+-- Name: inv_prod_cost_prom; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod_cost_prom (
+    id integer NOT NULL,
+    inv_prod_id integer NOT NULL,
+    ano smallint NOT NULL,
+    costo_promedio_1 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_2 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_3 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_4 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_5 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_6 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_7 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_8 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_9 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_10 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_11 double precision DEFAULT 0 NOT NULL,
+    costo_promedio_12 double precision DEFAULT 0 NOT NULL,
+    costo_ultimo_1 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_1 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_1 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_2 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_2 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_2 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_3 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_3 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_3 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_4 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_4 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_4 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_5 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_5 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_5 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_6 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_6 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_6 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_7 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_7 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_7 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_8 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_8 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_8 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_9 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_9 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_9 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_10 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_10 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_10 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_11 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_11 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_11 smallint DEFAULT 0 NOT NULL,
+    costo_ultimo_12 double precision DEFAULT 0 NOT NULL,
+    tipo_cambio_12 double precision DEFAULT 0 NOT NULL,
+    gral_mon_id_12 smallint DEFAULT 0 NOT NULL,
+    actualizacion_1 timestamp with time zone,
+    actualizacion_2 timestamp with time zone,
+    actualizacion_3 timestamp with time zone,
+    actualizacion_4 timestamp with time zone,
+    actualizacion_5 timestamp with time zone,
+    actualizacion_6 timestamp with time zone,
+    actualizacion_7 timestamp with time zone,
+    actualizacion_8 timestamp with time zone,
+    actualizacion_9 timestamp with time zone,
+    actualizacion_10 timestamp with time zone,
+    actualizacion_11 timestamp with time zone,
+    actualizacion_12 timestamp with time zone,
+    factura_ultima_1 character varying DEFAULT ''::character varying,
+    oc_ultima_1 character varying DEFAULT ''::character varying,
+    factura_ultima_2 character varying DEFAULT ''::character varying,
+    oc_ultima_2 character varying DEFAULT ''::character varying,
+    factura_ultima_3 character varying DEFAULT ''::character varying,
+    oc_ultima_3 character varying DEFAULT ''::character varying,
+    factura_ultima_4 character varying DEFAULT ''::character varying,
+    oc_ultima_4 character varying DEFAULT ''::character varying,
+    factura_ultima_5 character varying DEFAULT ''::character varying,
+    oc_ultima_5 character varying DEFAULT ''::character varying,
+    factura_ultima_6 character varying DEFAULT ''::character varying,
+    oc_ultima_6 character varying DEFAULT ''::character varying,
+    factura_ultima_7 character varying DEFAULT ''::character varying,
+    oc_ultima_7 character varying DEFAULT ''::character varying,
+    factura_ultima_8 character varying DEFAULT ''::character varying,
+    oc_ultima_8 character varying DEFAULT ''::character varying,
+    factura_ultima_9 character varying DEFAULT ''::character varying,
+    oc_ultima_9 character varying DEFAULT ''::character varying,
+    factura_ultima_10 character varying DEFAULT ''::character varying,
+    oc_ultima_10 character varying DEFAULT ''::character varying,
+    factura_ultima_11 character varying DEFAULT ''::character varying,
+    oc_ultima_11 character varying DEFAULT ''::character varying,
+    factura_ultima_12 character varying DEFAULT ''::character varying,
+    oc_ultima_12 character varying DEFAULT ''::character varying
+);
+
+
+ALTER TABLE inv_prod_cost_prom OWNER TO sumar;
+
+--
+-- Name: inv_prod_cost_prom_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_cost_prom_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_cost_prom_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_cost_prom_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_cost_prom_id_seq OWNED BY inv_prod_cost_prom.id;
 
 
 --
@@ -6802,6 +9545,41 @@ ALTER TABLE inv_prod_lineas_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE inv_prod_lineas_id_seq OWNED BY inv_prod_lineas.id;
+
+
+--
+-- Name: inv_prod_pres_x_prod; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_prod_pres_x_prod (
+    id integer NOT NULL,
+    producto_id integer,
+    presentacion_id integer,
+    producto_id_aux integer
+);
+
+
+ALTER TABLE inv_prod_pres_x_prod OWNER TO sumar;
+
+--
+-- Name: inv_prod_pres_x_prod_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_prod_pres_x_prod_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_prod_pres_x_prod_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_prod_pres_x_prod_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_prod_pres_x_prod_id_seq OWNED BY inv_prod_pres_x_prod.id;
 
 
 --
@@ -8060,7 +10838,49 @@ ALTER TABLE ONLY fac_metodos_pago ALTER COLUMN id SET DEFAULT nextval('fac_metod
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY fac_namespaces ALTER COLUMN id SET DEFAULT nextval('fac_namespaces_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY fac_nomina ALTER COLUMN id SET DEFAULT nextval('fac_nomina_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det ALTER COLUMN id SET DEFAULT nextval('fac_nomina_det_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_deduc ALTER COLUMN id SET DEFAULT nextval('fac_nomina_det_deduc_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_hrs_extra ALTER COLUMN id SET DEFAULT nextval('fac_nomina_det_hrs_extra_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_incapa ALTER COLUMN id SET DEFAULT nextval('fac_nomina_det_incapa_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_percep ALTER COLUMN id SET DEFAULT nextval('fac_nomina_det_percep_id_seq'::regclass);
 
 
 --
@@ -8186,7 +11006,28 @@ ALTER TABLE ONLY gral_empleados ALTER COLUMN id SET DEFAULT nextval('gral_emplea
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY gral_ieps ALTER COLUMN id SET DEFAULT nextval('gral_ieps_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY gral_imptos ALTER COLUMN id SET DEFAULT nextval('gral_imptos_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_imptos_ret ALTER COLUMN id SET DEFAULT nextval('gral_imptos_ret_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_isr ALTER COLUMN id SET DEFAULT nextval('gral_isr_id_seq'::regclass);
 
 
 --
@@ -8333,6 +11174,13 @@ ALTER TABLE ONLY inv_exi ALTER COLUMN id SET DEFAULT nextval('inv_exi_id_seq'::r
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY inv_kit ALTER COLUMN id SET DEFAULT nextval('inv_kit_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY inv_mar ALTER COLUMN id SET DEFAULT nextval('inv_mar_id_seq'::regclass);
 
 
@@ -8347,7 +11195,21 @@ ALTER TABLE ONLY inv_mov_tipos ALTER COLUMN id SET DEFAULT nextval('inv_mov_tipo
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY inv_pre ALTER COLUMN id SET DEFAULT nextval('inv_pre_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY inv_prod ALTER COLUMN id SET DEFAULT nextval('inv_prod_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_cost_prom ALTER COLUMN id SET DEFAULT nextval('inv_prod_cost_prom_id_seq'::regclass);
 
 
 --
@@ -8369,6 +11231,13 @@ ALTER TABLE ONLY inv_prod_grupos ALTER COLUMN id SET DEFAULT nextval('inv_prod_g
 --
 
 ALTER TABLE ONLY inv_prod_lineas ALTER COLUMN id SET DEFAULT nextval('inv_prod_lineas_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_pres_x_prod ALTER COLUMN id SET DEFAULT nextval('inv_prod_pres_x_prod_id_seq'::regclass);
 
 
 --
@@ -9070,6 +11939,11 @@ COPY erp_mascaras_para_validaciones_por_app (app_id, mask_name, mask_regex, id) 
 5	is_CurpCorrect	^[A-Za-z]{4}[0-9]{6}[A-Za-z]{6}[A-Za-z0-9]{1}[0-9]{1}$	31
 5	is_AddressNumberCorrect	[A-Za-z0-9]{1,5}	34
 5	is_LegacyidCorrect	^[0-9]+$	66
+8	is_SkuCorrect	.{1,30}$	55
+8	is_TituloesCorrect	.{1,50}$	56
+8	is_DescripcionesCorrect	.{1,120}$	58
+8	is_DescripcionenCorrect	.{1,120}$	59
+8	is_TituloenCorrect	.{1,50}$	57
 \.
 
 
@@ -9094,6 +11968,12 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 7	18.2454999999999998	2016-08-15 20:25:09.535235-04	2	DOF
 8	18.0363000000000007	2016-08-16 15:10:37.367853-04	2	DOF
 9	17.9868999999999986	2016-08-17 09:49:07.721927-04	2	DOF
+10	18.2597999999999985	2016-08-18 08:57:02.253714-04	2	DOF
+11	18.0832000000000015	2016-08-19 15:59:27.174621-04	2	DOF
+12	18.0832000000000015	2016-08-20 21:23:23.017334-04	2	DOF
+13	18.0832000000000015	2016-08-21 10:20:10.427693-04	2	DOF
+14	18.2673999999999985	2016-08-22 16:39:32.445811-04	2	DOF
+15	18.3022999999999989	2016-08-23 11:07:48.320334-04	2	DOF
 \.
 
 
@@ -9101,7 +11981,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 -- Name: erp_monedavers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_monedavers_id_seq', 9, true);
+SELECT pg_catalog.setval('erp_monedavers_id_seq', 15, true);
 
 
 --
@@ -9273,18 +12153,499 @@ SELECT pg_catalog.setval('fac_metodos_pago_id_seq', 1, false);
 
 
 --
+-- Data for Name: fac_namespaces; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_namespaces (id, key_xmlns, xmlns, schemalocation, fac, fac_nomina, derogado, fecha_derogacion) FROM stdin;
+3	xmlns:tfd	http://www.sat.gob.mx/TimbreFiscalDigital	http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd	t	t	f	\N
+\.
+
+
+--
+-- Name: fac_namespaces_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_namespaces_id_seq', 1, false);
+
+
+--
 -- Data for Name: fac_nomina; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
 COPY fac_nomina (id, tipo_comprobante, forma_pago, tipo_cambio, no_cuenta, fecha_pago, fac_metodos_pago_id, gral_mon_id, nom_periodicidad_pago_id, nom_periodos_conf_det_id, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id, gral_suc_id, status) FROM stdin;
+72	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-29	4	1	1	17	2016-08-23 13:24:16.121344-04	\N	\N	1	0	0	1	1	0
+73	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-05	4	1	1	18	2016-08-23 13:39:24.720854-04	2016-08-23 13:42:07.307362-04	\N	1	1	0	1	1	0
+74	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-12	4	1	1	19	2016-08-23 13:44:05.673497-04	2016-08-23 13:46:24.132163-04	\N	1	1	0	1	1	0
+54	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-15	4	1	1	2	2016-08-23 11:22:38.225531-04	2016-08-23 11:24:11.840871-04	\N	1	1	0	1	1	0
+56	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-22	4	1	1	3	2016-08-23 11:27:15.57167-04	\N	\N	1	0	0	1	1	0
+57	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-29	4	1	1	4	2016-08-23 11:30:07.868303-04	2016-08-23 11:31:21.817712-04	\N	1	1	0	1	1	0
+53	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-08	4	1	1	1	2016-08-23 11:17:31.674088-04	2016-08-23 11:36:00.433801-04	\N	1	1	0	1	1	0
+59	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-06	4	1	1	5	2016-08-23 12:21:33.703492-04	\N	\N	1	0	0	1	1	0
+75	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-19	4	1	1	20	2016-08-23 13:49:22.02297-04	2016-08-23 13:52:31.850051-04	\N	1	1	0	1	1	0
+61	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-13	4	1	1	6	2016-08-23 12:28:27.73169-04	\N	\N	1	0	0	1	1	0
+62	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-20	4	1	1	7	2016-08-23 12:32:08.860923-04	\N	\N	1	0	0	1	1	0
+63	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-27	4	1	1	8	2016-08-23 12:34:35.300803-04	\N	\N	1	0	0	1	1	0
+64	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-02	4	1	1	9	2016-08-23 12:40:38.392867-04	\N	\N	1	0	0	1	1	0
+65	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-10	4	1	1	10	2016-08-23 12:45:02.963601-04	\N	\N	1	0	0	1	1	0
+66	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-17	4	1	1	11	2016-08-23 12:48:15.070174-04	\N	\N	1	0	0	1	1	0
+67	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-24	4	1	1	12	2016-08-23 12:50:51.267114-04	2016-08-23 12:55:16.884425-04	\N	1	1	0	1	1	0
+68	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-01	4	1	1	13	2016-08-23 12:57:22.271777-04	2016-08-23 13:00:58.161212-04	\N	1	1	0	1	1	0
+69	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-08	4	1	1	14	2016-08-23 13:05:18.764354-04	\N	\N	1	0	0	1	1	0
+70	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-15	4	1	1	15	2016-08-23 13:10:24.887826-04	\N	\N	1	0	0	1	1	0
+71	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-22	4	1	1	16	2016-08-23 13:17:56.844385-04	\N	\N	1	0	0	1	1	0
 \.
+
+
+--
+-- Data for Name: fac_nomina_det; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_nomina_det (id, fac_nomina_id, gral_empleado_id, no_empleado, rfc, nombre, curp, gral_depto_id, gral_puesto_id, fecha_contrato, antiguedad, nom_regimen_contratacion_id, nom_tipo_contrato_id, nom_tipo_jornada_id, nom_periodicidad_pago_id, clabe, tes_ban_id, nom_riesgo_puesto_id, imss, reg_patronal, salario_base, salario_integrado, fecha_ini_pago, fecha_fin_pago, no_dias_pago, concepto_descripcion, concepto_unidad, concepto_cantidad, concepto_valor_unitario, concepto_importe, descuento, motivo_descuento, gral_isr_id, importe_retencion, comp_subtotal, comp_descuento, comp_retencion, comp_total, percep_total_gravado, percep_total_excento, deduc_total_gravado, deduc_total_excento, facturado, momento_facturacion, gral_usr_id_facturacion, validado, serie, folio, ref_id, cancelado, momento_cancelacion, gral_usr_id_cancela) FROM stdin;
+21	53	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	1	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-01	2016-04-07	7	PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+22	53	2					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+23	53	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+24	53	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+25	53	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+27	54	2					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+28	54	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+29	54	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+30	54	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+26	54	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	2	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-08	2016-04-14	7	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+33	56	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+34	56	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+35	56	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+31	56	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	3	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-15	2016-04-21	7	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+32	56	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	1	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-15	2016-04-21	7	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+38	57	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+39	57	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+40	57	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+37	57	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	2	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-22	2016-04-28	7	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+36	57	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	4	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-22	2016-04-28	7	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+43	59	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+44	59	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+45	59	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+41	59	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	5	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-29	2016-05-05	7	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+42	59	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	3	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-29	2016-05-05	7	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+48	61	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+46	61	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	6	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+47	61	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	4	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+50	61	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+49	61	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	1	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+53	62	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+55	62	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+51	62	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	7	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+52	62	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	5	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+54	62	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	2	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+58	63	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+60	63	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+56	63	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	8	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+57	63	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	6	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+59	63	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	3	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+63	64	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+65	64	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+61	64	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	9	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+62	64	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	7	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+64	64	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	4	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+68	65	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+70	65	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+66	65	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	10	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+67	65	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	8	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+69	65	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	5	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+73	66	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+75	66	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+71	66	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	11	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+72	66	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	9	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+74	66	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	6	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+78	67	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+76	67	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	12	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+77	67	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	10	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+79	67	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	7	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+84	68	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	8	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+80	67	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	1	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+83	68	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+81	68	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	13	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+82	68	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	11	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+86	69	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	14	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+85	68	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	2	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+88	69	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+87	69	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	12	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+89	69	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	9	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+90	69	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	3	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+93	70	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+91	70	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	15	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+92	70	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	13	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+94	70	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	10	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+95	70	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	4	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+98	71	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+96	71	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	16	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+97	71	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	14	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+99	71	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	11	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+100	71	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	5	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+104	72	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+101	72	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	17	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+102	72	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	15	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+105	72	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	6	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+103	72	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	1	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+106	73	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	18	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+107	73	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	16	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+109	73	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	12	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+110	73	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	7	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+108	73	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	2	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+111	74	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	19	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+112	74	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	17	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+114	74	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	13	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+115	74	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	8	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+113	74	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	3	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+116	75	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	20	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.600000000000023	793.600000000000023	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.600000000000023	17.379999999999999	39.6599999999999966	736.559999999999945	793.600000000000023	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+117	75	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	18	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+119	75	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	14	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+120	75	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	9	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+118	75	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	4	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+\.
+
+
+--
+-- Data for Name: fac_nomina_det_deduc; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_nomina_det_deduc (id, fac_nomina_det_id, nom_deduc_id, gravado, excento) FROM stdin;
+21	11	1	17.379999999999999	0
+22	11	2	39.6599999999999966	0
+23	16	1	0	17.379999999999999
+24	16	2	0	39.6599999999999966
+25	26	1	0	17.379999999999999
+26	26	2	0	39.6599999999999966
+27	31	1	0	17.379999999999999
+28	31	2	0	39.6599999999999966
+29	32	1	0	17.379999999999999
+30	32	2	0	39.6599999999999966
+31	37	1	0	17.379999999999999
+32	37	2	0	39.6599999999999966
+33	36	1	0	17.379999999999999
+34	36	2	0	39.6599999999999966
+35	21	1	0	17.379999999999999
+36	21	2	0	39.6599999999999966
+37	41	1	0	17.379999999999999
+38	41	2	0	39.6599999999999966
+39	42	1	0	17.379999999999999
+40	42	2	0	39.6599999999999966
+41	46	1	0	17.379999999999999
+42	46	2	0	39.6599999999999966
+43	47	1	0	17.379999999999999
+44	47	2	0	39.6599999999999966
+45	49	1	0	17.379999999999999
+46	49	2	0	39.6599999999999966
+47	51	1	0	17.379999999999999
+48	51	2	0	39.6599999999999966
+49	52	1	0	17.379999999999999
+50	52	2	0	39.6599999999999966
+51	54	1	0	17.379999999999999
+52	54	2	0	39.6599999999999966
+53	56	1	0	17.379999999999999
+54	56	2	0	39.6599999999999966
+55	57	1	0	17.379999999999999
+56	57	2	0	39.6599999999999966
+57	59	1	0	17.379999999999999
+58	59	2	0	39.6599999999999966
+59	61	1	0	17.379999999999999
+60	61	2	0	39.6599999999999966
+61	62	1	0	17.379999999999999
+62	62	2	0	39.6599999999999966
+63	64	1	0	17.379999999999999
+64	64	2	0	39.6599999999999966
+65	66	1	0	17.379999999999999
+66	66	2	0	39.6599999999999966
+67	67	1	0	17.379999999999999
+68	67	2	0	39.6599999999999966
+69	69	1	0	17.379999999999999
+70	69	2	0	39.6599999999999966
+71	71	1	0	17.379999999999999
+72	71	2	0	39.6599999999999966
+73	72	1	0	17.379999999999999
+74	72	2	0	39.6599999999999966
+75	74	1	0	17.379999999999999
+76	74	2	0	39.6599999999999966
+77	76	1	0	17.379999999999999
+78	76	2	0	39.6599999999999966
+79	77	1	0	17.379999999999999
+80	77	2	0	39.6599999999999966
+81	79	1	0	17.379999999999999
+82	79	2	0	39.6599999999999966
+86	80	1	0	38.5399999999999991
+87	80	2	0	119.010000000000005
+88	81	1	0	17.379999999999999
+89	81	2	0	39.6599999999999966
+90	82	1	0	17.379999999999999
+91	82	2	0	39.6599999999999966
+92	84	1	0	17.379999999999999
+93	84	2	0	39.6599999999999966
+96	85	1	0	38.5399999999999991
+97	85	2	0	119.010000000000005
+98	86	1	0	17.379999999999999
+99	86	2	0	39.6599999999999966
+100	87	1	0	17.379999999999999
+101	87	2	0	39.6599999999999966
+102	89	1	0	17.379999999999999
+103	89	2	0	39.6599999999999966
+106	90	1	0	38.5399999999999991
+107	90	2	0	119.010000000000005
+108	91	1	0	17.379999999999999
+109	91	2	0	39.6599999999999966
+110	92	1	0	17.379999999999999
+111	92	2	0	39.6599999999999966
+112	94	1	0	17.379999999999999
+113	94	2	0	39.6599999999999966
+114	95	1	0	38.5399999999999991
+115	95	2	0	119.010000000000005
+116	96	1	0	17.379999999999999
+117	96	2	0	39.6599999999999966
+118	97	1	0	17.379999999999999
+119	97	2	0	39.6599999999999966
+120	99	1	0	17.379999999999999
+121	99	2	0	39.6599999999999966
+122	100	1	0	38.5399999999999991
+123	100	2	0	119.010000000000005
+124	101	1	0	17.379999999999999
+125	101	2	0	39.6599999999999966
+126	102	1	0	17.379999999999999
+127	102	2	0	39.6599999999999966
+128	105	1	0	38.5399999999999991
+129	105	2	0	119.010000000000005
+130	103	1	0	17.379999999999999
+131	103	2	0	39.6599999999999966
+132	106	1	0	17.379999999999999
+133	106	2	0	39.6599999999999966
+134	107	1	0	17.379999999999999
+135	107	2	0	39.6599999999999966
+136	109	1	0	17.379999999999999
+137	109	2	0	39.6599999999999966
+138	110	1	0	38.5399999999999991
+139	110	2	0	119.010000000000005
+140	108	1	0	17.379999999999999
+141	108	2	0	39.6599999999999966
+142	111	1	0	17.379999999999999
+143	111	2	0	39.6599999999999966
+144	112	1	0	17.379999999999999
+145	112	2	0	39.6599999999999966
+146	114	1	0	17.379999999999999
+147	114	2	0	39.6599999999999966
+148	115	1	0	38.5399999999999991
+149	115	2	0	119.010000000000005
+150	113	1	0	17.379999999999999
+151	113	2	0	39.6599999999999966
+152	116	1	0	17.379999999999999
+153	116	2	0	39.6599999999999966
+154	117	1	0	17.379999999999999
+155	117	2	0	39.6599999999999966
+156	119	1	0	17.379999999999999
+157	119	2	0	39.6599999999999966
+158	120	1	0	38.5399999999999991
+159	120	2	0	119.010000000000005
+160	118	1	0	17.379999999999999
+161	118	2	0	39.6599999999999966
+\.
+
+
+--
+-- Name: fac_nomina_det_deduc_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_nomina_det_deduc_id_seq', 161, true);
+
+
+--
+-- Data for Name: fac_nomina_det_hrs_extra; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_nomina_det_hrs_extra (id, fac_nomina_det_id, nom_tipo_hrs_extra_id, no_dias, no_hrs, importe) FROM stdin;
+\.
+
+
+--
+-- Name: fac_nomina_det_hrs_extra_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_nomina_det_hrs_extra_id_seq', 1, false);
+
+
+--
+-- Name: fac_nomina_det_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_nomina_det_id_seq', 120, true);
+
+
+--
+-- Data for Name: fac_nomina_det_incapa; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_nomina_det_incapa (id, fac_nomina_det_id, nom_tipo_incapacidad_id, no_dias, importe) FROM stdin;
+\.
+
+
+--
+-- Name: fac_nomina_det_incapa_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_nomina_det_incapa_id_seq', 1, false);
+
+
+--
+-- Data for Name: fac_nomina_det_percep; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_nomina_det_percep (id, fac_nomina_det_id, nom_percep_id, gravado, excento) FROM stdin;
+1	6	1	700	0
+2	6	8	93.6599999999999966	0
+23	11	1	700	0
+24	11	8	93.6599999999999966	0
+25	16	1	700	0
+26	16	8	93.6599999999999966	0
+27	26	1	700	0
+28	26	8	93.6599999999999966	0
+29	31	1	700	0
+30	31	8	93.6599999999999966	0
+31	32	1	700	0
+32	32	8	93.6599999999999966	0
+33	37	1	700	0
+34	37	8	93.6599999999999966	0
+35	36	1	700	0
+36	36	8	93.6599999999999966	0
+37	21	1	700	0
+38	21	8	93.6599999999999966	0
+39	41	1	700	0
+40	41	8	93.6599999999999966	0
+41	42	1	700	0
+42	42	8	93.6599999999999966	0
+43	46	1	700	0
+44	46	8	93.6599999999999966	0
+45	47	1	700	0
+46	47	8	93.6599999999999966	0
+47	49	1	700	0
+48	49	8	93.6599999999999966	0
+49	51	1	700	0
+50	51	8	93.6599999999999966	0
+51	52	1	700	0
+52	52	8	93.6599999999999966	0
+53	54	1	700	0
+54	54	8	93.6599999999999966	0
+55	56	1	700	0
+56	56	8	93.6599999999999966	0
+57	57	1	700	0
+58	57	8	93.6599999999999966	0
+59	59	1	700	0
+60	59	8	93.6599999999999966	0
+61	61	1	700	0
+62	61	8	93.6599999999999966	0
+63	62	1	700	0
+64	62	8	93.6599999999999966	0
+65	64	1	700	0
+66	64	8	93.6599999999999966	0
+67	66	1	700	0
+68	66	8	93.6599999999999966	0
+69	67	1	700	0
+70	67	8	93.6599999999999966	0
+71	69	1	700	0
+72	69	8	93.6599999999999966	0
+73	71	1	700	0
+74	71	8	93.6599999999999966	0
+75	72	1	700	0
+76	72	8	93.6599999999999966	0
+77	74	1	700	0
+78	74	8	93.6599999999999966	0
+79	76	1	700	0
+80	76	8	93.6599999999999966	0
+81	77	1	700	0
+82	77	8	93.6599999999999966	0
+83	79	1	700	0
+84	79	8	93.6599999999999966	0
+87	80	1	1540.34999999999991	0
+88	80	8	58.3800000000000026	0
+89	81	1	700	0
+90	81	8	93.6599999999999966	0
+91	82	1	700	0
+92	82	8	93.6599999999999966	0
+93	84	1	700	0
+94	84	8	93.6599999999999966	0
+97	85	1	1540.34999999999991	0
+98	85	8	58.3800000000000026	0
+99	86	1	700	0
+100	86	8	93.6599999999999966	0
+101	87	1	700	0
+102	87	8	93.6599999999999966	0
+103	89	1	700	0
+104	89	8	93.6599999999999966	0
+107	90	1	1540.34999999999991	0
+108	90	8	58.3800000000000026	0
+109	91	1	700	0
+110	91	8	93.6599999999999966	0
+111	92	1	700	0
+112	92	8	93.6599999999999966	0
+113	94	1	700	0
+114	94	8	93.6599999999999966	0
+115	95	1	1540.34999999999991	0
+116	95	8	58.3800000000000026	0
+117	96	1	700	0
+118	96	8	93.6599999999999966	0
+119	97	1	700	0
+120	97	8	93.6599999999999966	0
+121	99	1	700	0
+122	99	8	93.6599999999999966	0
+123	100	1	1540.34999999999991	0
+124	100	8	58.3800000000000026	0
+125	101	1	700	0
+126	101	8	93.6599999999999966	0
+127	102	1	700	0
+128	102	8	93.6599999999999966	0
+129	105	1	1540.34999999999991	0
+130	105	8	58.3800000000000026	0
+131	103	1	700	0
+132	103	8	93.6599999999999966	0
+133	106	1	700	0
+134	106	8	93.6599999999999966	0
+135	107	1	700	0
+136	107	8	93.6599999999999966	0
+137	109	1	700	0
+138	109	8	93.6599999999999966	0
+139	110	1	1540.34999999999991	0
+140	110	8	58.3800000000000026	0
+141	108	1	700	0
+142	108	8	93.6599999999999966	0
+143	111	1	700	0
+144	111	8	93.6599999999999966	0
+145	112	1	700	0
+146	112	8	93.6599999999999966	0
+147	114	1	700	0
+148	114	8	93.6599999999999966	0
+149	115	1	1540.34999999999991	0
+150	115	8	58.3800000000000026	0
+151	113	1	700	0
+152	113	8	93.6599999999999966	0
+153	116	1	700	0
+154	116	8	93.5999999999999943	0
+155	117	1	700	0
+156	117	8	93.6599999999999966	0
+157	119	1	700	0
+158	119	8	93.6599999999999966	0
+159	120	1	1540.34999999999991	0
+160	120	8	58.3800000000000026	0
+161	118	1	700	0
+162	118	8	93.6599999999999966	0
+\.
+
+
+--
+-- Name: fac_nomina_det_percep_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_nomina_det_percep_id_seq', 162, true);
 
 
 --
 -- Name: fac_nomina_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('fac_nomina_id_seq', 1, false);
+SELECT pg_catalog.setval('fac_nomina_id_seq', 75, true);
 
 
 --
@@ -9602,7 +12963,16 @@ SELECT pg_catalog.setval('gral_emp_leyenda_id_seq', 1, false);
 --
 
 COPY gral_empleado_deduc (id, gral_empleado_id, nom_deduc_id) FROM stdin;
-1	1	1
+41	1	1
+42	1	2
+43	2	1
+44	2	2
+45	3	1
+46	3	2
+49	4	1
+50	4	2
+53	5	1
+54	5	2
 \.
 
 
@@ -9610,7 +12980,7 @@ COPY gral_empleado_deduc (id, gral_empleado_id, nom_deduc_id) FROM stdin;
 -- Name: gral_empleado_deduc_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_empleado_deduc_id_seq', 1, true);
+SELECT pg_catalog.setval('gral_empleado_deduc_id_seq', 54, true);
 
 
 --
@@ -9618,7 +12988,16 @@ SELECT pg_catalog.setval('gral_empleado_deduc_id_seq', 1, true);
 --
 
 COPY gral_empleado_percep (id, gral_empleado_id, nom_percep_id) FROM stdin;
-1	1	1
+41	1	1
+42	1	8
+43	2	1
+44	2	8
+45	3	1
+46	3	8
+49	4	1
+50	4	8
+53	5	1
+54	5	8
 \.
 
 
@@ -9626,7 +13005,7 @@ COPY gral_empleado_percep (id, gral_empleado_id, nom_percep_id) FROM stdin;
 -- Name: gral_empleado_percep_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_empleado_percep_id_seq', 1, true);
+SELECT pg_catalog.setval('gral_empleado_percep_id_seq', 54, true);
 
 
 --
@@ -9634,11 +13013,11 @@ SELECT pg_catalog.setval('gral_empleado_percep_id_seq', 1, true);
 --
 
 COPY gral_empleados (id, clave, nombre_pila, apellido_paterno, apellido_materno, imss, infonavit, curp, rfc, fecha_nacimiento, fecha_ingreso, gral_escolaridad_id, gral_sexo_id, gral_civil_id, gral_religion_id, gral_sangretipo_id, gral_puesto_id, gral_categ_id, gral_suc_id_empleado, telefono, telefono_movil, correo_personal, gral_pais_id, gral_edo_id, gral_mun_id, calle, numero, colonia, cp, contacto_emergencia, telefono_emergencia, enfermedades, alergias, comentarios, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id, gralsuc_id, comision_agen, region_id_agen, comision2_agen, comision3_agen, comision4_agen, dias_tope_comision, dias_tope_comision2, dias_tope_comision3, monto_tope_comision, monto_tope_comision2, monto_tope_comision3, correo_empresa, tipo_comision, no_int, nom_regimen_contratacion_id, nom_periodicidad_pago_id, nom_riesgo_puesto_id, nom_tipo_contrato_id, nom_tipo_jornada_id, tes_ban_id, clabe, salario_base, salario_integrado, registro_patronal, genera_nomina, gral_depto_id) FROM stdin;
-2	2	GASPAR\n	TAMEZ\n	GARZA\n	43806183124\n	\N	TAGG610726HNLMRS04\n	TAGG610726	1961-07-26	2016-04-15	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
-3	3	JOSE LUIS\n	TAMEZ	TAMEZ	43038202081\n	\N	TATL820816HNLMMS07\n	TATL820816\n	1982-08-16	2016-07-19	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
-4	4	JUAN EDGAR	BALBOA	RIVERA	43048719199	\N	BARJ870708HNLLVN02	NARJ870708	1983-09-22	2016-05-05	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
-5	5	ALBERTO JORGE	SUAREZ	CAVAZOS	3967836382	\N	SUCA780502HNLRVL00	SUCA780502	1980-05-02	2016-04-01	3	1	1	1	1	2	1	1	\N	\N	\N	2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
-1	1	JUAN ARTURO	RIOS	VARGAS	43008368748	\N	RIVJ830922HNLSRN06	RIVJ830922\n	1983-09-22	2016-04-01	3	1	1	1	1	1	1	1				2	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	f	\N	\N	\N	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	0		1		0	0	0	0	0	0		0	0		f	1
+1	1	JUAN ARTURO	RIOS	VARGAS	43008368748		RIVJ830922HNLSRN06	RIVJ830922296	1983-09-22	2016-04-01	3	1	2	1	1	1	1	1				2	19	951										f	\N	2016-08-20 21:23:50.169162-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
+2	2	GASPAR	TAMEZ	GARZA	43806183124		TAGG610726HNLMRS04	TAGG6107261L5	1961-07-26	2016-04-15	3	1	2	1	1	2	2	1				2	19	951										f	\N	2016-08-20 21:23:56.210519-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
+3	3	JOSE LUIS	TAMEZ	TAMEZ	43038202081		TATL820816HNLMMS07	TATL820816766	1982-08-16	2016-07-19	3	1	2	1	1	2	0	1				2	19	951										f	\N	2016-08-20 21:24:00.778474-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
+4	4	JUAN EDGAR	BALBOA	RIVERA	43048719199		BARJ870708HNLLVN02	BARJ8707085S9	1987-07-08	2016-05-05	3	1	2	1	1	2	0	1				2	19	951										f	\N	2016-08-20 21:24:12.695887-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
+5	5	ALBERTO JORGE	SUAREZ	CAVAZOS	03967836382		SUCA780502HNLRVL00	SUCA780502PG9	1978-05-02	2016-06-13	3	1	2	1	1	2	0	1				2	19	951										f	\N	2016-08-23 12:54:44.480675-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
 \.
 
 
@@ -9662,6 +13041,23 @@ COPY gral_escolaridads (id, titulo, borrado_logico, momento_creacion, momento_ac
 
 
 --
+-- Data for Name: gral_ieps; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY gral_ieps (id, titulo, descripcion, tasa, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_cancela, gral_emp_id, gral_suc_id) FROM stdin;
+2	3%		3	f	2014-10-24 05:59:02.667882-04	2014-10-24 06:45:24.010261-04	\N	37	37	0	1	1
+1	4.5		4.5	f	2014-10-24 05:47:55.642783-04	2014-10-24 06:45:39.422769-04	\N	37	37	0	1	1
+\.
+
+
+--
+-- Name: gral_ieps_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('gral_ieps_id_seq', 1, false);
+
+
+--
 -- Data for Name: gral_imptos; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -9678,6 +13074,37 @@ COPY gral_imptos (id, descripcion, iva_1, momento_baja, momento_creacion, moment
 --
 
 SELECT pg_catalog.setval('gral_imptos_id_seq', 4, true);
+
+
+--
+-- Data for Name: gral_imptos_ret; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY gral_imptos_ret (id, titulo, descripcion, tasa, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_cancela, gral_emp_id, gral_suc_id) FROM stdin;
+\.
+
+
+--
+-- Name: gral_imptos_ret_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('gral_imptos_ret_id_seq', 1, false);
+
+
+--
+-- Data for Name: gral_isr; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY gral_isr (id, titulo, descripcion, tasa, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_cancela, gral_emp_id, gral_suc_id) FROM stdin;
+1	ISR	IMPUESTO SOBRE LA RENTA	0	f	2014-03-04 01:00:00-05	\N	\N	1	0	0	1	1
+\.
+
+
+--
+-- Name: gral_isr_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('gral_isr_id_seq', 1, false);
 
 
 --
@@ -12509,11 +15936,11 @@ SELECT pg_catalog.setval('gral_tc_url_id_seq', 1, false);
 --
 
 COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id) FROM stdin;
-2	user2	123qwe	t	\N	2
-3	user3	123qwe	t	\N	3
-4	user4	123qwe	t	\N	4
-5	user5	123qwe	t	\N	5
-1	admin	123qwe	t	2016-08-17 09:49:21.887786-04	1
+1	admin	123qwe	t	2016-08-23 20:56:01.693472-04	1
+2	admin1	123qwe	t	\N	2
+3	admin2	123qwe	t	\N	3
+4	admin3	123qwe	t	\N	4
+5	admin4	123qwe	f	\N	5
 \.
 
 
@@ -12529,7 +15956,11 @@ SELECT pg_catalog.setval('gral_usr_id_seq', 4, true);
 --
 
 COPY gral_usr_rol (id, gral_usr_id, gral_rol_id) FROM stdin;
-1	1	1
+30	1	1
+31	2	1
+32	3	1
+34	4	1
+36	5	1
 \.
 
 
@@ -12537,7 +15968,7 @@ COPY gral_usr_rol (id, gral_usr_id, gral_rol_id) FROM stdin;
 -- Name: gral_usr_rol_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_usr_rol_id_seq', 1, false);
+SELECT pg_catalog.setval('gral_usr_rol_id_seq', 36, true);
 
 
 --
@@ -12615,6 +16046,7 @@ SELECT pg_catalog.setval('inv_clas_id_seq', 1, false);
 --
 
 COPY inv_exi (id, inv_prod_id, inv_alm_id, ano, transito, reservado, exi_inicial, entradas_1, salidas_1, costo_ultimo_1, entradas_2, salidas_2, costo_ultimo_2, entradas_3, salidas_3, costo_ultimo_3, entradas_4, salidas_4, costo_ultimo_4, entradas_5, salidas_5, costo_ultimo_5, entradas_6, salidas_6, costo_ultimo_6, entradas_7, salidas_7, costo_ultimo_7, entradas_8, salidas_8, costo_ultimo_8, entradas_9, salidas_9, costo_ultimo_9, entradas_10, salidas_10, costo_ultimo_10, entradas_11, salidas_11, costo_ultimo_11, entradas_12, salidas_12, costo_ultimo_12, momento_entrada_1, momento_salida_1, momento_entrada_2, momento_salida_2, momento_entrada_3, momento_salida_3, momento_entrada_4, momento_salida_4, momento_entrada_5, momento_salida_5, momento_entrada_6, momento_salida_6, momento_entrada_7, momento_salida_7, momento_entrada_8, momento_salida_8, momento_entrada_9, momento_salida_9, momento_entrada_10, momento_salida_10, momento_entrada_11, momento_salida_11, momento_entrada_12, momento_salida_12) FROM stdin;
+3	8	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
 \.
 
 
@@ -12622,7 +16054,22 @@ COPY inv_exi (id, inv_prod_id, inv_alm_id, ano, transito, reservado, exi_inicial
 -- Name: inv_exi_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('inv_exi_id_seq', 1, false);
+SELECT pg_catalog.setval('inv_exi_id_seq', 3, true);
+
+
+--
+-- Data for Name: inv_kit; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_kit (id, producto_kit_id, cantidad, producto_elemento_id) FROM stdin;
+\.
+
+
+--
+-- Name: inv_kit_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_kit_id_seq', 1, false);
 
 
 --
@@ -12667,12 +16114,46 @@ SELECT pg_catalog.setval('inv_mov_tipos_id_seq', 1, false);
 
 
 --
+-- Data for Name: inv_pre; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_pre (id, inv_prod_id, precio_1, precio_2, precio_3, precio_4, precio_5, precio_6, precio_7, precio_8, precio_9, precio_10, descuento_1, descuento_2, descuento_3, descuento_4, descuento_5, descuento_6, descuento_7, descuento_8, descuento_9, descuento_10, base_precio_1, base_precio_2, base_precio_3, base_precio_4, base_precio_5, base_precio_6, base_precio_7, base_precio_8, base_precio_9, base_precio_10, default_precio_1, default_precio_2, default_precio_3, default_precio_4, default_precio_5, default_precio_6, default_precio_7, default_precio_8, default_precio_9, default_precio_10, operacion_precio_1, operacion_precio_2, operacion_precio_3, operacion_precio_4, operacion_precio_5, operacion_precio_6, operacion_precio_7, operacion_precio_8, operacion_precio_9, operacion_precio_10, calculo_precio_1, calculo_precio_2, calculo_precio_3, calculo_precio_4, calculo_precio_5, calculo_precio_6, calculo_precio_7, calculo_precio_8, calculo_precio_9, calculo_precio_10, redondeo_precio_1, redondeo_precio_2, redondeo_precio_3, redondeo_precio_4, redondeo_precio_5, redondeo_precio_6, redondeo_precio_7, redondeo_precio_8, redondeo_precio_9, redondeo_precio_10, gral_emp_id, borrado_logico, momento_creacion, momento_baja, momento_actualizacion, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_mon_id_pre1, gral_mon_id_pre2, gral_mon_id_pre3, gral_mon_id_pre4, gral_mon_id_pre5, gral_mon_id_pre6, gral_mon_id_pre7, gral_mon_id_pre8, gral_mon_id_pre9, gral_mon_id_pre10, inv_prod_presentacion_id) FROM stdin;
+5	8	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-08-20 21:47:57.66066-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	3
+6	8	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-08-20 21:47:57.66066-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	4
+\.
+
+
+--
+-- Name: inv_pre_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_pre_id_seq', 6, true);
+
+
+--
 -- Data for Name: inv_prod; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
 COPY inv_prod (id, sku, descripcion, codigo_barras, tentrega, inv_clas_id, inv_stock_clasif_id, estatus, inv_prod_familia_id, subfamilia_id, inv_prod_grupo_id, ieps, meta_impuesto, inv_prod_linea_id, inv_mar_id, tipo_de_producto_id, inv_seccion_id, unidad_id, requiere_numero_serie, requiere_numero_lote, requiere_pedimento, permitir_stock, venta_moneda_extranjera, compra_moneda_extranjera, requiere_nom, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, sucursal_id, empresa_id, cxp_prov_id, sku_aux, id_aux, densidad, valor_maximo, valor_minimo, punto_reorden, gral_impto_id, ctb_cta_id_gasto, ctb_cta_id_costo_venta, ctb_cta_id_venta, descripcion_corta, descripcion_larga, archivo_img, archivo_pdf, inv_prod_presentacion_id, flete, no_clie, gral_mon_id, gral_imptos_ret_id) FROM stdin;
 1	S-21	MESCLA XK XILOL MEK		0	1	1	t	0	0	1	0		1	1	1	1	1	f	f	f	f	f	f	f	f	2015-04-22 08:40:02.080175-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
+8	XXX	XXXXX		0	1	1	t	0	0	1	0		3	3	6	1	3	f	f	f	f	f	f	f	f	2016-08-20 21:47:57.66066-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					4	f		1	0
 \.
+
+
+--
+-- Data for Name: inv_prod_cost_prom; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod_cost_prom (id, inv_prod_id, ano, costo_promedio_1, costo_promedio_2, costo_promedio_3, costo_promedio_4, costo_promedio_5, costo_promedio_6, costo_promedio_7, costo_promedio_8, costo_promedio_9, costo_promedio_10, costo_promedio_11, costo_promedio_12, costo_ultimo_1, tipo_cambio_1, gral_mon_id_1, costo_ultimo_2, tipo_cambio_2, gral_mon_id_2, costo_ultimo_3, tipo_cambio_3, gral_mon_id_3, costo_ultimo_4, tipo_cambio_4, gral_mon_id_4, costo_ultimo_5, tipo_cambio_5, gral_mon_id_5, costo_ultimo_6, tipo_cambio_6, gral_mon_id_6, costo_ultimo_7, tipo_cambio_7, gral_mon_id_7, costo_ultimo_8, tipo_cambio_8, gral_mon_id_8, costo_ultimo_9, tipo_cambio_9, gral_mon_id_9, costo_ultimo_10, tipo_cambio_10, gral_mon_id_10, costo_ultimo_11, tipo_cambio_11, gral_mon_id_11, costo_ultimo_12, tipo_cambio_12, gral_mon_id_12, actualizacion_1, actualizacion_2, actualizacion_3, actualizacion_4, actualizacion_5, actualizacion_6, actualizacion_7, actualizacion_8, actualizacion_9, actualizacion_10, actualizacion_11, actualizacion_12, factura_ultima_1, oc_ultima_1, factura_ultima_2, oc_ultima_2, factura_ultima_3, oc_ultima_3, factura_ultima_4, oc_ultima_4, factura_ultima_5, oc_ultima_5, factura_ultima_6, oc_ultima_6, factura_ultima_7, oc_ultima_7, factura_ultima_8, oc_ultima_8, factura_ultima_9, oc_ultima_9, factura_ultima_10, oc_ultima_10, factura_ultima_11, oc_ultima_11, factura_ultima_12, oc_ultima_12) FROM stdin;
+1	8	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N																								
+\.
+
+
+--
+-- Name: inv_prod_cost_prom_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_cost_prom_id_seq', 1, true);
 
 
 --
@@ -12715,7 +16196,7 @@ SELECT pg_catalog.setval('inv_prod_grupos_id_seq', 1, true);
 -- Name: inv_prod_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('inv_prod_id_seq', 1, false);
+SELECT pg_catalog.setval('inv_prod_id_seq', 8, true);
 
 
 --
@@ -12736,6 +16217,23 @@ COPY inv_prod_lineas (id, titulo, descripcion, inv_seccion_id, borrado_logico, m
 --
 
 SELECT pg_catalog.setval('inv_prod_lineas_id_seq', 5, true);
+
+
+--
+-- Data for Name: inv_prod_pres_x_prod; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_prod_pres_x_prod (id, producto_id, presentacion_id, producto_id_aux) FROM stdin;
+9	8	3	\N
+10	8	4	\N
+\.
+
+
+--
+-- Name: inv_prod_pres_x_prod_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_prod_pres_x_prod_id_seq', 10, true);
 
 
 --
@@ -12878,6 +16376,27 @@ SELECT pg_catalog.setval('nom_deduc_id_seq', 1, false);
 --
 
 COPY nom_deduc_tipo (id, clave, titulo, activo) FROM stdin;
+1	001	Seguridad social\n	t
+2	002	ISR\n	t
+3	003	Aportaciones a retiro, cesantía en edad avanzada y vejez.\n	t
+4	004	Otros\n	t
+5	005	Aportaciones a Fondo de vivienda\n	t
+6	006	Descuento por incapacidad\n	t
+7	007	Pensión alimenticia\n	t
+8	008	Renta\n	t
+9	009	Préstamos provenientes del Fondo Nacional de la Vivienda para los Trabajadores\n	t
+10	010	Pago por crédito de vivienda\n	t
+11	011	Pago de abonos INFONACOT\n	t
+12	012	Anticipo de salarios\n	t
+13	013	Pagos hechos con exceso al trabajador\n	t
+14	014	Errores\n	t
+15	015	Pérdidas\n	t
+16	016	Averías\n	t
+17	017	Adquisición de artículos producidos por la empresa o establecimiento\n	t
+18	018	Cuotas para la constitución y fomento de sociedades cooperativas y de cajas de ahorro\n	t
+19	019	Cuotas sindicales\n	t
+20	020	Ausencia (Ausentismo)\n	t
+21	021	Cuotas obrero patronales\n	t
 \.
 
 
@@ -12972,7 +16491,7 @@ SELECT pg_catalog.setval('nom_percep_tipo_id_seq', 1, false);
 --
 
 COPY nom_periodicidad_pago (id, titulo, no_periodos, activo, borrado_logico, momento_creacion, momento_actualiza, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_baja, gral_emp_id, gral_suc_id) FROM stdin;
-1	QUINCENAL	24	t	f	2014-04-09 10:01:29.466309-04	\N	\N	1	0	0	1	1
+1	SEMANAL	53	t	f	2016-08-19 00:00:00-04	\N	\N	1	0	0	1	1
 \.
 
 
@@ -12988,7 +16507,7 @@ SELECT pg_catalog.setval('nom_periodicidad_pago_id_seq', 1, false);
 --
 
 COPY nom_periodos_conf (id, ano, nom_periodicidad_pago_id, prefijo, borrado_logico, momento_creacion, momento_actualiza, momento_baja, gral_usr_id_crea, gral_usr_id_actualiza, gral_usr_id_baja, gral_emp_id, gral_suc_id) FROM stdin;
-1	2016	1	Q	f	2016-01-17 19:00:00-05	\N	\N	1	0	0	1	1
+1	2016	1	S	f	2016-01-17 19:00:00-05	\N	\N	1	0	0	1	1
 \.
 
 
@@ -12997,7 +16516,45 @@ COPY nom_periodos_conf (id, ano, nom_periodicidad_pago_id, prefijo, borrado_logi
 --
 
 COPY nom_periodos_conf_det (id, nom_periodos_conf_id, folio, titulo, fecha_ini, fecha_fin, estatus) FROM stdin;
-1	1	1	PAGO DE LA QUINCENA DEL 16/07/2016 AL 31/07/2016	2016-07-16	2016-07-31	t
+3	1	16	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	2016-04-15	2016-04-21	f
+4	1	17	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	2016-04-22	2016-04-28	f
+5	1	18	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	2016-04-29	2016-05-05	f
+6	1	19	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	2016-05-06	2016-05-12	f
+7	1	20	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	2016-05-13	2016-05-19	f
+8	1	21	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	2016-05-20	2016-05-26	f
+9	1	22	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	2016-05-27	2016-06-02	f
+10	1	23	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	2016-06-03	2016-06-09	f
+11	1	24	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	2016-06-10	2016-06-16	f
+12	1	25	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	2016-06-17	2016-06-23	f
+13	1	26	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	2016-06-24	2016-06-30	f
+14	1	27	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	2016-07-01	2016-07-07	f
+15	1	28	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	2016-07-08	2016-07-14	f
+16	1	29	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	2016-07-15	2016-07-21	f
+17	1	30	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	2016-07-22	2016-07-28	f
+18	1	31	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	2016-07-29	2016-08-04	f
+19	1	32	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	2016-08-05	2016-08-11	f
+20	1	33	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	2016-08-12	2016-08-18	f
+21	1	34	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	2016-08-19	2016-08-25	f
+22	1	35	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	2016-08-26	2016-09-01	f
+23	1	36	PAGO DE NOMINA DEL 02/09/2016 AL 08/09/2016	2016-09-02	2016-09-08	f
+24	1	37	PAGO DE NOMINA DEL 09/09/2016 AL 15/09/2016	2016-09-09	2016-09-15	f
+25	1	38	PAGO DE NOMINA DEL 16/09/2016 AL 22/09/2016	2016-09-16	2016-09-22	f
+26	1	39	PAGO DE NOMINA DEL 23/09/2016 AL 29/09/2016	2016-09-23	2016-09-29	f
+27	1	40	PAGO DE NOMINA DEL 30/09/2016 AL 06/10/2016	2016-09-30	2016-10-06	f
+28	1	41	PAGO DE NOMINA DEL 07/10/2016 AL 13/10/2016	2016-10-07	2016-10-13	f
+29	1	42	PAGO DE NOMINA DEL 14/10/2016 AL 20/10/2016	2016-10-14	2016-10-20	f
+30	1	43	PAGO DE NOMINA DEL 21/10/2016 AL 27/10/2016	2016-10-21	2016-10-27	f
+31	1	44	PAGO DE NOMINA DEL 28/10/2016 AL 03/11/2016	2016-10-28	2016-11-03	f
+32	1	45	PAGO DE NOMINA DEL 04/11/2016 AL 10/11/2016	2016-11-04	2016-11-10	f
+33	1	46	PAGO DE NOMINA DEL 11/11/2016 AL 17/11/2016	2016-11-11	2016-11-17	f
+34	1	47	PAGO DE NOMINA DEL 18/11/2016 AL 24/11/2016	2016-11-18	2016-11-24	f
+35	1	48	PAGO DE NOMINA DEL 25/11/2016 AL 01/12/2016	2016-11-25	2016-12-01	f
+36	1	49	PAGO DE NOMINA DEL 02/12/2016 AL 08/12/2016	2016-12-02	2016-12-08	f
+37	1	50	PAGO DE NOMINA DEL 09/12/2016 AL 15/12/2016	2016-12-09	2016-12-15	f
+38	1	51	PAGO DE NOMINA DEL 16/12/2016 AL 22/12/2016	2016-12-16	2016-12-22	f
+39	1	52	PAGO DE NOMINA DEL 23/12/2016 AL 29/12/2016	2016-12-23	2016-12-29	f
+1	1	14	PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016	2016-04-01	2016-04-07	f
+2	1	15	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	2016-04-08	2016-04-14	f
 \.
 
 
@@ -13005,7 +16562,7 @@ COPY nom_periodos_conf_det (id, nom_periodos_conf_id, folio, titulo, fecha_ini, 
 -- Name: nom_periodos_conf_det_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('nom_periodos_conf_det_id_seq', 1, true);
+SELECT pg_catalog.setval('nom_periodos_conf_det_id_seq', 2, true);
 
 
 --
@@ -13512,6 +17069,54 @@ ALTER TABLE ONLY fac_metodos_pago
 
 
 --
+-- Name: fac_namespaces_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_namespaces
+    ADD CONSTRAINT fac_namespaces_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_nomina_det_deduc_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_deduc
+    ADD CONSTRAINT fac_nomina_det_deduc_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_nomina_det_hrs_extra_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_hrs_extra
+    ADD CONSTRAINT fac_nomina_det_hrs_extra_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_nomina_det_incapa_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_incapa
+    ADD CONSTRAINT fac_nomina_det_incapa_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_nomina_det_percep_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det_percep
+    ADD CONSTRAINT fac_nomina_det_percep_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_nomina_det_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det
+    ADD CONSTRAINT fac_nomina_det_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fac_nomina_par_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -13680,11 +17285,35 @@ ALTER TABLE ONLY gral_escolaridads
 
 
 --
+-- Name: gral_ieps_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_ieps
+    ADD CONSTRAINT gral_ieps_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: gral_imptos_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
 ALTER TABLE ONLY gral_imptos
     ADD CONSTRAINT gral_imptos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: gral_imptos_ret_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_imptos_ret
+    ADD CONSTRAINT gral_imptos_ret_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: gral_isr_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_isr
+    ADD CONSTRAINT gral_isr_pkey PRIMARY KEY (id);
 
 
 --
@@ -13904,6 +17533,14 @@ ALTER TABLE ONLY inv_exi
 
 
 --
+-- Name: inv_kit_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_kit
+    ADD CONSTRAINT inv_kit_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: inv_mar_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -13917,6 +17554,22 @@ ALTER TABLE ONLY inv_mar
 
 ALTER TABLE ONLY inv_mov_tipos
     ADD CONSTRAINT inv_mov_tipos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_pre_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_pre
+    ADD CONSTRAINT inv_pre_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_prod_cost_prom_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_cost_prom
+    ADD CONSTRAINT inv_prod_cost_prom_pkey PRIMARY KEY (id);
 
 
 --
@@ -13949,6 +17602,14 @@ ALTER TABLE ONLY inv_prod_lineas
 
 ALTER TABLE ONLY inv_prod
     ADD CONSTRAINT inv_prod_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inv_prod_pres_x_prod_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_pres_x_prod
+    ADD CONSTRAINT inv_prod_pres_x_prod_pkey PRIMARY KEY (id);
 
 
 --
@@ -14240,11 +17901,27 @@ ALTER TABLE ONLY inv_exi
 
 
 --
+-- Name: unique_inv_prod_cost_prom; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_cost_prom
+    ADD CONSTRAINT unique_inv_prod_cost_prom UNIQUE (inv_prod_id, ano);
+
+
+--
 -- Name: unique_inv_suc_alm; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
 ALTER TABLE ONLY inv_suc_alm
     ADD CONSTRAINT unique_inv_suc_alm UNIQUE (almacen_id, sucursal_id);
+
+
+--
+-- Name: unique_nomina_det_nominaid_empleadoid; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_nomina_det
+    ADD CONSTRAINT unique_nomina_det_nominaid_empleadoid UNIQUE (fac_nomina_id, gral_empleado_id);
 
 
 --
@@ -14352,6 +18029,14 @@ ALTER TABLE ONLY cxc_clie
 
 ALTER TABLE ONLY gral_emp
     ADD CONSTRAINT "fk-3457856" FOREIGN KEY (municipio_id) REFERENCES gral_mun(id);
+
+
+--
+-- Name: fk-354532; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_prod_cost_prom
+    ADD CONSTRAINT "fk-354532" FOREIGN KEY (inv_prod_id) REFERENCES inv_prod(id);
 
 
 --
@@ -14632,6 +18317,14 @@ ALTER TABLE ONLY inv_prod
 
 ALTER TABLE ONLY cxp_prov
     ADD CONSTRAINT proveedors_proveedortipo_id_fkey FOREIGN KEY (proveedortipo_id) REFERENCES cxp_prov_clases(id);
+
+
+--
+-- Name: yttr; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_pre
+    ADD CONSTRAINT yttr FOREIGN KEY (inv_prod_id) REFERENCES inv_prod(id);
 
 
 --
