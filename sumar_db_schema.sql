@@ -6457,6 +6457,49 @@ ALTER SEQUENCE erp_tiempos_entrega_id_seq OWNED BY erp_tiempos_entrega.id;
 
 
 --
+-- Name: fac_cfdis; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_cfdis (
+    id integer NOT NULL,
+    tipo integer DEFAULT 0 NOT NULL,
+    ref_id character varying DEFAULT ''::character varying NOT NULL,
+    doc text,
+    gral_emp_id integer DEFAULT 0 NOT NULL,
+    gral_suc_id integer DEFAULT 0 NOT NULL,
+    fecha_crea timestamp with time zone,
+    gral_usr_id_crea integer DEFAULT 0 NOT NULL,
+    cancelado boolean DEFAULT false NOT NULL,
+    fecha_cancela timestamp with time zone,
+    gral_usr_id_cancela integer DEFAULT 0,
+    CONSTRAINT chk_fac_cfdis_tipo CHECK ((tipo = ANY (ARRAY[1, 2, 3])))
+);
+
+
+ALTER TABLE fac_cfdis OWNER TO sumar;
+
+--
+-- Name: fac_cfdis_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_cfdis_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_cfdis_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_cfdis_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_cfdis_id_seq OWNED BY fac_cfdis.id;
+
+
+--
 -- Name: fac_cfds_conf; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -6568,6 +6611,46 @@ COMMENT ON COLUMN fac_cfds_conf.archivo_xsl_cadena_ctas_contables IS 'Fichero xs
 --
 
 COMMENT ON COLUMN fac_cfds_conf.archivo_xsd_ctas_contables IS 'Fichero xsd para validar el Xml de Cuentas Contables';
+
+
+--
+-- Name: fac_cfds_conf_folios; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_cfds_conf_folios (
+    id integer NOT NULL,
+    no_aprobacion integer,
+    ano_aprobacion smallint,
+    serie character varying,
+    folio_inicial integer,
+    folio_final integer,
+    fac_cfds_conf_id integer,
+    proposito character(3),
+    folio_actual integer
+);
+
+
+ALTER TABLE fac_cfds_conf_folios OWNER TO sumar;
+
+--
+-- Name: fac_cfds_conf_folios_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_cfds_conf_folios_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_cfds_conf_folios_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_cfds_conf_folios_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_cfds_conf_folios_id_seq OWNED BY fac_cfds_conf_folios.id;
 
 
 --
@@ -10824,7 +10907,21 @@ ALTER TABLE ONLY erp_tiempos_entrega ALTER COLUMN id SET DEFAULT nextval('erp_ti
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY fac_cfdis ALTER COLUMN id SET DEFAULT nextval('fac_cfdis_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY fac_cfds_conf ALTER COLUMN id SET DEFAULT nextval('fac_cfds_conf_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_cfds_conf_folios ALTER COLUMN id SET DEFAULT nextval('fac_cfds_conf_folios_id_seq'::regclass);
 
 
 --
@@ -11974,6 +12071,9 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 13	18.0832000000000015	2016-08-21 10:20:10.427693-04	2	DOF
 14	18.2673999999999985	2016-08-22 16:39:32.445811-04	2	DOF
 15	18.3022999999999989	2016-08-23 11:07:48.320334-04	2	DOF
+16	18.4970999999999997	2016-08-25 12:12:56.306087-04	2	DOF
+17	18.4460000000000015	2016-08-26 08:52:55.22621-04	2	DOF
+18	18.4460000000000015	2016-08-27 08:52:48.846369-04	2	DOF
 \.
 
 
@@ -11981,7 +12081,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 -- Name: erp_monedavers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_monedavers_id_seq', 15, true);
+SELECT pg_catalog.setval('erp_monedavers_id_seq', 18, true);
 
 
 --
@@ -12115,12 +12215,46 @@ SELECT pg_catalog.setval('erp_tiempos_entrega_id_seq', 9, true);
 
 
 --
+-- Data for Name: fac_cfdis; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_cfdis (id, tipo, ref_id, doc, gral_emp_id, gral_suc_id, fecha_crea, gral_usr_id_crea, cancelado, fecha_cancela, gral_usr_id_cancela) FROM stdin;
+1	3	1_KNG1	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-25T13:57:52" folio="1" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="X0+WM2FCczJ2MPxde40eIlymxiiXVRAVxiWbr9024yXmqa0qZtwu8IEZhstXgokS3wcCAEwWnlr4cmV+KwaCbfCp/1c6PhqycpQ3m9N+unhonGtwnFq1YMVs6Aar6RHk1LuouM1YAF3/tI8Z406/5KkQbYuVYd4J7cqNyDMgeDQ=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="1" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-04-07" FechaInicialPago="2016-04-01" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-04-08" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="F6953FAC-C3D4-47CA-894D-171C97B5CD74" FechaTimbrado="2016-08-25T13:57:57" noCertificadoSAT="00001000000301160463" selloCFD="X0+WM2FCczJ2MPxde40eIlymxiiXVRAVxiWbr9024yXmqa0qZtwu8IEZhstXgokS3wcCAEwWnlr4cmV+KwaCbfCp/1c6PhqycpQ3m9N+unhonGtwnFq1YMVs6Aar6RHk1LuouM1YAF3/tI8Z406/5KkQbYuVYd4J7cqNyDMgeDQ=" selloSAT="2MKtx2vKCTGCwCxzMKm7z5KLH8HOTi328sKnaCTv7hX+oKRC0orMqwj70A91YJrwoX2DurOh/YGazhwWvTW9lIZnfuw/NGUa9B+BhCgujWAfuJl2JOEPu3J/qSnfDslBAggYV4YPRjWnKFrDtMLLpw1t8uv+xl4qFPIFrIItC+E=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-25 13:57:56.092571-04	1	f	\N	0
+2	3	1_KNG2	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-25T17:02:16" folio="2" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="BZNa4+MMoFMPBNGg0H/DA4oJrSK7WwXWkdKiSr6b5Kz3cxhbXBUYK5co6AH8rcNnuz2gRNMfKk9Dug0dvrKy0bY89rXkay1preeDOsUD8xu2GcCejB8PNN9+REgpYpMsIXVGc/JMoXy1TXgd8HOT9hgzJfibtkLCMq1MLq6dqzg=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="2" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-04-14" FechaInicialPago="2016-04-08" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-04-15" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="7B07BAE1-D7D6-4EEF-ACF0-E69E21A94278" FechaTimbrado="2016-08-25T17:02:21" noCertificadoSAT="00001000000301160463" selloCFD="BZNa4+MMoFMPBNGg0H/DA4oJrSK7WwXWkdKiSr6b5Kz3cxhbXBUYK5co6AH8rcNnuz2gRNMfKk9Dug0dvrKy0bY89rXkay1preeDOsUD8xu2GcCejB8PNN9+REgpYpMsIXVGc/JMoXy1TXgd8HOT9hgzJfibtkLCMq1MLq6dqzg=" selloSAT="c8F0ef2h0V+ZmCyoHLV0ZEuevmYjg+RgpEwEjeWzlSEt5DCkMUlapQ8MuewWWVy05hx+4iG7gIdMSP0LXvBMXhpGUfYys0juwemJS+qhq0R/wuO2BNtV9O4AhpXlx3lWGI2V+SItvW1b9/wHhWjTCR/AAazbbMdHsNhGLUz7ovI=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-25 17:02:19.811979-04	1	f	\N	0
+\.
+
+
+--
+-- Name: fac_cfdis_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_cfdis_id_seq', 2, true);
+
+
+--
 -- Data for Name: fac_cfds_conf; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
 COPY fac_cfds_conf (empresa_id, archivo_certificado, numero_certificado, archivo_llave, password_llave, id, gral_suc_id, archivo_xsl, archivo_xsd_cfdi, archivo_wsdl_timbrado_cfdi, ws_pfx_cert, passwd_ws_pfx, javavm_dir, javavm_cacerts, archivo_xsl_cadena_timbre, usuario, contrasena, archivo_xsl_cadena_ctas_contables, archivo_xsd_ctas_contables, archivo_xsl_cadena_balanza_comprobacion) FROM stdin;
-1	00001000000301698966.cer	00001000000301698966	CSD_EXPORTACIONES_SUMAR_SA_DE_CV_ESU131122SZ6_20131211_122743.key	Esu131122	1	1	cadenaoriginal_3_2.xslt	cfdv32.xsd	TimbradoCFDI.wsdl	AAA010101AAA.pfx	AAA010101AAA	/usr/bin/java	/home/j2eeserver/jdk/jre/lib/security/cacerts	cadena_original_timbre.xslt	195	G3rM4rAr45aLaVi	CatalogoCuentas_1_1.xslt	CatalogoCuentas_1_1.xsd	BalanzaComprobacion_1_1.xslt
+1	00001000000301698966.cer	00001000000301698966	CSD_EXPORTACIONES_SUMAR_SA_DE_CV_ESU131122SZ6_20131211_122730.key	Esu131122	1	1	cadenaoriginal_3_2.xslt	cfdv32.xsd	TimbradoCFDI.wsdl	AAA010101AAA.pfx	AAA010101AAA	/usr/bin/java	/home/j2eeserver/jdk/jre/lib/security/cacerts	cadena_original_timbre.xslt	195	G3rM4rAr45aLaVi	CatalogoCuentas_1_1.xslt	CatalogoCuentas_1_1.xsd	BalanzaComprobacion_1_1.xslt
 \.
+
+
+--
+-- Data for Name: fac_cfds_conf_folios; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_cfds_conf_folios (id, no_aprobacion, ano_aprobacion, serie, folio_inicial, folio_final, fac_cfds_conf_id, proposito, folio_actual) FROM stdin;
+6	0	0	KNG	1	99999	1	NOM	3
+4	0	0	KNG	1	99999	1	FAC	512
+\.
+
+
+--
+-- Name: fac_cfds_conf_folios_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_cfds_conf_folios_id_seq', 1, false);
 
 
 --
@@ -12158,6 +12292,8 @@ SELECT pg_catalog.setval('fac_metodos_pago_id_seq', 1, false);
 
 COPY fac_namespaces (id, key_xmlns, xmlns, schemalocation, fac, fac_nomina, derogado, fecha_derogacion) FROM stdin;
 3	xmlns:tfd	http://www.sat.gob.mx/TimbreFiscalDigital	http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd	t	t	f	\N
+1	xmlns:xsi	http://www.w3.org/2001/XMLSchema-instance		t	t	f	\N
+2	xmlns:cfdi	http://www.sat.gob.mx/cfd/3	http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd	t	t	f	\N
 \.
 
 
@@ -12174,12 +12310,11 @@ SELECT pg_catalog.setval('fac_namespaces_id_seq', 1, false);
 
 COPY fac_nomina (id, tipo_comprobante, forma_pago, tipo_cambio, no_cuenta, fecha_pago, fac_metodos_pago_id, gral_mon_id, nom_periodicidad_pago_id, nom_periodos_conf_det_id, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id, gral_suc_id, status) FROM stdin;
 72	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-29	4	1	1	17	2016-08-23 13:24:16.121344-04	\N	\N	1	0	0	1	1	0
+54	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-15	4	1	1	2	2016-08-23 11:22:38.225531-04	2016-08-25 17:02:16.326959-04	\N	1	1	0	1	1	1
 73	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-05	4	1	1	18	2016-08-23 13:39:24.720854-04	2016-08-23 13:42:07.307362-04	\N	1	1	0	1	1	0
 74	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-12	4	1	1	19	2016-08-23 13:44:05.673497-04	2016-08-23 13:46:24.132163-04	\N	1	1	0	1	1	0
-54	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-15	4	1	1	2	2016-08-23 11:22:38.225531-04	2016-08-23 11:24:11.840871-04	\N	1	1	0	1	1	0
 56	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-22	4	1	1	3	2016-08-23 11:27:15.57167-04	\N	\N	1	0	0	1	1	0
 57	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-29	4	1	1	4	2016-08-23 11:30:07.868303-04	2016-08-23 11:31:21.817712-04	\N	1	1	0	1	1	0
-53	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-08	4	1	1	1	2016-08-23 11:17:31.674088-04	2016-08-23 11:36:00.433801-04	\N	1	1	0	1	1	0
 59	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-06	4	1	1	5	2016-08-23 12:21:33.703492-04	\N	\N	1	0	0	1	1	0
 75	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-19	4	1	1	20	2016-08-23 13:49:22.02297-04	2016-08-23 13:52:31.850051-04	\N	1	1	0	1	1	0
 61	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-13	4	1	1	6	2016-08-23 12:28:27.73169-04	\N	\N	1	0	0	1	1	0
@@ -12193,6 +12328,7 @@ COPY fac_nomina (id, tipo_comprobante, forma_pago, tipo_cambio, no_cuenta, fecha
 69	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-08	4	1	1	14	2016-08-23 13:05:18.764354-04	\N	\N	1	0	0	1	1	0
 70	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-15	4	1	1	15	2016-08-23 13:10:24.887826-04	\N	\N	1	0	0	1	1	0
 71	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-22	4	1	1	16	2016-08-23 13:17:56.844385-04	\N	\N	1	0	0	1	1	0
+53	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-08	4	1	1	1	2016-08-23 11:17:31.674088-04	2016-08-25 13:57:52.500297-04	\N	1	1	0	1	1	1
 \.
 
 
@@ -12201,7 +12337,7 @@ COPY fac_nomina (id, tipo_comprobante, forma_pago, tipo_cambio, no_cuenta, fecha
 --
 
 COPY fac_nomina_det (id, fac_nomina_id, gral_empleado_id, no_empleado, rfc, nombre, curp, gral_depto_id, gral_puesto_id, fecha_contrato, antiguedad, nom_regimen_contratacion_id, nom_tipo_contrato_id, nom_tipo_jornada_id, nom_periodicidad_pago_id, clabe, tes_ban_id, nom_riesgo_puesto_id, imss, reg_patronal, salario_base, salario_integrado, fecha_ini_pago, fecha_fin_pago, no_dias_pago, concepto_descripcion, concepto_unidad, concepto_cantidad, concepto_valor_unitario, concepto_importe, descuento, motivo_descuento, gral_isr_id, importe_retencion, comp_subtotal, comp_descuento, comp_retencion, comp_total, percep_total_gravado, percep_total_excento, deduc_total_gravado, deduc_total_excento, facturado, momento_facturacion, gral_usr_id_facturacion, validado, serie, folio, ref_id, cancelado, momento_cancelacion, gral_usr_id_cancela) FROM stdin;
-21	53	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	1	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-01	2016-04-07	7	PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+21	53	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	1	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-01	2016-04-07	7	PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-25 13:57:56.092571-04	1	t	KNG	1	1_KNG1	f	\N	0
 22	53	2					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 23	53	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 24	53	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
@@ -12210,7 +12346,6 @@ COPY fac_nomina_det (id, fac_nomina_id, gral_empleado_id, no_empleado, rfc, nomb
 28	54	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 29	54	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 30	54	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-26	54	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	2	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-08	2016-04-14	7	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
 33	56	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 34	56	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 35	56	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
@@ -12229,6 +12364,7 @@ COPY fac_nomina_det (id, fac_nomina_id, gral_empleado_id, no_empleado, rfc, nomb
 48	61	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 46	61	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	6	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
 47	61	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	4	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+26	54	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	2	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-08	2016-04-14	7	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-25 17:02:19.811979-04	1	t	KNG	2	1_KNG2	f	\N	0
 50	61	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 49	61	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	1	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
 53	62	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
@@ -12932,7 +13068,7 @@ SELECT pg_catalog.setval('gral_emails_id_seq', 1, false);
 --
 
 COPY gral_emp (id, titulo, colonia, cp, calle, rfc, numero_interior, numero_exterior, momento_creacion, momento_actualizacion, momento_baja, telefono, borrado_logico, estado_id, municipio_id, pais_id, regimen_fiscal, incluye_produccion, email_compras, pass_email_compras, pagina_web, incluye_contabilidad, nivel_cta, incluye_crm, encluye_envasado, control_exis_pres, lista_precio_clientes, tipo_facturacion, pac_facturacion, ambiente_facturacion, gral_impto_id, transportista, tasa_retencion, nomina, no_id, incluye_log, gral_tc_url_id) FROM stdin;
-1	EXPORTACIONES SUMAR S.A. DE C.V.	CENTRO	64000	ISAAC GARZA	ESU131122SZ6	1810	\N	2016-08-10 00:00:00-04	2016-08-10 00:00:00-04	\N	8112345678	f	19	986	2	REGIMEN GENERAL DE LEY PERSONAS MORALES	f			www.exportacionessumar.com	f	5	f	f	t	f	cfditf	2	f	1	f	4	t	1	f	0
+1	EXPORTACIONES SUMAR S.A. DE C.V.	CENTRO	64000	ISAAC GARZA	ESU131122SZ6	\N	1810	2016-08-10 00:00:00-04	2016-08-10 00:00:00-04	\N	8112345678	f	19	986	2	REGIMEN GENERAL DE LEY PERSONAS MORALES	f			www.exportacionessumar.com	f	5	f	f	t	f	cfditf	2	t	1	f	4	t	1	f	0
 \.
 
 
@@ -15936,7 +16072,7 @@ SELECT pg_catalog.setval('gral_tc_url_id_seq', 1, false);
 --
 
 COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id) FROM stdin;
-1	admin	123qwe	t	2016-08-23 20:56:01.693472-04	1
+1	admin	123qwe	t	2016-08-27 11:36:57.228178-04	1
 2	admin1	123qwe	t	\N	2
 3	admin2	123qwe	t	\N	3
 4	admin3	123qwe	t	\N	4
@@ -16553,8 +16689,8 @@ COPY nom_periodos_conf_det (id, nom_periodos_conf_id, folio, titulo, fecha_ini, 
 37	1	50	PAGO DE NOMINA DEL 09/12/2016 AL 15/12/2016	2016-12-09	2016-12-15	f
 38	1	51	PAGO DE NOMINA DEL 16/12/2016 AL 22/12/2016	2016-12-16	2016-12-22	f
 39	1	52	PAGO DE NOMINA DEL 23/12/2016 AL 29/12/2016	2016-12-23	2016-12-29	f
-1	1	14	PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016	2016-04-01	2016-04-07	f
-2	1	15	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	2016-04-08	2016-04-14	f
+1	1	14	PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016	2016-04-01	2016-04-07	t
+2	1	15	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	2016-04-08	2016-04-14	t
 \.
 
 
@@ -17053,11 +17189,27 @@ ALTER TABLE ONLY gral_usr
 
 
 --
+-- Name: fac_cfdis_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_cfdis
+    ADD CONSTRAINT fac_cfdis_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fac_cfds_conf_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
 ALTER TABLE ONLY fac_cfds_conf
     ADD CONSTRAINT fac_cfds_conf_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fac_cfds_folios_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_cfds_conf_folios
+    ADD CONSTRAINT fac_cfds_folios_pkey PRIMARY KEY (id);
 
 
 --
@@ -17845,6 +17997,14 @@ ALTER TABLE ONLY tes_ban
 
 
 --
+-- Name: unique_cfdis; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_cfdis
+    ADD CONSTRAINT unique_cfdis UNIQUE (tipo, ref_id, gral_emp_id, gral_suc_id);
+
+
+--
 -- Name: unique_emp_clave_suc; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -17945,6 +18105,13 @@ ALTER TABLE ONLY nom_percep
 --
 
 CREATE INDEX fki_12314333 ON gral_suc_pza USING btree (sucursal_id);
+
+
+--
+-- Name: fki_5354; Type: INDEX; Schema: public; Owner: sumar
+--
+
+CREATE INDEX fki_5354 ON fac_cfds_conf_folios USING btree (fac_cfds_conf_id);
 
 
 --
@@ -18117,6 +18284,14 @@ ALTER TABLE ONLY cxp_prov
 
 ALTER TABLE ONLY cxp_prov
     ADD CONSTRAINT fk8970x FOREIGN KEY (dias_credito_id) REFERENCES cxp_prov_credias(id);
+
+
+--
+-- Name: fk_5354; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_cfds_conf_folios
+    ADD CONSTRAINT fk_5354 FOREIGN KEY (fac_cfds_conf_id) REFERENCES fac_cfds_conf(id);
 
 
 --
