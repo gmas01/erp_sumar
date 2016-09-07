@@ -59,7 +59,10 @@ DECLARE
 	ano_actual integer:=0;
 	mes_actual integer:=0;
 	
-
+        -- # Billing settings
+        facpar record;
+        cambiaUnidadMedida boolean:=false;
+        	
 	-- # From Where and who is 
 	-- # performing validation
 	usuario_id integer;
@@ -78,6 +81,28 @@ DECLARE
 	incluye_nomina  boolean:=false;
 	validaListaPrecioCliente boolean:=false;
 	controlExisPres boolean := false;
+
+	-- # purchase variables
+	-- # and prior billing
+	precio_minimo double precision:=0;
+        descuento double precision:=0;
+	mon_prec_prod integer:=0; --Moneda del precio del producto
+	precio_producto double precision:=0;
+	descuento_producto double precision:=0;
+	cantPresAsignado double precision:=0;
+	equivalenciaPres double precision:=0; --Equivalencia de la presentacion en la unidad del producto
+	cantPresReservAnterior double precision:=0;
+	exisActualPres double precision:=0; --Existencia actual de la presentacion
+	cant_reservada_anterior double precision:=0;
+	total_existencia double precision;
+	num_lista_precio integer:=0;
+	tipo integer;
+	idUnidadMedida integer:=0; --Id de la unidad de medida del producto
+	nombreUnidadMedida character varying:=''; --Nombre de la unidad de medida del producto
+	densidadProd double precision:=0; --Densidad del producto
+	noDecUnidad integer:=0; --Numero de decimales permitidos para la unidad
+	cantUnidadVenta double precision:=0; --Cantidad en la unidad de Venta, esto se utiliza cuando la unidad del producto es diferente a la de venta
+	cantExisUnidadVenta double precision:=0; --Cantidad de la existencia convertida a la unidad de venta, esto se utiliza cuando la unidad del producto es diferente a la de venta
 	
 	
         -- # General purpose variables related with 
@@ -139,6 +164,11 @@ BEGIN
 	SELECT incluye_produccion, incluye_contabilidad, control_exis_pres, lista_precio_clientes, transportista, nomina FROM gral_emp WHERE id=emp_id 
 	INTO incluye_modulo_produccion, incluye_modulo_contabilidad, controlExisPres, validaListaPrecioCliente, empresa_transportista, incluye_nomina;
 
+	--Obtener parametros para la facturacion
+	SELECT * FROM fac_par WHERE gral_suc_id=suc_id INTO facpar;
+	
+	--Asignar valor a variable que indica si el usuario puede cambiar la unidad de medida de venta
+	cambiaUnidadMedida:=facpar.cambiar_unidad_medida;
 
 	--INICIA VALIDACION Catalogo de proveedores
 	IF id_app=2 THEN
@@ -1031,6 +1061,881 @@ BEGIN
 		END IF;
 	END IF;--TERMINA VALIDACION validacion de productos
 
+
+	--validacion de Catalogo de inv_pre
+	IF id_app=47 THEN
+		SELECT INTO str_data string_to_array(''||campos_data||'','___');
+		--str_data[4]	id
+		IF str_data[4] ='0' THEN
+			IF str_data[5] != '0' THEN
+				valida_integridad:=0;
+				EXECUTE 'SELECT count(id) FROM inv_pre WHERE inv_prod_id='||str_data[5]::integer||' AND inv_prod_presentacion_id='||str_data[76]::integer||' AND borrado_logico=false AND gral_emp_id='||emp_id||';' INTO valida_integridad;
+				IF valida_integridad > 0 THEN
+					valor_retorno := ''||valor_retorno||'productosku:Ya existe una lista de precios para el producto con esta presentaci&oacute;n.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[5]	producto_id
+		IF str_data[5] = '0' THEN
+			valor_retorno := ''||valor_retorno||'productosku:Es necesario Seleccionar un producto___';
+		END IF;
+		
+		--str_data[6]	lista1
+		IF str_data[6] != '' THEN
+			IF str_data[6]::double precision > 0 THEN
+				--str_data[77]	select_moneda1
+				IF str_data[77] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda1:Es necesario Seleccionar la Moneda para el Precio de la Lista 1.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[7]	lista2
+		IF str_data[7] != '' THEN
+			IF str_data[7]::double precision > 0 THEN
+				--str_data[78]	select_moneda2
+				IF str_data[78] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda2:Es necesario Seleccionar la Moneda para el Precio de la Lista 2.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[8]	lista3
+		IF str_data[8] != '' THEN
+			IF str_data[8]::double precision > 0 THEN
+				--str_data[79]	select_moneda3
+				IF str_data[79] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda3:Es necesario Seleccionar la Moneda para el Precio de la Lista 3.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[9]	lista4
+		IF str_data[9] != '' THEN
+			IF str_data[9]::double precision > 0 THEN
+				--str_data[80]	select_moneda4
+				IF str_data[80] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda4:Es necesario Seleccionar la Moneda para el Precio de la Lista 4.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[10]	lista5
+		IF str_data[10] != '' THEN
+			IF str_data[10]::double precision > 0 THEN
+				--str_data[81]	select_moneda5
+				IF str_data[81] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda5:Es necesario Seleccionar la Moneda para el Precio de la Lista 5.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[11]	lista6
+		IF str_data[11] != '' THEN
+			IF str_data[11]::double precision > 0 THEN
+				--str_data[82]	select_moneda6
+				IF str_data[82] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda6:Es necesario Seleccionar la Moneda para el Precio de la Lista 6.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[12]	lista7
+		IF str_data[12] != '' THEN
+			IF str_data[12]::double precision > 0 THEN
+				--str_data[83]	select_moneda7
+				IF str_data[83] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda7:Es necesario Seleccionar la Moneda para el Precio de la Lista 7.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[13]	lista8
+		IF str_data[13] != '' THEN
+			IF str_data[13]::double precision > 0 THEN
+				--str_data[84]	select_moneda8
+				IF str_data[84] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda8:Es necesario Seleccionar la Moneda para el Precio de la Lista 8.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[14]	lista9
+		IF str_data[14] != '' THEN
+			IF str_data[14]::double precision > 0 THEN
+				--str_data[85]	select_moneda9
+				IF str_data[85] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda9:Es necesario Seleccionar la Moneda para el Precio de la Lista 9.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[15]	lista10
+		IF str_data[15] != '' THEN
+			IF str_data[15]::double precision > 0 THEN
+				--str_data[86]	select_moneda10
+				IF str_data[86] = '0' THEN
+					valor_retorno := ''||valor_retorno||'moneda10:Es necesario Seleccionar la Moneda para el Precio de la Lista 10.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[76]	presentacion
+		IF str_data[76] = '0' THEN
+			valor_retorno := ''||valor_retorno||'presentacion:Es necesario seleccionar una Presentaci&oacute;n. Si no le muestra opciones tiene que ir al cat&aacute;logo de productos y asignar una presentaci&oacute;n.___';
+		END IF;
+		
+		--str_data[77]	select_moneda1
+		--str_data[78]	select_moneda2
+		--str_data[79]	select_moneda3
+		--str_data[80]	select_moneda4
+		--str_data[81]	select_moneda5
+		--str_data[82]	select_moneda6
+		--str_data[83]	select_moneda7
+		--str_data[84]	select_moneda8
+		--str_data[85]	select_moneda9
+		--str_data[86]	select_moneda10
+		
+	END IF;--termina Catalogo inv_pre
+
+
+	--Pedidos  de Clientes
+	IF id_app=64 THEN
+		
+		--query para verificar si la Empresa actual incluye Modulo de Produccion
+		SELECT incluye_produccion, control_exis_pres FROM gral_emp WHERE id=emp_id INTO incluye_modulo_produccion, controlExisPres;
+		
+		--tomar el id del almacen para ventas
+		id_almacen := facpar.inv_alm_id;
+		
+		--str_data[3]	id_usuario
+		--str_data[4]	id_pedido
+		--str_data[5] 	id_cliente
+		IF str_data[5]::integer < 1 THEN
+			valor_retorno := ''||valor_retorno||'nocliente:Es necesario seleccionar un cliente___';
+		END IF;
+
+		-- trae la lista de precio del cliente------- str_data[5] idcliente
+		select lista_precio from cxc_clie where id= str_data[5]::integer into num_lista_precio;
+
+		
+		--str_data[6]	select_moneda
+		--str_data[7]	observaciones
+		--str_data[8]	tipo_cambio
+		IF str_data[8] = '' THEN
+			valor_retorno := ''||valor_retorno||'tc:Es necesario ingresar el tipo de cambio___';
+		END IF;
+		--str_data[9]	id_agente
+		--str_data[10]	select_condiciones
+		--str_data[11]	orden_compra
+		
+		--str_data[12]	fecha_compromiso
+		IF str_data[12] = '' THEN
+			valor_retorno := ''||valor_retorno||'fcompromiso:Es necesario ingresar la Fecha de Compromiso___';
+		END IF;
+		
+		--str_data[13]	lugar_entrega
+		--str_data[14]	transporte
+		--str_data[15]	tasa_ret_immex
+		--str_data[16]	select_metodo_pago
+		--str_data[17]	no_cuenta
+		
+		--str_data[16]	id_metodo_pago
+		--str_data[17]	no_cuenta
+		IF str_data[16]::integer=2 OR str_data[16]::integer=3 THEN
+			IF str_data[17]='' OR str_data[17]=' ' THEN
+				valor_retorno := ''||valor_retorno||'nocuenta:Es necesario ingresar los ultimos 4 digitos de la tarjeta___';
+			ELSE
+				EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_DigitosTarjetaCorrect'';' INTO mask_general;
+				EXECUTE 'select '''||str_data[17]||''' ~ '''||mask_general||''';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno|| 'nocuenta:Es necesario ingresar 4 digitos.___';
+				END IF;
+			END IF;
+		END IF;
+
+		
+--		IF empresa_transportista THEN
+			--Aqui solo entra cuando la empresa es transportista
+--			IF str_data[22]='true' THEN
+				--Aqui entra cuando el pedido es de flete.
+				
+				--str_data[23]	nombre_documentador
+				--str_data[24]	valor_declarado
+				--str_data[25]	select_tviaje
+				--str_data[26]	remolque1
+				--str_data[27]	remolque2
+				--str_data[28]	id_vehiculo
+				--str_data[29]	no_operador
+				--str_data[30]	nombre_operador
+				--str_data[31]	select_pais_origen
+				--str_data[32]	select_estado_origen
+				--str_data[33]	select_municipio_origen
+				--str_data[34]	select_pais_dest
+				--str_data[35]	select_estado_dest
+				--str_data[36]	select_municipio_dest
+				--str_data[37]	agena_id
+				--str_data[38]	rem_id
+				--str_data[39]	rem_dir_alterna
+				--str_data[40]	dest_id
+				--str_data[41]	dest_dir_alterna
+				--str_data[42]	observaciones_transportista
+				
+				--str_data[23]	nombre_documentador
+--				IF str_data[23] = '' THEN
+--					valor_retorno := ''||valor_retorno||'documentador:Es necesario ingresar el nombre del Documentador.___';
+--				END IF;
+				
+				--str_data[24]	valor_declarado
+				--str_data[25]	select_tviaje
+--				IF str_data[25]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'tviaje:Es necesario seleccionar el Tipo de Viaje..___';
+--				ELSE
+					--str_data[26]	remolque1
+--					IF trim(str_data[26]) = '' THEN
+--						valor_retorno := ''||valor_retorno||'remolque1:Es necesario seleccionar ingresar el Remolque 1.___';
+--					END IF;
+					
+--					IF str_data[25]::integer = 2 THEN
+						--str_data[27]	remolque2
+--						IF trim(str_data[27]) = '' THEN
+--							valor_retorno := ''||valor_retorno||'remolque2:Es necesario seleccionar ingresar el Remolque 2.___';
+--						END IF;
+--					END IF;
+--				END IF;
+				
+				--str_data[28]	id_vehiculo
+--				IF str_data[28]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'noeconomico:Es necesario seleccionar una Unidad.___';
+--				END IF;
+				
+				--str_data[29]	no_operador
+				--str_data[30]	nombre_operador
+--				IF trim(str_data[30]) = '' THEN
+--					valor_retorno := ''||valor_retorno||'operador:Es necesario ingresar el Nombre del Operador.___';
+--				END IF;
+				
+				--str_data[31]	select_pais_origen
+--				IF str_data[31]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'paisorig:Es necesario seleccionar el Pais Origen.___';
+--				END IF;
+				
+				--str_data[32]	select_estado_origen
+--				IF str_data[32]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'estadoorig:Es necesario seleccionar el Estado Origen.___';
+--				END IF;
+				
+				--str_data[33]	select_municipio_origen
+--				IF str_data[33]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'municipioorig:Es necesario seleccionar el Municipio Origen.___';
+--				END IF;
+				
+				--str_data[34]	select_pais_dest
+--				IF str_data[34]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'paisdest:Es necesario seleccionar el Pais Destino.___';
+--				END IF;
+				
+				--str_data[35]	select_estado_dest
+--				IF str_data[35]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'estadodest:Es necesario seleccionar el Estado Destino.___';
+--				END IF;
+				
+				--str_data[36]	select_municipio_dest
+--				IF str_data[36]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'municipiodest:Es necesario seleccionar el Municipio Destino.___';
+--				END IF;
+				
+				--str_data[37]	agena_id
+--				IF str_data[37]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'agenano:Es necesario seleccionar un Agente Aduanal.___';
+--				END IF;
+				
+				--str_data[38]	rem_id
+--				IF str_data[38]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'remid:Es necesario seleccionar un Remitente.___';
+--				END IF;
+				
+				--str_data[39]	rem_dir_alterna
+				--str_data[40]	dest_id
+--				IF str_data[40]::integer = 0 THEN
+--					valor_retorno := ''||valor_retorno||'nodest:Es necesario seleccionar un Destinatario.___';
+--				END IF;
+				
+				--str_data[41]	dest_dir_alterna
+				--str_data[42]	observaciones_transportista
+--			END IF;
+--		END IF;
+		
+		total_filas:= array_length(arreglo,1);
+		cont_fila:=1;
+		IF arreglo[1] != 'sin datos' THEN
+			
+			FOR cont_fila IN 1 .. total_filas LOOP
+				SELECT INTO str_filas string_to_array(arreglo[cont_fila],'___');
+				
+				--str_filas[1] eliminado
+				IF str_filas[1]::integer<>0 THEN--1: no esta eliminado, 0:eliminado
+					--str_filas[2]	iddetalle
+					--str_filas[3]	idproducto
+					--str_filas[4]	id_presentacion
+					--str_filas[5]	id_impuesto
+					--str_filas[6]	cantidad
+					--str_filas[7]	costo
+					--str_filas[8]	valor_imp
+					--str_filas[9]	noTr
+					--str_filas[10]	seleccionado
+					--str_filas[11]	unidad_medida
+					--str_filas[12]	idIeps 
+					--str_filas[13]	tasaIeps
+					--str_filas[14]	vdescto
+					--str_filas[15]	idcot
+					--str_filas[16]	iddetcot
+					--str_filas[17]	status_autorizacion
+					--str_filas[18]	precio_autorizado
+					--str_filas[19]	id_user_autoriza
+					--str_filas[20]	reqauth
+					--str_filas[21]	salvar_registro
+					--str_filas[22]	retencion_id
+					--str_filas[23]	retencion_tasa
+					
+					--str_filas[6]	cantidad
+					IF trim(str_filas[6]) = '' THEN
+						valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Es necesario ingresar la cantidad___';
+					ELSE
+						--Verificar que el campo sea numerico
+						IF (SELECT trim(str_filas[6]) ~ '^([0-9]+[.]?[0-9]*|[.][0-9]+)$') THEN 
+							
+							--RAISE EXCEPTION '%',str_filas[6];
+							IF str_filas[6]::double precision < 0.000001 THEN
+								valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':La cantidad debe ser mayor que cero___';
+							ELSE
+								--obtener el tipo de producto y el numero de Decimales Permitidos
+								SELECT inv_prod.tipo_de_producto_id AS tipo_producto, inv_prod.unidad_id, inv_prod_unidades.titulo, inv_prod.densidad, (CASE WHEN inv_prod_unidades.id IS NULL THEN 0 ELSE inv_prod_unidades.decimales END) AS no_dec
+								FROM inv_prod LEFT JOIN inv_prod_unidades ON inv_prod_unidades.id=inv_prod.unidad_id
+								WHERE inv_prod.id=str_filas[3]::integer 
+								INTO tipo, idUnidadMedida, nombreUnidadMedida, densidadProd, noDecUnidad;
+								
+								--Tomamos la cantidad en la unidad de Venta seleccionada por el usuario
+								cantUnidadVenta:=str_filas[6]::double precision;
+								
+								IF cambiaUnidadMedida THEN
+									IF idUnidadMedida::integer<>str_filas[11]::integer THEN
+										IF densidadProd IS NULL OR densidadProd=0 THEN
+											densidadProd:=1;
+										END IF;
+										
+										EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''KILO*'';' INTO match_cadena;
+										IF match_cadena=true THEN
+											--Convertir a kilos
+											str_filas[6] := str_filas[6]::double precision * densidadProd;
+										ELSE
+											EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''LITRO*'';' INTO match_cadena;
+											IF match_cadena=true THEN
+												--Convertir a Litros
+												str_filas[6] := str_filas[6]::double precision / densidadProd;
+											END IF;
+										END IF;
+									END IF;
+								END IF;
+								
+								--Redondear la Cantidad
+								str_filas[6] := round(str_filas[6]::numeric,noDecUnidad)::double precision; 
+								cantUnidadVenta := round(cantUnidadVenta::numeric,noDecUnidad)::double precision; 
+								
+								--Si el tipo de producto es diferente de 4, hay que validar existencias
+								--tipo=4 Servicios
+								--para el tipo servicios no se debe validar existencias
+								IF tipo<>4 THEN
+									
+									IF incluye_modulo_produccion=FALSE THEN
+										--Aqui entra si la Empresa NO INCLUYE Modulo de Produccion
+										--Se debe validar existencias de los productos tipo 1,2,5,6,7,8
+										
+										--tipo=1 Normal o Terminado
+										--tipo=2 Subensable o Formulacion o Intermedio
+										--tipo=5 Refacciones
+										--tipo=6 Accesorios
+										--tipo=7 Materia Prima
+										--tipo=8 Prod. en Desarrollo
+										IF tipo::integer=1 OR tipo::integer=2 OR tipo::integer=5 OR tipo::integer=6 OR tipo::integer=7 OR tipo::integer=8 THEN 
+											--Llamada a proc que devuelve la existencia del producto. 
+											--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+											--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+											SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, str_data[3]::integer, id_almacen) INTO total_existencia; 
+											
+											--Asignanos el total de la venta
+											cantExisUnidadVenta:=total_existencia;
+											
+											IF cambiaUnidadMedida THEN
+												IF idUnidadMedida::integer<>str_filas[11]::integer THEN
+													EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''KILO*'';' INTO match_cadena;
+													IF match_cadena=true THEN
+														--Convertir a litros la existencia para mostrar el warning
+														cantExisUnidadVenta := cantExisUnidadVenta::double precision / densidadProd::double precision;
+													ELSE
+														EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''LITRO*'';' INTO match_cadena;
+														IF match_cadena=true THEN 
+															--Convertir a Kilos la existencia para mostrar el warning
+															cantExisUnidadVenta := cantExisUnidadVenta::double precision * densidadProd::double precision;
+														END IF;
+													END IF;
+												END IF;
+											END IF;
+											
+											--si es diferente de cero estamos en editar
+											IF str_filas[2]::integer > 0 THEN 
+												--Buscamos la cantidad reservada anterior
+												SELECT reservado FROM poc_pedidos_detalle WHERE id=str_filas[2]::integer INTO cant_reservada_anterior;
+												
+												--le sumamos a la existencia la cantidad reservada anterior para tener la existencia real
+												total_existencia := total_existencia::double precision + cant_reservada_anterior::double precision;
+											END IF;
+											
+											--Redondear el total_existencia
+											total_existencia := round(total_existencia::numeric,noDecUnidad)::double precision;
+
+											/*
+											IF total_existencia<=0 THEN
+												valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':El producto tiene Existencia 0 en Almacen.___';
+											ELSE
+												IF total_existencia < str_filas[6]::double precision THEN
+													valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponibles '||cantExisUnidadVenta||',  usted esta intentando vender '||cantUnidadVenta||'___';
+												END IF;
+											END IF;
+											*/
+
+											IF facpar.permitir_req_com THEN 
+												--AQUI ENTRA CUANDO LA CONFIGURACION PERMITE GENERAR REQUISICION DE COMPRA
+												--tipo=7 Materia Prima
+												IF tipo::integer=7 THEN 
+													--Seleccionado=0 indica que no se ha marcado para enviar a produccion la cantidad que falta
+													IF str_filas[10]='0' THEN
+														IF total_existencia < str_filas[6]::double precision THEN
+															valor_retorno := ''||valor_retorno||'backorder:cantidad'||str_filas[9]||':'||cantExisUnidadVenta||'___';
+														END IF;
+														
+														IF total_existencia<=0 THEN
+															valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponible=0,  Pedido='||cantUnidadVenta||'. Seleccione la casilla para enviar una Requisici&oacute;n de Compra.___';
+														ELSE
+															IF total_existencia < str_filas[6]::double precision THEN
+																valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponible='||cantExisUnidadVenta||',  Pedido='||cantUnidadVenta||'. Seleccione la casilla para enviar una Requisici&oacute;n de Compra.___';
+															END IF;
+														END IF;
+													END IF;
+												END IF;
+												
+												--Solo se debe validar existencias de productos tipo 5,6
+												--tipo=5 Refacciones
+												--tipo=6 Accesorios
+												--IF tipo::integer=5 OR tipo::integer=6 THEN 
+												IF tipo::integer=1 OR tipo::integer=2 OR tipo::integer=5 OR tipo::integer=6 OR tipo::integer=8 THEN 
+													IF total_existencia<=0 THEN
+														valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':El producto tiene Existencia 0 en Almacen.___';
+													ELSE
+														IF total_existencia < str_filas[6]::double precision THEN
+															valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponibles '||cantExisUnidadVenta||',  usted esta intentando vender '||cantUnidadVenta||'___';
+														END IF;
+													END IF;
+												END IF;
+											ELSE
+												--AQUI ENTRA CUANDO LA CONFIGURACION NO PERMITE GENERAR REQUISICION DE COMPRA
+												IF total_existencia<=0 THEN
+													valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':El producto tiene Existencia 0 en Almacen.___';
+												ELSE
+													IF total_existencia < str_filas[6]::double precision THEN
+														valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponibles '||cantExisUnidadVenta||',  usted esta intentando vender '||cantUnidadVenta||'___';
+													END IF;
+												END IF;
+											END IF;											
+										END IF;
+										
+									ELSE
+										--Aqui entra si la Empresa SI INCLUYE Modulo de Produccion
+										--llamada a proc que devuelve la existencia del producto. 
+										--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+										--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+										SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, str_data[3]::integer, id_almacen) INTO total_existencia; 
+										--RAISE EXCEPTION '%','total_existencia: '||total_existencia;
+										--Asignanos el total de la venta
+										cantExisUnidadVenta:=total_existencia;
+										
+										IF cambiaUnidadMedida THEN
+											IF idUnidadMedida::integer<>str_filas[11]::integer THEN
+												EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''KILO*'';' INTO match_cadena;
+												IF match_cadena=true THEN
+													--Convertir a litros la existencia para mostrar el warning
+													cantExisUnidadVenta := cantExisUnidadVenta::double precision / densidadProd::double precision;
+												ELSE
+													EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''LITRO*'';' INTO match_cadena;
+													IF match_cadena=true THEN 
+														--Convertir a Kilos la existencia para mostrar el warning
+														cantExisUnidadVenta := cantExisUnidadVenta::double precision * densidadProd::double precision;
+													END IF;
+												END IF;
+											END IF;
+										END IF;
+										
+										--Si es diferente de cero estamos en editar
+										IF str_filas[2]::integer > 0 THEN 
+											--buscamos la cantidad reservada anterior
+											SELECT reservado FROM poc_pedidos_detalle WHERE id=str_filas[2]::integer INTO cant_reservada_anterior;
+											--RAISE EXCEPTION '%','cant_reservada_anterior: '||cant_reservada_anterior;
+											--le sumamos a la existencia la cantidad reservada anterior para tener la existencia real
+											total_existencia := total_existencia + cant_reservada_anterior;
+										END IF;
+										
+										--Redondear el total_existencia
+										total_existencia := round(total_existencia::numeric,noDecUnidad)::double precision;
+										
+										--tipo=1 Normal o Terminado
+										--tipo=2 Subensable o Formulacion o Intermedio
+										--tipo=8 Prod. en Desarrollo
+										IF tipo::integer=1 OR tipo::integer=2 OR tipo::integer=8 THEN 
+											--seleccionado=0 indica que no se ha marcado para enviar a produccion la cantidad que falta
+											IF str_filas[10]='0' THEN 
+												IF total_existencia < str_filas[6]::double precision THEN
+													valor_retorno := ''||valor_retorno||'backorder:cantidad'||str_filas[9]||':'||cantExisUnidadVenta||'___';
+												END IF;
+												
+												IF total_existencia<=0 THEN
+													valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponible=0,  Pedido='||cantUnidadVenta||'. Seleccione la casilla para enviar a producci&oacute;n.___';
+												ELSE
+													IF total_existencia < str_filas[6]::double precision THEN
+														valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponible='||cantExisUnidadVenta||',  Pedido='||cantUnidadVenta||'. Seleccione la casilla para enviar a producci&oacute;n.___';
+													END IF;
+												END IF;
+											END IF;
+										END IF;
+										
+										--RAISE EXCEPTION '%','facpar.permitir_req_com: '||facpar.permitir_req_com;
+										
+										IF facpar.permitir_req_com THEN 
+											--AQUI ENTRA CUANDO LA CONFIGURACION PERMITE GENERAR REQUISICION DE COMPRA
+											--tipo=7 Materia Prima
+											IF tipo::integer=7 THEN 
+
+												--RAISE EXCEPTION '%','total_existencia: '||total_existencia||' < '||str_filas[6];
+												
+												--seleccionado=0 indica que no se ha marcado para enviar a produccion la cantidad que falta
+												IF str_filas[10]='0' THEN
+													IF total_existencia < str_filas[6]::double precision THEN
+														valor_retorno := ''||valor_retorno||'backorder:cantidad'||str_filas[9]||':'||cantExisUnidadVenta||'___';
+													END IF;
+													
+													IF total_existencia<=0 THEN
+														valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponible=0,  Pedido='||cantUnidadVenta||'. Seleccione la casilla para enviar una Requisici&oacute;n de Compra.___';
+													ELSE
+														IF total_existencia < str_filas[6]::double precision THEN
+															valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':Disponible='||cantExisUnidadVenta||',  Pedido='||cantUnidadVenta||'. Seleccione la casilla para enviar una Requisici&oacute;n de Compra.___';
+														END IF;
+													END IF;
+												END IF;
+											END IF;
+											
+											--Solo se debe validar existencias de productos tipo 5,6
+											--tipo=5 Refacciones
+											--tipo=6 Accesorios
+											IF tipo::integer=5 OR tipo::integer=6 THEN 
+												IF total_existencia<=0 THEN
+													valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':El producto tiene Existencia 0 en Almacen___';
+												ELSE
+													IF total_existencia < str_filas[6]::double precision THEN
+														valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':Disponibles '||cantExisUnidadVenta||',  usted esta intentando vender '||cantUnidadVenta||'___';
+													END IF;
+												END IF;
+											END IF;
+										ELSE
+											--AQUI ENTRA CUANDO LA CONFIGURACION NO PERMITE GENERAR REQUISICION DE COMPRA
+											--Solo se debe validar existencias de productos tipo 5,6,7
+											--tipo=5 Refacciones
+											--tipo=6 Accesorios
+											--tipo=7 Materia Prima
+											IF tipo::integer=5 OR tipo::integer=6 OR tipo::integer=7 THEN 
+												IF total_existencia<=0 THEN
+													valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':El producto tiene Existencia 0 en Almacen___';
+												ELSE
+													IF total_existencia < str_filas[6]::double precision THEN
+														valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':Disponibles '||cantExisUnidadVenta||',  usted esta intentando vender '||cantUnidadVenta||'___';
+													END IF;
+												END IF;
+											END IF;
+										END IF;
+										
+									END IF;
+									
+									
+									
+									--verificar si hay que validar existencias de Presentaciones
+									IF controlExisPres=true THEN 
+										--Verificar si hay que validar las existencias de presentaciones desde el Pedido.
+										--TRUE = Validar presentaciones desde el Pedido
+										--FALSE = No validar presentaciones desde el Pedido
+										IF facpar.validar_pres_pedido=true THEN 
+											--Buscar la existencia actual de la Presentacion
+											SELECT (inicial::double precision + entradas::double precision - salidas::double precision -reservado::double precision) AS exi
+											FROM inv_exi_pres WHERE inv_alm_id=id_almacen::integer AND inv_prod_id=str_filas[3]::integer AND inv_prod_presentacion_id=str_filas[4]::integer 
+											INTO exisActualPres;
+											
+											IF exisActualPres IS NULL THEN exisActualPres:=0; END IF;
+											
+											IF exisActualPres > 0 THEN 
+												--Si es diferente de cero estamos en editar,por lo tanto hay que buscar la cantidad reservada anterior.
+												IF str_filas[2]::integer > 0 THEN 
+													--buscamos la cantidad reservada anterior
+													SELECT (poc_pedidos_detalle.reservado::double precision / inv_prod_presentaciones.cantidad::double precision) AS cant_pres
+													FROM poc_pedidos_detalle 
+													JOIN inv_prod_presentaciones ON inv_prod_presentaciones.id=poc_pedidos_detalle.presentacion_id
+													WHERE poc_pedidos_detalle.id=str_filas[2]::integer 
+													INTO cantPresReservAnterior;
+													
+													--redondear la Cantidad de la Presentacion reservada Anteriormente
+													cantPresReservAnterior := round(cantPresReservAnterior::numeric,noDecUnidad)::double precision; 
+													
+													--sumar la cantidad reservada anterior para tener la existencia real
+													exisActualPres = exisActualPres::double precision + cantPresReservAnterior::double precision;
+												END IF;
+												
+												--redondear la Existencia actual de Presentaciones
+												exisActualPres := round(exisActualPres::numeric,noDecUnidad)::double precision; 
+												
+												--buscar la equivalencia de la Presentacion
+												SELECT cantidad  FROM inv_prod_presentaciones WHERE id=str_filas[4]::integer INTO equivalenciaPres;
+												
+												--convertir a su equivalencia en Presentacion, la cantidad de la partida actual del pedido
+												cantPresAsignado := str_filas[6]::double precision / equivalenciaPres::double precision;
+												
+												--redondear la cantidad de Presentaciones Asignado en la partida
+												cantPresAsignado := round(cantPresAsignado::numeric,noDecUnidad)::double precision; 
+												
+												IF exisActualPres::double precision < cantPresAsignado::double precision THEN
+													IF incluye_modulo_produccion=true OR facpar.permitir_req_com=TRUE THEN 
+														--Si incluye modulo de produccion ó la configuracion permite generar requisiciones cuando no hay exisencia
+														IF incluye_modulo_produccion THEN 
+															IF tipo::integer=1 OR tipo::integer=2 OR tipo::integer=8 THEN 
+																IF str_filas[10]='0' THEN
+																	valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':Disponibles='||exisActualPres||',  Venta='||cantPresAsignado||'. No hay existencia suficiente en esta presentacion.___';
+																END IF;
+															END IF;
+														END IF;
+														--Si la configuracion permite generar requisiciones en automatico
+														IF facpar.permitir_req_com THEN 
+															IF tipo::integer=7 THEN 
+																IF str_filas[10]='0' THEN
+																	valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':Disponibles='||exisActualPres||',  Venta='||cantPresAsignado||'. No hay existencia suficiente en esta presentacion.___';
+																END IF;
+															END IF;
+														END IF;
+														
+														IF tipo::integer=5 OR tipo::integer=6 THEN 
+															valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':Disponibles='||exisActualPres||',  Venta='||cantPresAsignado||'. No hay existencia suficiente en esta presentacion.___';
+														END IF;
+														
+													ELSE 
+														valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':Disponibles='||exisActualPres||',  Venta='||cantPresAsignado||'. No hay existencia suficiente en esta presentacion.___';
+													END IF;
+												END IF;
+											ELSE 
+												IF incluye_modulo_produccion=true OR facpar.permitir_req_com=TRUE THEN 
+													--Si incluye modulo de produccion ó la configuracion permite generar requisiciones cuando no hay exisencia
+													
+													IF incluye_modulo_produccion THEN 
+														IF tipo::integer=1 OR tipo::integer=2 OR tipo::integer=8 THEN 
+															IF str_filas[10]='0' THEN
+																valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':No hay existencia en esta presentacion.___';
+															END IF;
+														END IF;
+													END IF;
+
+													IF facpar.permitir_req_com THEN 
+														IF tipo::integer=7 THEN 
+															IF str_filas[10]='0' THEN
+																valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':No hay existencia en esta presentacion.___';
+															END IF;
+														END IF;
+													END IF;
+													
+													IF tipo::integer=5 OR tipo::integer=6 THEN 
+														valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':No hay existencia en esta presentacion.___';
+													END IF;
+												ELSE 
+													valor_retorno := ''||valor_retorno||'presentacion'||str_filas[9]||':No hay existencia en esta presentacion.___';
+												END IF;
+											END IF;
+										END IF;
+										
+									END IF;
+								END IF;
+							END IF;
+						ELSE
+							--Aqui entra porque el campo cantidad trae un valor no numerico
+							valor_retorno := ''||valor_retorno||'cantidad'||str_filas[9]||':El valor para Cantidad es incorrecto, tiene mas de un punto('||str_filas[6]||')___';
+						END IF;
+					END IF;
+					
+					
+					--str_filas[7]	costo
+					IF trim(str_filas[7]) = '' THEN
+						valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':Es necesario ingresar el precio unitario___';
+					ELSE
+						--Verificar que el campo sea numerico
+						IF (SELECT trim(str_filas[7]) ~ '^([0-9]+[.]?[0-9]*|[.][0-9]+)$') THEN 
+							IF str_filas[7]::double precision < 0.000001 THEN
+								valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':El precio debe ser mayor que cero___';
+							ELSE
+								IF num_lista_precio > 0 THEN
+									--sacando el descuento y precio del producto de acuerdo a la presentacion seleccionada
+									sql_select:='SELECT (CASE WHEN descuento_'||num_lista_precio||' IS NULL THEN 0 ELSE descuento_'||num_lista_precio||' END ),inv_pre.precio_'||num_lista_precio||', (CASE WHEN inv_pre.gral_mon_id_pre'||num_lista_precio||' IS NULL THEN 0 ELSE inv_pre.gral_mon_id_pre'||num_lista_precio||' END) FROM inv_pre where inv_prod_id='||str_filas[3]||' AND inv_prod_presentacion_id='||str_filas[4]||' AND borrado_logico=false;';
+									
+									--RAISE EXCEPTION '%',sql_select;
+									EXECUTE sql_select INTO descuento_producto, precio_producto, mon_prec_prod;
+									
+									IF descuento_producto IS NULL THEN
+										descuento_producto:=0;
+									END IF;
+									
+									IF precio_producto IS NULL THEN
+										precio_producto:=0;
+									ELSE
+										IF str_data[6]::integer <> mon_prec_prod::integer THEN 
+											/*
+											IF mon_prec_prod::integer > 0 THEN 
+												SELECT valor FROM erp_monedavers WHERE momento_creacion<=now() AND moneda_id=mon_prec_prod ORDER BY momento_creacion DESC LIMIT 1 INTO tc_mon_prod;
+											ELSE
+												tc_mon_prod:=0;
+											END IF;
+											*/
+											
+											IF str_data[6]::integer=1 AND mon_prec_prod::integer<>1 THEN 
+												--si la moneda del pedido es pesos y la moneda del precio es diferente de Pesos,
+												--entonces calculamos su equivalente a pesos
+												precio_producto:= precio_producto * str_data[8]::double precision;
+											END IF;
+
+											IF str_data[6]::integer<>1 AND mon_prec_prod::integer=1 THEN 
+												--si la moneda del Pedido es Diferente de Pesos y la moneda del precio es Pesos,
+												--entonces calculamos su equivalente a dolar
+												precio_producto:= precio_producto / str_data[8]::double precision;
+											END IF;
+
+											--tc str_data[8]
+										END IF;
+									END IF;
+									
+									--redondear a 4 digitos el precio del producto
+									precio_producto:=round((precio_producto)::numeric, 4)::double precision;
+									
+									--RAISE EXCEPTION '%',num_lista_precio;
+									--obteniendo el valor del descuento
+									descuento := ((descuento_producto::double precision/100) * precio_producto);
+									--redondear a 4 digitos el descuento
+									descuento:=round((descuento)::numeric, 4)::double precision;
+									
+									--precio minimo
+									precio_minimo := precio_producto - descuento;
+									
+									--redondear a 4 digitos el Precio Minimo
+									precio_minimo := round((precio_minimo)::numeric,4)::double precision;
+
+									--RAISE EXCEPTION '%', 'PrecioVista:'||round(str_filas[7]::numeric,4)::double precision||'\nPrecioMinimo:'||precio_minimo;
+									
+									IF round(str_filas[7]::numeric,4)::double precision < precio_minimo THEN
+										--valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':No puede ser asignado este precio.___';
+										
+										--Verificar si la configuración permite la autorizacion de precios abajo de la lista de precio en pedidos
+										if facpar.aut_precio_menor_ped then 
+											
+											--Verificar si hay que salvar aun cuando hay precios no autorizados
+											if str_filas[21]::boolean=false then 
+												
+												--Verificar si está autorizado el precio menor
+												if str_filas[17]::boolean then 
+													
+													--RAISE EXCEPTION '%','str_filas[6]:'||str_filas[6]||'     str_filas[13]:'||str_filas[13];
+													
+													--Verificar si el precio no es menor al precio autorizado
+													if round(str_filas[7]::numeric,4)::double precision < round(str_filas[18]::numeric,4)::double precision then 
+														valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':El Precio es menor al autorizado '||str_filas[18]||'.___';
+														valor_retorno := ''||valor_retorno||'checkauth'||str_filas[9]||':true.___';
+													else
+														--Verificar si el precio autorizado no es menor al precio_minimo de venta
+														sql_select := '
+														SELECT 
+															sbt.prod_id,
+															sbt.pres_id,
+															sbt.moneda_id, 
+															(CASE WHEN sbt.costo > 0 THEN (sbt.costo + sbt.costo_adic + (sbt.costo * sbt.igi) + ((sbt.costo + (sbt.costo * sbt.igi)) * sbt.gi))/(1 - sbt.pmin) ELSE 0 END) AS pmin  
+														FROM (
+															SELECT 
+																inv_prod.id AS  prod_id,
+																inv_prod_pres_x_prod.presentacion_id AS pres_id,
+																(CASE WHEN inv_prod_presentaciones.cantidad IS NULL THEN 1 ELSE inv_prod_presentaciones.cantidad END) AS equiv_pres,
+																(CASE WHEN inv_prod_cost_prom.costo_ultimo_'||mes_actual||' IS NULL THEN 0 ELSE inv_prod_cost_prom.costo_ultimo_'||mes_actual||' END) AS costo,
+																(CASE WHEN inv_prod_cost_prom.gral_mon_id_'||mes_actual||' IS NULL THEN 1 ELSE inv_prod_cost_prom.gral_mon_id_'||mes_actual||' END) AS moneda_id,
+																(CASE WHEN inv_prod_costos.costo_adic_'||mes_actual||' IS NULL THEN 0 ELSE inv_prod_costos.costo_adic_'||mes_actual||'::double precision END ) AS costo_adic, 
+																(CASE WHEN inv_prod_costos.costo_imp_'||mes_actual||' IS NULL THEN 0 ELSE (inv_prod_costos.costo_imp_'||mes_actual||'/100)::double precision END ) AS igi,  
+																(CASE WHEN inv_prod_costos.costo_dir_'||mes_actual||' IS NULL THEN 0 ELSE (inv_prod_costos.costo_dir_'||mes_actual||'/100)::double precision END ) AS gi, 
+																(CASE WHEN inv_prod_costos.precio_min_'||mes_actual||' IS NULL THEN 0 ELSE (inv_prod_costos.precio_min_'||mes_actual||'/100)::double precision END ) AS pmin
+															FROM inv_prod 
+															JOIN inv_prod_pres_x_prod ON inv_prod_pres_x_prod.producto_id=inv_prod.id
+															JOIN inv_prod_presentaciones ON inv_prod_presentaciones.id=inv_prod_pres_x_prod.presentacion_id
+															LEFT JOIN inv_prod_cost_prom ON inv_prod_cost_prom.inv_prod_id=inv_prod.id
+															LEFT JOIN inv_prod_costos ON (inv_prod_costos.inv_prod_id=inv_prod.id AND inv_prod_costos.inv_prod_presentacion_id=inv_prod_pres_x_prod.presentacion_id AND inv_prod_costos.ano='||ano_actual||')
+															WHERE inv_prod.borrado_logico=false AND inv_prod_cost_prom.ano='||ano_actual||' AND inv_prod.id='||str_filas[3]||' AND inv_prod_pres_x_prod.presentacion_id='||str_filas[4]||'  
+														) AS sbt LIMIT 1;';
+														
+														--RAISE EXCEPTION '%','sql_select: '||sql_select;
+														
+														FOR record1 IN EXECUTE (sql_select) LOOP 
+															IF str_data[6]::integer <> record1.moneda_id::integer THEN 
+																IF str_data[6]::integer=1 AND record1.moneda_id<>1 THEN 
+																	--si la moneda del pedido es pesos y la moneda del Costo es diferente de Pesos,
+																	--entonces calculamos su equivalente a pesos
+																	record1.pmin:= record1.pmin * str_data[8]::double precision;
+																END IF;
+																
+																IF str_data[6]::integer<>1 AND record1.moneda_id=1 THEN 
+																	--si la moneda del Pedido es Diferente de Pesos y la moneda del Costo es Pesos,
+																	--entonces calculamos su equivalente a dolar
+																	record1.pmin:= record1.pmin / str_data[8]::double precision;
+																END IF;
+															end if;
+
+															record1.pmin:=round(record1.pmin::numeric,4)::double precision;
+
+															--RAISE EXCEPTION '%','str_filas[6]:'||str_filas[6]||'     record1.pmin:'||record1.pmin;
+															
+															IF round(str_filas[7]::numeric, 4)::double precision < record1.pmin THEN 
+																valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':El Precio es menor al costo '||record1.pmin||'.___';
+															end if;
+														END LOOP;
+													end if;
+												else
+													valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':No puede ser asignado este precio.___';
+													valor_retorno := ''||valor_retorno||'checkauth'||str_filas[9]||':true.___';
+												end if;
+											end if;
+										else
+											valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':No puede ser asignado este precio.___';
+										end if;
+										
+									END IF;	
+								END IF;
+								--RAISE EXCEPTION '%',descuento;
+							END IF;
+						ELSE
+							--Aqui entra porque el campo cantidad trae un valor no numerico
+							valor_retorno := ''||valor_retorno||'costo'||str_filas[9]||':El valor para Precio Unitario es incorrecto, tiene mas de un punto('||str_filas[7]||')___';
+						END IF;
+					END IF;
+				END IF;
+				
+			END LOOP;
+			
+		END IF;
+		
+	END IF;--termina pedidos
+	
 
 	--Validacion de Catalogo Percepciones
         IF id_app=170 THEN
@@ -3607,6 +4512,215 @@ BEGIN
 		END IF;
     END IF;
     --termina catalogo de productos
+
+
+
+    -- Catalogo de inv_pre
+    IF app_selected = 47 THEN
+		IF command_selected = 'new' THEN
+			--str_data[4]	id
+			--str_data[5]	titulo
+			--str_data[76]	select_presentacion
+			
+			INSERT INTO inv_pre(
+				inv_prod_id, 
+				precio_1,
+				precio_2,
+				precio_3,
+				precio_4,
+				precio_5,
+				precio_6,
+				precio_7,
+				precio_8,
+				precio_9,
+				precio_10,
+				descuento_1,
+				descuento_2,
+				descuento_3,
+				descuento_4,
+				descuento_5,
+				descuento_6,
+				descuento_7,
+				descuento_8,
+				descuento_9,
+				descuento_10, 
+				default_precio_1, --str_data[26]::double precision
+				default_precio_2, --str_data[27]::double precision
+				default_precio_3, --str_data[28]::double precision
+				default_precio_4, --str_data[29]::double precision
+				default_precio_5, --str_data[30]::double precision
+				default_precio_6, --str_data[31]::double precision
+				default_precio_7, --str_data[32]::double precision
+				default_precio_8, --str_data[33]::double precision
+				default_precio_9, --str_data[34]::double precision
+				default_precio_10, --str_data[35]::double precision
+				base_precio_1, --str_data[36]::integer
+				base_precio_2, --str_data[37]::integer
+				base_precio_3, --str_data[38]::integer
+				base_precio_4, --str_data[39]::integer
+				base_precio_5, --str_data[40]::integer
+				base_precio_6, --str_data[41]::integer
+				base_precio_7, --str_data[42]::integer
+				base_precio_8, --str_data[43]::integer
+				base_precio_9, --str_data[44]::integer
+				base_precio_10, --str_data[45]::integer
+				calculo_precio_1, --str_data[46]::integer
+				calculo_precio_2, --str_data[47]::integer
+				calculo_precio_3, --str_data[48]::integer
+				calculo_precio_4, --str_data[49]::integer
+				calculo_precio_5, --str_data[50]::integer
+				calculo_precio_6, --str_data[51]::integer
+				calculo_precio_7, --str_data[52]::integer
+				calculo_precio_8, --str_data[53]::integer
+				calculo_precio_9, --str_data[54]::integer
+				calculo_precio_10, --str_data[55]::integer
+				operacion_precio_1, --str_data[56]::integer
+				operacion_precio_2, --str_data[57]::integer
+				operacion_precio_3, --str_data[58]::integer
+				operacion_precio_4, --str_data[59]::integer
+				operacion_precio_5, --str_data[60]::integer
+				operacion_precio_6, --str_data[61]::integer
+				operacion_precio_7, --str_data[62]::integer
+				operacion_precio_8, --str_data[63]::integer
+				operacion_precio_9, --str_data[64]::integer
+				operacion_precio_10, --str_data[65]::integer
+				redondeo_precio_1, --str_data[66]::integer
+				redondeo_precio_2, --str_data[67]::integer
+				redondeo_precio_3, --str_data[68]::integer
+				redondeo_precio_4, --str_data[69]::integer
+				redondeo_precio_5, --str_data[70]::integer
+				redondeo_precio_6, --str_data[71]::integer
+				redondeo_precio_7, --str_data[72]::integer
+				redondeo_precio_8, --str_data[73]::integer
+				redondeo_precio_9, --str_data[74]::integer
+				redondeo_precio_10, --str_data[75]::integer
+				inv_prod_presentacion_id, --str_data[76]::integer
+				gral_mon_id_pre1, --str_data[77]::integer
+				gral_mon_id_pre2, --str_data[78]::integer
+				gral_mon_id_pre3, --str_data[79]::integer
+				gral_mon_id_pre4, --str_data[80]::integer
+				gral_mon_id_pre5, --str_data[81]::integer
+				gral_mon_id_pre6, --str_data[82]::integer
+				gral_mon_id_pre7, --str_data[83]::integer
+				gral_mon_id_pre8, --str_data[84]::integer
+				gral_mon_id_pre9, --str_data[85]::integer
+				gral_mon_id_pre10, --str_data[86]::integer
+				gral_emp_id, --emp_id
+				gral_usr_id_creacion, --usuario_id, 
+				borrado_logico,--FALSE
+				momento_creacion --now()
+			) 
+			VALUES(str_data[5]::integer,
+				str_data[6]::double precision,str_data[7]::double precision,str_data[8]::double precision,str_data[9]::double precision,str_data[10]::double precision,str_data[11]::double precision,str_data[12]::double precision,str_data[13]::double precision,str_data[14]::double precision,str_data[15]::double precision,
+				str_data[16]::double precision,str_data[17]::double precision,str_data[18]::double precision,str_data[19]::double precision,str_data[20]::double precision,str_data[21]::double precision,str_data[22]::double precision,str_data[23]::double precision,str_data[24]::double precision,str_data[25]::double precision,
+				str_data[26]::double precision,str_data[27]::double precision,str_data[28]::double precision,str_data[29]::double precision,str_data[30]::double precision,str_data[31]::double precision,str_data[32]::double precision,str_data[33]::double precision,str_data[34]::double precision,str_data[35]::double precision,
+				str_data[36]::integer,str_data[37]::integer,str_data[38]::integer,str_data[39]::integer,str_data[40]::integer,str_data[41]::integer,str_data[42]::integer,str_data[43]::integer,str_data[44]::integer,str_data[45]::integer,
+				str_data[46]::integer,str_data[47]::integer,str_data[48]::integer,str_data[49]::integer,str_data[50]::integer,str_data[51]::integer,str_data[52]::integer,str_data[53]::integer,str_data[54]::integer,str_data[55]::integer,
+				str_data[56]::integer,str_data[57]::integer,str_data[58]::integer,str_data[59]::integer,str_data[60]::integer,str_data[61]::integer,str_data[62]::integer,str_data[63]::integer,str_data[64]::integer,str_data[65]::integer,
+				str_data[66]::integer,str_data[67]::integer,str_data[68]::integer,str_data[69]::integer,str_data[70]::integer,str_data[71]::integer,str_data[72]::integer,str_data[73]::integer,str_data[74]::integer,str_data[75]::integer,
+				str_data[76]::integer, str_data[77]::integer, str_data[78]::integer, str_data[79]::integer, str_data[80]::integer, str_data[81]::integer, str_data[82]::integer, str_data[83]::integer, str_data[84]::integer, str_data[85]::integer, str_data[86]::integer,
+				emp_id,usuario_id,false,now()
+			) RETURNING id INTO ultimo_id;
+			
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'edit' THEN
+			
+			UPDATE inv_pre SET precio_1=str_data[6]::double precision,
+				precio_2=str_data[7]::double precision,
+				precio_3=str_data[8]::double precision,
+				precio_4=str_data[9]::double precision,
+				precio_5=str_data[10]::double precision,
+				precio_6=str_data[11]::double precision,
+				precio_7=str_data[12]::double precision,
+				precio_8=str_data[13]::double precision,
+				precio_9=str_data[14]::double precision,
+				precio_10=str_data[15]::double precision,
+				descuento_1=str_data[16]::double precision,
+				descuento_2=str_data[17]::double precision,
+				descuento_3=str_data[18]::double precision,
+				descuento_4=str_data[19]::double precision,
+				descuento_5=str_data[20]::double precision,
+				descuento_6=str_data[21]::double precision,
+				descuento_7=str_data[22]::double precision,
+				descuento_8=str_data[23]::double precision,
+				descuento_9=str_data[24]::double precision,
+				descuento_10=str_data[25]::double precision,
+				default_precio_1 = str_data[26]::double precision,
+				default_precio_2 = str_data[27]::double precision,
+				default_precio_3 = str_data[28]::double precision,
+				default_precio_4 = str_data[29]::double precision,
+				default_precio_5 = str_data[30]::double precision,
+				default_precio_6 = str_data[31]::double precision,
+				default_precio_7 = str_data[32]::double precision,
+				default_precio_8 = str_data[33]::double precision,
+				default_precio_9 = str_data[34]::double precision,
+				default_precio_10 = str_data[35]::double precision,
+				base_precio_1 = str_data[36]::integer,
+				base_precio_2 = str_data[37]::integer,
+				base_precio_3 = str_data[38]::integer,
+				base_precio_4 = str_data[39]::integer,
+				base_precio_5 = str_data[40]::integer,
+				base_precio_6 = str_data[41]::integer,
+				base_precio_7 = str_data[42]::integer,
+				base_precio_8 = str_data[43]::integer,
+				base_precio_9 = str_data[44]::integer,
+				base_precio_10 = str_data[45]::integer,
+				calculo_precio_1 = str_data[46]::integer,
+				calculo_precio_2 = str_data[47]::integer,
+				calculo_precio_3 = str_data[48]::integer,
+				calculo_precio_4 = str_data[49]::integer,
+				calculo_precio_5 = str_data[50]::integer,
+				calculo_precio_6 = str_data[51]::integer,
+				calculo_precio_7 = str_data[52]::integer,
+				calculo_precio_8 = str_data[53]::integer,
+				calculo_precio_9 = str_data[54]::integer,
+				calculo_precio_10 = str_data[55]::integer,
+				operacion_precio_1 = str_data[56]::integer,
+				operacion_precio_2 = str_data[57]::integer,
+				operacion_precio_3 = str_data[58]::integer,
+				operacion_precio_4 = str_data[59]::integer,
+				operacion_precio_5 = str_data[60]::integer,
+				operacion_precio_6 = str_data[61]::integer,
+				operacion_precio_7 = str_data[62]::integer,
+				operacion_precio_8 = str_data[63]::integer,
+				operacion_precio_9 = str_data[64]::integer,
+				operacion_precio_10 = str_data[65]::integer,
+				redondeo_precio_1 = str_data[66]::integer,
+				redondeo_precio_2 = str_data[67]::integer,
+				redondeo_precio_3 = str_data[68]::integer,
+				redondeo_precio_4 = str_data[69]::integer,
+				redondeo_precio_5 = str_data[70]::integer,
+				redondeo_precio_6 = str_data[71]::integer,
+				redondeo_precio_7 = str_data[72]::integer,
+				redondeo_precio_8 = str_data[73]::integer,
+				redondeo_precio_9 = str_data[74]::integer,
+				redondeo_precio_10 = str_data[75]::integer,
+				inv_prod_presentacion_id=str_data[76]::integer,
+				gral_mon_id_pre1 = str_data[77]::integer,
+				gral_mon_id_pre2 = str_data[78]::integer,
+				gral_mon_id_pre3 = str_data[79]::integer,
+				gral_mon_id_pre4 = str_data[80]::integer,
+				gral_mon_id_pre5 = str_data[81]::integer,
+				gral_mon_id_pre6 = str_data[82]::integer,
+				gral_mon_id_pre7 = str_data[83]::integer,
+				gral_mon_id_pre8 = str_data[84]::integer,
+				gral_mon_id_pre9 = str_data[85]::integer,
+				gral_mon_id_pre10 = str_data[86]::integer,
+				gral_usr_id_actualizacion = usuario_id,
+				borrado_logico=false,
+				momento_actualizacion=now() 
+			WHERE id = str_data[4]::integer;
+			
+			valor_retorno := '1';
+		END IF;
+		
+		IF command_selected = 'delete' THEN
+			UPDATE inv_pre SET borrado_logico=true, momento_baja=now(), gral_usr_id_baja=usuario_id  WHERE id=str_data[4]::integer;
+			valor_retorno := '1';
+		END IF;
+    END IF;--termina Catalogo de inv_pre
 	
         
     --Empieza Job Actualiza Moneda
@@ -4061,6 +5175,40 @@ BEGIN
 	END IF;	--termina buscador  de productos
 
 
+
+	--buscador de Catalogo de invprec
+        IF app_selected = 47 THEN
+		--str_data[1] 	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	tipo_prod
+		--str_data[4]	codigo
+		--str_data[5]	descripcion
+		--str_data[6]	presentacion
+		IF str_data[3]::integer != 0 THEN
+			cadena_where:= cadena_where ||' AND inv_prod.tipo_de_producto_id='||str_data[3];
+		END IF;
+		
+		IF str_data[4] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.sku ILIKE '''||str_data[4]||'''';
+		END IF;
+		
+		IF str_data[5] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.descripcion ILIKE '''||str_data[5]||'''';
+		END IF;
+		
+		IF str_data[6]::integer != 0 THEN
+			cadena_where:= cadena_where ||' AND inv_pre.inv_prod_presentacion_id='||str_data[6];
+		END IF;
+		
+                sql_query := 'SELECT inv_pre.id 
+			FROM inv_pre 
+			JOIN inv_prod ON inv_prod.id=inv_pre.inv_prod_id 
+			WHERE inv_pre.borrado_logico=false AND gral_emp_id='||emp_id||' '||cadena_where||';';
+		--RAISE EXCEPTION '%',sql_query;	
+        END IF;
+        --termina buscador de Catalogo invprec
+
+        
 	--buscador de Catalogo de UNIDADES
         IF app_selected = 49 THEN
 		IF str_data[4] != '' THEN
@@ -4463,6 +5611,1195 @@ $$;
 
 
 ALTER FUNCTION public.gral_bus_catalogos(campos_data text) OWNER TO sumar;
+
+--
+-- Name: inv_calculo_existencia_producto(integer, integer); Type: FUNCTION; Schema: public; Owner: sumar
+--
+
+CREATE FUNCTION inv_calculo_existencia_producto(id_prod integer, id_user integer) RETURNS double precision
+    LANGUAGE plpgsql
+    AS $$
+
+DECLARE
+	cadena_sql text = '';
+	ano_actual integer;
+	mes_actual integer;
+	id_almacen integer;
+	incrementa int:=1;
+	espacio_tiempo_ejecucion timestamp with time zone = now();
+	existencia double precision;
+BEGIN	
+	
+	SELECT EXTRACT(YEAR FROM espacio_tiempo_ejecucion) INTO ano_actual;
+	SELECT EXTRACT(MONTH FROM espacio_tiempo_ejecucion) INTO mes_actual;
+	
+	--obtener id de almacen de la sucursal
+  	SELECT inv_suc_alm.almacen_id FROM gral_usr_suc 
+	JOIN gral_suc ON gral_suc.id = gral_usr_suc.gral_suc_id
+	JOIN inv_suc_alm ON inv_suc_alm.sucursal_id = gral_suc.id
+	WHERE gral_usr_suc.gral_usr_id = id_user
+	INTO id_almacen;
+
+	--Si el id del almacen es null, le asignamos un cero para que no genere error al ejecutar el query
+	IF id_almacen IS NULL THEN 
+		id_almacen:=0;
+	END IF;
+	
+	
+	cadena_sql:= 'SELECT exi_inicial - transito - reservado ';
+	WHILE incrementa <= mes_actual LOOP
+		cadena_sql:=cadena_sql ||' + entradas_'||incrementa||' - salidas_'||incrementa;
+		incrementa:= incrementa + 1;
+	END LOOP;
+	cadena_sql:= cadena_sql||' FROM inv_exi WHERE inv_prod_id='||id_prod||' AND ano='||ano_actual||' AND inv_alm_id='||id_almacen;
+	
+	--RAISE EXCEPTION '%',cadena_sql;
+	
+	EXECUTE cadena_sql INTO existencia;
+	
+	IF existencia IS NULL OR existencia<=0 THEN 
+		existencia:=0;
+	END IF;
+	
+	RETURN existencia;
+	
+END;
+
+$$;
+
+
+ALTER FUNCTION public.inv_calculo_existencia_producto(id_prod integer, id_user integer) OWNER TO sumar;
+
+--
+-- Name: poc_adm_procesos(text, text[]); Type: FUNCTION; Schema: public; Owner: sumar
+--
+
+CREATE FUNCTION poc_adm_procesos(campos_data text, extra_data text[]) RETURNS character varying
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+	
+	
+	--estas  variables se utilizan en la mayoria de los catalogos
+	str_data text[];
+	app_selected integer;
+	command_selected text;
+	valor_retorno character varying;
+	usuario_id integer;
+	emp_id integer:=0;
+	suc_id integer:=0;
+	suc_id_consecutivo integer=0; --sucursal de donde se tomara el consecutivo
+	id_tipo_consecutivo integer=0;
+	ultimo_id integer:=0;
+	ultimo_id2 integer:=0;
+	ultimo_id_det integer:=0;
+	espacio_tiempo_ejecucion timestamp with time zone = now();
+	ano_actual integer:=0;
+	mes_actual integer:=0;
+	sql_select character varying = '';
+	sql_update character varying = '';
+	sql_insert character varying = '';
+	
+	str_filas text[];
+	total_filas integer;--total de elementos de arreglo
+	cont_fila integer;--contador de filas o posiciones del arreglo
+	--str_incoterms char[];
+	--iter_y integer;
+	
+	--variable para pedidos
+	facpar record;--parametros de Facturacion
+	ultimo_id_proceso integer = 0;
+	id_proceso integer = 0;
+	id_proceso_flujo integer =0;
+	prefijo_consecutivo character varying = '';
+	nuevo_consecutivo bigint=0;
+	nuevo_folio character varying = '';
+	incluye_modulo_produccion boolean;
+	empresa_transportista boolean;
+	tipo_prod integer=0;
+	id_producto integer = 0;
+	total_existencia double precision = 0;
+	cantidad_produccion double precision = 0;
+	cant_reservada_anterior double precision = 0;
+	cant_reservar_nuevo double precision = 0;
+	generar_backorder boolean = false;
+	en_proceso_produccion boolean = false;
+	
+	importe_del_descto_partida double precision = 0;
+	importe_partida_con_descto double precision = 0;
+	suma_descuento double precision = 0;
+	suma_subtotal_con_descuento double precision = 0;
+	
+	importe_partida double precision = 0;
+	impuesto_partida double precision = 0;
+	monto_subtotal double precision = 0;
+	monto_total double precision = 0;
+	monto_impuesto double precision = 0;
+	total_retencion double precision = 0;
+	importe_ieps_partida double precision = 0;
+	suma_ieps double precision = 0;
+	retener_iva boolean = false;
+	tasa_retencion double precision = 0;
+	retencion_partida double precision = 0;
+	suma_retencion_de_partidas double precision = 0;
+	
+	--variables autorizacion de pedidos
+	pedido record;
+	fila record;
+	fila2 record;
+	fila_detalle record;
+	
+	exis integer = 0;
+	exis_rem_doc integer = 0;
+	tipo_movimiento_id integer =0;
+	identificador_nuevo_movimiento integer =0;
+	remision_detalle record;
+	bandera_tipo_4 boolean;
+	id_almacen integer =0;
+	folio_remision character varying='';
+	id_cliente integer=0;
+	obser_prefactura text='';
+
+	result character varying='';
+	
+	noDecUnidad integer=0;--numero de decimales permitidos para la unidad
+	exisActualPres double precision=0;--existencia actual de la presentacion
+	equivalenciaPres double precision=0; --equivalencia de la presentacion en la unidad del producto
+	cantPres double precision=0; --Cantidad que se esta Intentando traspasar
+	cantPresAsignado double precision=0;
+	cantPresReservAnterior double precision=0;
+	controlExisPres boolean; --Variable que indica  si se debe controlar Existencias por Presentacion
+	cambiaUnidadMedida boolean:=false;
+	
+	--Id de la unidad de medida del producto
+	idUnidadMedida integer:=0;
+	--Nombre de la unidad de medida del producto
+	nombreUnidadMedida character varying:=0;
+	--Densidad del producto
+	densidadProd double precision:=0;
+	--Cantidad en la unidad de Venta, esto se utiliza cuando la unidad del producto es diferente a la de venta
+	cantUnidadVenta double precision:=0;
+	--Cantidad de la existencia convertida a la unidad de venta, esto se utiliza cuando la unidad del producto es diferente a la de venta
+	cantExisUnidadVenta double precision:=0;
+	match_cadena boolean:=false;
+
+	--Variable para controlar la creacion de un registro en la tabla header de requisiciones cuando la configuracion lo permita
+	header_requisicion_generada boolean:=false;
+	--Variable que indica si una partida generó requisicion
+	generar_requisicion  boolean:=false;
+BEGIN
+	controlExisPres:=false;
+	
+	--convertir cadena en arreglo
+	SELECT INTO str_data string_to_array(''||campos_data||'','___');
+	
+	--aplicativo seleccionado
+	app_selected := str_data[1]::integer;
+	
+	command_selected := str_data[2];--new, edit, delete. Para aplicativo 14 pagos: pago, anticipo, cancelacion
+	
+	-- usuario que utiliza el aplicativo
+	usuario_id := str_data[3]::integer;
+
+	
+	SELECT EXTRACT(YEAR FROM espacio_tiempo_ejecucion) INTO ano_actual;
+	SELECT EXTRACT(MONTH FROM espacio_tiempo_ejecucion) INTO mes_actual;
+	
+	
+  	SELECT gral_suc.empresa_id, gral_usr_suc.gral_suc_id
+  	FROM gral_usr_suc 
+	JOIN gral_suc ON gral_suc.id = gral_usr_suc.gral_suc_id
+	WHERE gral_usr_suc.gral_usr_id = usuario_id
+	INTO emp_id, suc_id;
+	
+	valor_retorno:='0';
+	
+	--Obtener parametros para la facturacion
+	SELECT * FROM fac_par WHERE gral_suc_id=suc_id INTO facpar;
+
+			
+	--query para verificar si la Empresa actual incluye Modulo de Produccion y control de Existencias por Presentacion
+	SELECT incluye_produccion, control_exis_pres, transportista  FROM gral_emp WHERE id=emp_id INTO incluye_modulo_produccion, controlExisPres, empresa_transportista;
+
+	
+	--tomar el id del almacen para ventas
+	--id_almacen := facpar.inv_alm_id;
+
+	--éste consecutivo es para el folio del Pedido y folio para BackOrder(poc_ped_bo)
+	suc_id_consecutivo := facpar.gral_suc_id_consecutivo;
+	
+	--Aplicativo Pedidos de Clientes
+	IF app_selected = 64 THEN
+		
+		IF command_selected = 'new' THEN
+			--str_data[3]	id_usuario
+			--str_data[4]	id_pedido
+			--str_data[5] 	id_cliente
+			--str_data[6]	select_moneda
+			--str_data[7]	observaciones
+			--str_data[8]	tipo_cambio
+			--str_data[9]	id_agente
+			--str_data[10]	select_condiciones
+			--str_data[11]	orden_compra
+			--str_data[12]	fecha_compromiso
+			--str_data[13]	lugar_entrega
+			--str_data[14]	transporte
+			--str_data[15]	tasa_ret_immex
+			--str_data[16]	select_metodo_pago
+			--str_data[17]	no_cuenta
+			--str_data[18]	check_ruta
+			--str_data[19]	select_almacen
+			--str_data[20]	id_df
+			--str_data[21]	check_enviar_obser
+			
+			--str_data[43]	permitir_descto
+			--str_data[44]	motivo_descuento
+			--str_data[45]	porcentaje_descto
+			--str_data[46]	nocot
+			
+			
+			id_almacen = str_data[19]::integer;
+			
+			--crea registro en tabla erp_proceso y retorna el id del registro creado. El flujo del proceso es 4=Pedido
+			INSERT INTO  erp_proceso(proceso_flujo_id,empresa_id,sucursal_id)VALUES(4, emp_id, suc_id) RETURNING id into ultimo_id_proceso;
+			
+			id_tipo_consecutivo:=7;--consecutivo de pedidos
+			
+			--aqui entra para tomar el consecutivo del pedido de la sucursal actual
+			UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+			WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+			--suc_id_consecutivo
+			
+			--concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio del pedido
+			nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+			
+			--crear registro en la tabla poc_pedidos y retorna el id del registro creado
+			 INSERT INTO  poc_pedidos(
+				folio, --nuevo_folio,
+				cxc_clie_id, --str_data[5]::integer,
+				moneda_id,--str_data[6]::integer,
+				observaciones, --str_data[7]::text,
+				tipo_cambio,--str_data[8]::double precision,
+				cxc_agen_id,--str_data[9]::integer,
+				cxp_prov_credias_id,--str_data[10]::integer,
+				orden_compra,--str_data[11],
+				proceso_id,--ultimo_id_proceso,
+				fecha_compromiso,--str_data[12]::date,
+				lugar_entrega,--str_data[13],
+				transporte,--str_data[14],
+				tasa_retencion_immex,--str_data[15]::double precision,
+				fac_metodos_pago_id,--str_data[16]::integer,
+				no_cuenta,--str_data[17],
+				enviar_ruta,--str_data[18]::boolean,
+				inv_alm_id,--str_data[19]::smallint
+				cxc_clie_df_id,--str_data[20]::integer,
+				enviar_obser_fac,--str_data[21]::boolean,
+				flete,--str_data[22]::boolean,
+				subtotal,--0,
+				impuesto,--0,
+				monto_retencion,--0,
+				total,--0,
+				borrado_logico,--false,
+				cancelado,--false,
+				momento_creacion,--espacio_tiempo_ejecucion,
+				gral_usr_id_creacion,--usuario_id
+				motivo_descto, --str_data[44]
+				porcentaje_descto, --str_data[45]
+				folio_cot--str_data[46] 
+			)VALUES(nuevo_folio, str_data[5]::integer, str_data[6]::integer, str_data[7]::text, str_data[8]::double precision, str_data[9]::integer, str_data[10]::integer, str_data[11], ultimo_id_proceso, str_data[12]::date, str_data[13], str_data[14], str_data[15]::double precision, str_data[16]::integer, str_data[17], str_data[18]::boolean, str_data[19]::smallint, str_data[20]::integer, str_data[21]::boolean, str_data[22]::boolean, 0, 0, 0, 0, false, false, espacio_tiempo_ejecucion, usuario_id, str_data[44], str_data[45]::double precision, str_data[46]) 
+			RETURNING id INTO ultimo_id;
+			
+			
+			
+			IF empresa_transportista THEN 
+				--Aqui solo entra cuando la empresa es transportista
+				IF str_data[22]='true' THEN
+					--Aqui entra cuando el pedido es de flete.
+					INSERT INTO poc_ped_trans(
+						poc_pedido_id,--ultimo_id
+						documentador,--str_data[23],
+						valor_declarado,--str_data[24],
+						tipo_viaje,--str_data[25]::integer,
+						remolque1,--str_data[26],
+						remolque2,--str_data[27],
+						log_vehiculo_id,--str_data[28]::integer,
+						no_operador,--str_data[29],
+						nombre_operador,--str_data[30],
+						gral_pais_id_orig,--str_data[31]::integer,
+						gral_edo_id_orig,--str_data[32]::integer,
+						gral_mun_id_orig,--str_data[33]::integer,
+						gral_pais_id_dest,--str_data[34]::integer,
+						gral_edo_id_dest,--str_data[35]::integer,
+						gral_mun_id_dest,--str_data[36]::integer,
+						cxc_agente_aduanal_id,--str_data[37]::integer,
+						cxc_remitente_id,--str_data[38]::integer,
+						rem_dir_alterna,--str_data[39],
+						cxc_destinatario_id,--str_data[40]::integer,
+						dest_dir_alterna,--str_data[41],
+						trans_observaciones--str_data[42]
+					)
+					VALUES(ultimo_id, str_data[23], str_data[24], str_data[25]::integer, str_data[26], str_data[27], str_data[28]::integer, str_data[29], str_data[30], str_data[31]::integer, str_data[32]::integer, str_data[33]::integer, str_data[34]::integer, str_data[35]::integer, str_data[36]::integer, str_data[37]::integer, str_data[38]::integer, str_data[39], str_data[40]::integer, str_data[41], str_data[42]);
+					
+				END IF;
+			END IF;
+			
+			
+			total_filas:= array_length(extra_data,1);--obtiene total de elementos del arreglo
+			cont_fila:=1;
+			FOR cont_fila IN 1 .. total_filas LOOP
+				generar_requisicion:=false;
+				retencion_partida:=0;
+				
+				SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+				
+				--str_filas[1] eliminado
+				IF str_filas[1]::integer<>0 THEN--1: no esta eliminado, 0:eliminado
+					--str_filas[2]	iddetalle
+					--str_filas[3]	idproducto
+					--str_filas[4]	id_presentacion
+					--str_filas[5]	id_impuesto
+					--str_filas[6]	cantidad
+					--str_filas[7]	costo
+					--str_filas[8]	valor_impuesto
+					--str_filas[12]	id_ieps
+					--str_filas[13]	tasa_ieps
+					--str_filas[14]	vdescto
+					--str_filas[15]	idcot
+					--str_filas[16]	iddetcot
+					--str_filas[17]	status_autorizacion
+					--str_filas[18]	precio_autorizado
+					--str_filas[19]	id_user_autoriza
+					--str_filas[20]	reqauth
+					--str_filas[21]	salvar_registro
+					--str_filas[22]	retencion_id
+					--str_filas[23]	retencion_tasa
+					
+					cantPresAsignado:=0;
+					equivalenciaPres:=0;
+					noDecUnidad:=0;
+					--Id de la unidad de medida del producto
+					idUnidadMedida:=0;
+					--Nombre de la unidad de medida del producto
+					nombreUnidadMedida:='';
+					--Cantidad en la unidad de Venta, esto se utiliza cuando la unidad del producto es diferente a la de venta
+					cantUnidadVenta:=0;
+					
+					--Obtener datos del Producto
+					SELECT inv_prod.tipo_de_producto_id AS tipo_producto, inv_prod.unidad_id, inv_prod_unidades.titulo, inv_prod.densidad, (CASE WHEN inv_prod_unidades.id IS NULL THEN 0 ELSE inv_prod_unidades.decimales END) AS no_dec
+					FROM inv_prod LEFT JOIN inv_prod_unidades ON inv_prod_unidades.id=inv_prod.unidad_id
+					WHERE inv_prod.id=str_filas[3]::integer 
+					INTO tipo_prod, idUnidadMedida, nombreUnidadMedida, densidadProd, noDecUnidad;
+					
+					IF noDecUnidad IS NULL THEN noDecUnidad:=0; END IF;
+					
+					--Tomamos la cantidad en la unidad de Venta seleccionada por el usuario
+					cantUnidadVenta:=str_filas[6]::double precision;
+					
+					IF facpar.cambiar_unidad_medida THEN
+						IF idUnidadMedida::integer<>str_filas[11]::integer THEN
+							IF densidadProd IS NULL OR densidadProd=0 THEN
+								densidadProd:=1;
+							END IF;
+							
+							EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''KILO*'';' INTO match_cadena;
+							IF match_cadena=true THEN
+								--Convertir a kilos
+								str_filas[6] := str_filas[6]::double precision * densidadProd;
+							ELSE
+								EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''LITRO*'';' INTO match_cadena;
+								IF match_cadena=true THEN 
+									--Convertir a Litros
+									str_filas[6] := str_filas[6]::double precision / densidadProd;
+								END IF;
+							END IF;
+							--RAISE EXCEPTION '%',match_cadena;
+						END IF;
+					END IF;
+					
+					--Redondear la cantidad de la Partida
+					str_filas[6] := round(str_filas[6]::numeric,noDecUnidad)::double precision;
+					cantUnidadVenta := round(cantUnidadVenta::numeric,noDecUnidad)::double precision; 
+					
+					--Si el tipo de producto es diferente de 4, hay que RESERVAR existencias
+					--tipo=4 Servicios
+					--para el tipo servicios no se debe reservar existencias
+					IF tipo_prod<>4 THEN 
+						
+						--RAISE EXCEPTION '%',incluye_modulo_produccion;
+						
+						IF incluye_modulo_produccion=FALSE THEN 
+							--Aqui entra si la Empresa NO INCLUYE Modulo de Produccion
+							
+							--reservar toda cantidad la cantidad del pedido
+							cant_reservar_nuevo := str_filas[6]::double precision;
+							generar_backorder:=false;
+						ELSE
+							--RAISE EXCEPTION '%','tipo_prod='||tipo_prod;
+							
+							--Solo para productos formulados
+							IF tipo_prod=1 OR tipo_prod=2 OR tipo_prod=8 THEN
+								--llamada a proc que devuelve la existencia del producto. 
+								--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+								--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+								SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, usuario_id, id_almacen) INTO total_existencia; 
+								
+								--Redondear la existencia del producto
+								total_existencia := round(total_existencia::numeric,noDecUnidad)::double precision;
+								
+								IF total_existencia < str_filas[6]::double precision THEN
+									IF total_existencia <=0 THEN 
+										--reservar cero
+										cant_reservar_nuevo=0;
+									ELSE
+										--tomar la existencia para reservar
+										cant_reservar_nuevo:=total_existencia;
+									END IF;
+									
+									generar_backorder:=true;
+								ELSE
+									--Reservar toda la cantidad del  pedido
+									cant_reservar_nuevo := str_filas[6]::double precision;
+									
+									generar_backorder:=false;
+								END IF;
+							END IF;
+						END IF;
+						
+						--RAISE EXCEPTION '%','permitir_req_com='|| facpar.permitir_req_com ||'    tipo_prod='||tipo_prod;
+						
+						/*
+						"1";"Prod. Terminado";FALSE
+						"2";"Prod. Intermedio";FALSE
+						"3";"Kit";FALSE
+						"4";"Servicios";FALSE
+						"5";"Refacciones";FALSE
+						"6";"Accesorios";FALSE
+						"7";"Materia Prima";FALSE
+						"8";"Prod. en Desarrollo";FALSE
+						*/
+						IF facpar.permitir_req_com THEN 
+							--7=Materia Prima - Hay que generar una requisicion de compra.
+							IF tipo_prod=7 THEN 
+								--llamada a proc que devuelve la existencia del producto. 
+								--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+								--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+								SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, usuario_id, id_almacen) INTO total_existencia; 
+								
+								--Redondear la existencia del producto
+								total_existencia := round(total_existencia::numeric,noDecUnidad)::double precision;
+								
+								IF total_existencia < str_filas[6]::double precision THEN
+									IF total_existencia <=0 THEN 
+										--reservar cero
+										cant_reservar_nuevo=0;
+									ELSE
+										--tomar la existencia para reservar
+										cant_reservar_nuevo:=total_existencia;
+									END IF;
+									
+									generar_requisicion:=true;
+								ELSE
+									--Reservar toda la cantidad del  pedido
+									cant_reservar_nuevo := str_filas[6]::double precision;
+									
+									generar_requisicion:=false;
+								END IF;
+							END IF;
+						ELSE
+							if tipo_prod=7 then  
+								--Reservar toda cantidad la cantidad del pedido ya que no incluye
+								cant_reservar_nuevo := str_filas[6]::double precision;
+								generar_backorder:=false;
+								generar_requisicion:=false;
+							end if;
+						END IF;
+						
+						--RAISE EXCEPTION '%','permitir_req_com='|| facpar.permitir_req_com ||'    tipo_prod='||tipo_prod ||'    cant_reservar_nuevo='||cant_reservar_nuevo;
+						
+						--Redondear la cantidad de a Reservar
+						cant_reservar_nuevo := round(cant_reservar_nuevo::numeric,noDecUnidad)::double precision;
+						
+						--Reservar cantidad para el  pedido
+						UPDATE inv_exi SET reservado=(reservado::double precision + cant_reservar_nuevo::double precision) WHERE inv_prod_id=str_filas[3]::integer AND inv_alm_id=id_almacen AND ano=ano_actual;
+						
+						------inicia reservar existencias en presentaciones--------------------------
+						--Verificar si hay que validar existencias de Presentaciones
+						IF controlExisPres=true THEN 
+							--Verificar si hay que validar las existencias de presentaciones desde el Pedido.
+							--TRUE = Validar presentaciones desde el Pedido
+							--FALSE = No validar presentaciones desde el Pedido
+							IF facpar.validar_pres_pedido=true THEN 
+								--buscar la equivalencia de la Presentacion
+								SELECT cantidad  FROM inv_prod_presentaciones WHERE id=str_filas[4]::integer 
+								INTO equivalenciaPres;
+								
+								IF equivalenciaPres IS NULL THEN equivalenciaPres:=0; END IF;
+								
+								--Convertir a su equivalencia en Presentacion, la cantidad de la partida actual del pedido
+								cantPresAsignado := cant_reservar_nuevo::double precision / equivalenciaPres::double precision;
+								
+								--Redondear la cantidad de Presentaciones Asignado en la partida
+								cantPresAsignado := round(cantPresAsignado::numeric,noDecUnidad)::double precision; 
+								
+								--Reservar existencia en inv_exi_pres
+								UPDATE inv_exi_pres SET reservado=(reservado::double precision + cantPresAsignado::double precision)
+								WHERE inv_alm_id=id_almacen::integer
+								AND inv_prod_id=str_filas[3]::integer
+								AND inv_prod_presentacion_id=str_filas[4]::integer;
+								
+							END IF;
+						END IF;
+						------termina reservar existencias de Presentaciones------------------------------------
+						
+					ELSE
+						generar_backorder:=false;
+						generar_requisicion:=false;
+						cant_reservar_nuevo=0;
+					END IF;--termina IF tipo 4
+
+					--Tasa ieps
+					IF str_filas[13]::double precision>0 THEN 
+						str_filas[13]:=str_filas[13]::double precision/100;
+					END IF;
+
+					--Tasa retencion
+					IF str_filas[23]::double precision>0 THEN 
+						str_filas[23]:=str_filas[23]::double precision/100;
+					END IF;
+					
+					--Crea registros para tabla poc_pedidos_detalle
+					INSERT INTO poc_pedidos_detalle(poc_pedido_id, inv_prod_id, presentacion_id, gral_imp_id, cantidad, precio_unitario, valor_imp, reservado, backorder, inv_prod_unidad_id, gral_ieps_id, valor_ieps, descto, requisicion, requiere_aut, autorizado, precio_aut, gral_usr_id_aut, gral_imptos_ret_id, tasa_ret)
+					VALUES(ultimo_id,str_filas[3]::integer,str_filas[4]::integer,str_filas[5]::integer,cantUnidadVenta::double precision,str_filas[7]::double precision,str_filas[8]::double precision, cant_reservar_nuevo, generar_backorder, str_filas[11]::integer, str_filas[12]::integer, str_filas[13]::double precision, str_filas[14]::double precision, generar_requisicion, str_filas[20]::boolean, str_filas[17]::boolean, str_filas[18]::double precision, str_filas[19]::integer, str_filas[22]::integer, str_filas[23]::double precision) 
+					RETURNING id INTO ultimo_id_det;
+					
+					--Calcula el Importe de la Partida
+					importe_partida := round((cantUnidadVenta::double precision * str_filas[7]::double precision)::numeric,4)::double precision;
+					
+					--Calcula el IEPS de la partida
+					importe_ieps_partida := round((importe_partida::double precision * str_filas[13]::double precision)::numeric,4)::double precision;
+					
+					--Calcula el IVA de la Partida
+					impuesto_partida := (importe_partida::double precision + importe_ieps_partida::double precision) * str_filas[8]::double precision;
+					
+					--str_filas[22]::integer		retencion_id
+					--str_filas[23]::double precision	retencion_tasa
+					
+					--Calcular el importe de la retencion de la partida si existe la tasa de retencion
+					if str_filas[23]::double precision>0 then 
+						retencion_partida := round((importe_partida::double precision * str_filas[23]::double precision)::numeric,4)::double precision;
+					end if;
+					
+					
+					--Cargar tabla que relaciona el pedido con la cotizacion
+					IF str_filas[16]::integer>0 THEN 
+						INSERT INTO poc_ped_cot(poc_ped_id, poc_cot_id, poc_ped_det_id, poc_cot_det_id)VALUES(ultimo_id, str_filas[15]::integer, ultimo_id_det, str_filas[16]::integer);
+					END IF;
+					
+					IF lower(str_data[43])='true' THEN
+						IF str_filas[14]::double precision>0 THEN
+							--$pu_con_descto.val(parseFloat(parseFloat($campoPrecioU.val()) - (parseFloat($campoPrecioU.val()) * (parseFloat($vdescto.val())/100))).toFixed(4));
+							importe_del_descto_partida = round((importe_partida * (str_filas[14]::double precision/100))::numeric,4)::double precision;
+
+							importe_partida_con_descto = round((importe_partida - importe_del_descto_partida)::numeric,4)::double precision;
+							
+							--Recalcular el IEPS de la partida tomando el importe_partida_con_descto
+							importe_ieps_partida := round((importe_partida_con_descto::double precision * str_filas[13]::double precision)::numeric,4)::double precision;
+							
+							--Recalcular el IVA de la Partida tomando el importe_partida_con_descto
+							impuesto_partida := (importe_partida_con_descto::double precision + importe_ieps_partida::double precision) * str_filas[8]::double precision;
+							
+							--Reclacular el nuevo el importe de la retencion de la partida si existe la tasa de retencion
+							if str_filas[23]::double precision>0 then 
+								retencion_partida := round((importe_partida::double precision * str_filas[23]::double precision)::numeric,4)::double precision;
+							end if;
+						END IF;
+					END IF;
+					
+					suma_descuento = suma_descuento + importe_del_descto_partida::double precision;
+					suma_subtotal_con_descuento = suma_subtotal_con_descuento + importe_partida_con_descto::double precision;
+					
+					monto_subtotal := monto_subtotal + importe_partida::double precision;
+					suma_ieps := suma_ieps + importe_ieps_partida::double precision; 
+					monto_impuesto := monto_impuesto + impuesto_partida::double precision;
+					suma_retencion_de_partidas := suma_retencion_de_partidas + retencion_partida::double precision;
+				END IF;
+			END LOOP;
+			
+			--Verificar si hay que retener iva para este cliente
+			SELECT empresa_immex, case when tasa_ret_immex is null then 0 else tasa_ret_immex::double precision/100 end FROM cxc_clie WHERE id=str_data[5]::integer INTO retener_iva, tasa_retencion;
+			
+			IF lower(str_data[43])='true' AND suma_descuento>0 THEN
+				IF retener_iva=true THEN 
+					total_retencion := suma_subtotal_con_descuento::double precision * tasa_retencion;
+				ELSE
+					total_retencion :=0;
+				END IF;
+				
+				if suma_retencion_de_partidas > 0 then 
+					total_retencion := round((total_retencion + suma_retencion_de_partidas)::numeric,4)::double precision;
+				end if;
+				
+				--Calcula el monto del pedido
+				monto_total:= suma_subtotal_con_descuento::double precision + suma_ieps::double precision + monto_impuesto::double precision - total_retencion::double precision;
+				
+				--Actualiza campos subtotal, impuesto, retencion, total de tabla poc_pedidos
+				UPDATE poc_pedidos SET subtotal=suma_subtotal_con_descuento, monto_descto=suma_descuento, monto_ieps=suma_ieps, impuesto=monto_impuesto, monto_retencion=total_retencion, total=monto_total
+				WHERE id=ultimo_id;
+			ELSE
+				IF retener_iva=true THEN
+					total_retencion := monto_subtotal::double precision * tasa_retencion;
+				ELSE
+					total_retencion :=0;
+				END IF;
+
+				if suma_retencion_de_partidas > 0 then 
+					total_retencion := round((total_retencion + suma_retencion_de_partidas)::numeric,4)::double precision;
+				end if;
+				
+				--Calcula el monto del pedido
+				monto_total:= monto_subtotal::double precision + suma_ieps::double precision + monto_impuesto::double precision - total_retencion::double precision;
+				
+				--Actualiza campos subtotal, impuesto, retencion, total de tabla poc_pedidos
+				UPDATE poc_pedidos SET subtotal=monto_subtotal, monto_ieps=suma_ieps, impuesto=monto_impuesto, monto_retencion=total_retencion, total=monto_total
+				WHERE id=ultimo_id;
+			END IF;
+			
+			valor_retorno := '1';
+		END IF;--termina accion NEW pedido
+		
+		
+		
+		
+		IF command_selected = 'edit' THEN
+			
+			id_almacen = str_data[19]::integer;
+			
+			--obtener el id del proceso para este pedido
+			SELECT proceso_id FROM poc_pedidos WHERE id=str_data[4]::integer INTO id_proceso;
+			
+			--obtener el id del flujo del proceso
+			SELECT proceso_flujo_id FROM erp_proceso WHERE id=id_proceso INTO id_proceso_flujo;
+			
+			IF id_proceso_flujo::integer=4 THEN 
+				
+				UPDATE poc_pedidos SET cxc_clie_id=str_data[5]::integer,moneda_id=str_data[6]::integer,observaciones=str_data[7]::text,tipo_cambio=str_data[8]::double precision,cxc_agen_id=str_data[9]::integer,cxp_prov_credias_id=str_data[10]::integer,orden_compra=str_data[11], fecha_compromiso=str_data[12]::date,lugar_entrega=str_data[13], transporte=str_data[14], tasa_retencion_immex=str_data[15]::double precision, fac_metodos_pago_id=str_data[16]::integer, no_cuenta=str_data[17], enviar_ruta=str_data[18]::boolean, inv_alm_id=str_data[19]::smallint, cxc_clie_df_id=str_data[20]::integer, enviar_obser_fac=str_data[21]::boolean, flete=str_data[22]::boolean, momento_actualizacion=espacio_tiempo_ejecucion, gral_usr_id_actualizacion=usuario_id, motivo_descto=str_data[44], porcentaje_descto=str_data[45]::double precision 
+				WHERE id = str_data[4]::integer;
+				
+				IF empresa_transportista THEN 
+					--Aqui solo entra cuando la empresa es transportista
+					IF str_data[22]='true' THEN
+						--Aqui entra cuando el pedido es de flete.
+						UPDATE poc_ped_trans SET documentador=str_data[23], valor_declarado=str_data[24], tipo_viaje=str_data[25]::integer, remolque1=str_data[26], remolque2=str_data[27], log_vehiculo_id=str_data[28]::integer, no_operador=str_data[29], nombre_operador=str_data[30], gral_pais_id_orig=str_data[31]::integer, gral_edo_id_orig=str_data[32]::integer, gral_mun_id_orig=str_data[33]::integer, gral_pais_id_dest=str_data[34]::integer, gral_edo_id_dest=str_data[35]::integer, gral_mun_id_dest=str_data[36]::integer, cxc_agente_aduanal_id=str_data[37]::integer, cxc_remitente_id=str_data[38]::integer, rem_dir_alterna=str_data[39], cxc_destinatario_id=str_data[40]::integer, dest_dir_alterna=str_data[41], trans_observaciones=str_data[42] 
+						WHERE poc_pedido_id = str_data[4]::integer;
+					END IF;
+				END IF;
+				
+				total_filas:= array_length(extra_data,1);--obtiene total de elementos del arreglo
+				cont_fila:=1;
+				FOR cont_fila IN 1 .. total_filas LOOP
+					generar_requisicion:=false;
+					generar_backorder:=false;
+					retencion_partida:=0;
+					
+					SELECT INTO str_filas string_to_array(extra_data[cont_fila],'___');
+					
+					--str_filas[1] eliminado
+					IF str_filas[1]::integer<>0 THEN--1: no esta eliminado, 0:eliminado
+						--str_filas[2]	iddetalle
+						--str_filas[3]	idproducto
+						--str_filas[4]	id_presentacion
+						--str_filas[5]	id_impuesto
+						--str_filas[6]	cantidad
+						--str_filas[7]	costo
+						--str_filas[8]	valor_impuesto
+						
+						--str_filas[12]	id_ieps
+						--str_filas[13]	tasa_ieps
+						--str_filas[14]	vdescto
+						
+						cant_reservada_anterior:=0;
+						cant_reservar_nuevo:=0;
+						cantPresAsignado:=0;
+						equivalenciaPres:=0;
+						noDecUnidad:=0;
+						cantPresReservAnterior:=0;
+						idUnidadMedida:=0;
+						nombreUnidadMedida:='';
+						cantUnidadVenta:=0;
+						cantExisUnidadVenta:=0;
+					
+						--Obtener datos del Producto
+						SELECT inv_prod.tipo_de_producto_id AS tipo_producto, inv_prod.unidad_id, inv_prod_unidades.titulo, inv_prod.densidad, (CASE WHEN inv_prod_unidades.id IS NULL THEN 0 ELSE inv_prod_unidades.decimales END) AS no_dec
+						FROM inv_prod LEFT JOIN inv_prod_unidades ON inv_prod_unidades.id=inv_prod.unidad_id
+						WHERE inv_prod.id=str_filas[3]::integer 
+						INTO tipo_prod, idUnidadMedida, nombreUnidadMedida, densidadProd, noDecUnidad;
+						
+						IF noDecUnidad IS NULL THEN noDecUnidad:=0; END IF;
+
+						--Tomamos la cantidad en la unidad de Venta seleccionada por el usuario
+						cantUnidadVenta:=str_filas[6]::double precision;
+					
+						IF facpar.cambiar_unidad_medida THEN
+							IF idUnidadMedida::integer<>str_filas[11]::integer THEN
+								IF densidadProd IS NULL OR densidadProd=0 THEN
+									densidadProd:=1;
+								END IF;
+								
+								EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''KILO*'';' INTO match_cadena;
+								IF match_cadena=true THEN
+									--Convertir a kilos
+									str_filas[6] := str_filas[6]::double precision * densidadProd;
+								ELSE
+									EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''LITRO*'';' INTO match_cadena;
+									IF match_cadena=true THEN 
+										--Convertir a Litros
+										str_filas[6] := str_filas[6]::double precision / densidadProd;
+									END IF;
+								END IF;
+							END IF;
+						END IF;
+						
+						--Redondear la cantidad de la Partida
+						str_filas[6] := round(str_filas[6]::numeric,noDecUnidad)::double precision;
+						cantUnidadVenta := round(cantUnidadVenta::numeric,noDecUnidad)::double precision; 
+						
+						--Si el tipo de producto es diferente de 4, hay que RESERVAR existencias
+						--tipo=4 Servicios
+						--para el tipo servicios no se debe reservar existencias
+						IF tipo_prod::integer<>4 THEN 
+
+							--Solo Para productos formulados
+							IF tipo_prod=5 OR tipo_prod=6 THEN 
+								--Reservar toda cantidad de la partida del pedido
+								cant_reservar_nuevo := str_filas[6]::double precision;
+								generar_backorder:=false;
+							end if;
+									
+							
+							IF incluye_modulo_produccion=false THEN
+								--Aqui entra si la Empresa NO INCLUYE Modulo de Produccion
+								
+								--Solo Para productos formulados
+								IF tipo_prod=1 OR tipo_prod=2 OR tipo_prod=8 THEN
+									--si es diferente de cero estamos en editar
+									IF str_filas[2]::integer > 0 THEN 
+										--Buscamos la cantidad reservada anterior
+										SELECT inv_prod_id, reservado FROM poc_pedidos_detalle WHERE id=str_filas[2]::integer INTO id_producto, cant_reservada_anterior;
+										
+										--redondear la cantidad de Presentaciones reservada anteriormente
+										cant_reservada_anterior := round(cant_reservada_anterior::numeric,noDecUnidad)::double precision;
+										
+										--restar la cantidad reservada anterior
+										UPDATE inv_exi SET reservado=(reservado::double precision - cant_reservada_anterior::double precision) WHERE inv_prod_id=id_producto AND inv_alm_id=id_almacen AND ano=ano_actual;
+									END IF;
+									
+									--Reservar toda cantidad de la partida del pedido
+									cant_reservar_nuevo := str_filas[6]::double precision;
+									generar_backorder:=false;
+									
+								END IF;
+							ELSE
+								--Solo Para productos formulados
+								IF tipo_prod=1 OR tipo_prod=2 OR tipo_prod=8 THEN
+									--llamada a proc que devuelve la existencia del producto. 
+									--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+									--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+									SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, usuario_id, id_almacen) INTO total_existencia; 
+									
+									--Si es diferente de cero estamos en editar
+									IF str_filas[2]::integer > 0 THEN 
+										--buscamos la cantidad reservada anterior
+										SELECT inv_prod_id, reservado FROM poc_pedidos_detalle WHERE id=str_filas[2]::integer INTO id_producto, cant_reservada_anterior;
+
+										--redondear la cantidad de Presentaciones reservada anteriormente
+										cant_reservada_anterior := round(cant_reservada_anterior::numeric,noDecUnidad)::double precision;
+										
+										--restar la cantidad reservada anterior
+										UPDATE inv_exi SET reservado=(reservado::double precision - cant_reservada_anterior::double precision) WHERE inv_prod_id=id_producto AND inv_alm_id=id_almacen AND ano=ano_actual;
+										
+										--le sumamos a la existencia la cantidad reservada anterior para tener la existencia real
+										total_existencia := total_existencia + cant_reservada_anterior;
+									END IF;
+									
+									IF total_existencia < str_filas[6]::double precision THEN
+										IF total_existencia <=0 THEN 
+											cant_reservar_nuevo=0;--reservar cero
+										ELSE
+											cant_reservar_nuevo:=total_existencia;--tomar la existencia para reservar
+										END IF;
+										
+										generar_backorder:=true;
+									ELSE
+										cant_reservar_nuevo := str_filas[6]::double precision;--reservar toda la cantidad del  pedido
+										generar_backorder:=false;
+									END IF;
+								END IF;
+							END IF;
+
+
+
+							
+							
+							IF facpar.permitir_req_com THEN 
+								--7=Materia Prima - Hay que generar una requisicion de compra.
+								IF tipo_prod=7 THEN 
+									--llamada a proc que devuelve la existencia del producto. 
+									--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+									--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+									SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, usuario_id, id_almacen) INTO total_existencia; 
+									
+									--si es diferente de cero estamos en editar
+									IF str_filas[2]::integer > 0 THEN 
+										--Buscamos la cantidad reservada anterior
+										SELECT inv_prod_id, reservado FROM poc_pedidos_detalle WHERE id=str_filas[2]::integer INTO id_producto, cant_reservada_anterior;
+
+										--Redondear la cantidad de Presentaciones reservada anteriormente
+										cant_reservada_anterior := round(cant_reservada_anterior::numeric,noDecUnidad)::double precision;
+										
+										--Restar la cantidad reservada anterior
+										UPDATE inv_exi SET reservado=(reservado::double precision - cant_reservada_anterior::double precision) WHERE inv_prod_id=id_producto AND inv_alm_id=id_almacen AND ano=ano_actual;
+										
+										--Le sumamos a la existencia la cantidad reservada anterior para tener la existencia real
+										total_existencia := total_existencia + cant_reservada_anterior;
+									END IF;
+									
+									IF total_existencia < str_filas[6]::double precision THEN
+										IF total_existencia <=0 THEN 
+											--Reservar cero
+											cant_reservar_nuevo=0;
+										ELSE
+											--Tomar la existencia para reservar
+											cant_reservar_nuevo:=total_existencia;
+										END IF;
+										
+										generar_requisicion:=true;
+									ELSE
+										--Reservar toda la cantidad del  pedido
+										cant_reservar_nuevo := str_filas[6]::double precision;
+										generar_requisicion:=false;
+									END IF;
+								END IF;
+							ELSE
+								if tipo_prod=7 then  
+									--llamada a proc que devuelve la existencia del producto. 
+									--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+									--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+									SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, usuario_id, id_almacen) INTO total_existencia; 
+									
+									--si es diferente de cero estamos en editar
+									IF str_filas[2]::integer > 0 THEN 
+										--Buscamos la cantidad reservada anterior
+										SELECT inv_prod_id, reservado FROM poc_pedidos_detalle WHERE id=str_filas[2]::integer INTO id_producto, cant_reservada_anterior;
+
+										--Redondear la cantidad de Presentaciones reservada anteriormente
+										cant_reservada_anterior := round(cant_reservada_anterior::numeric,noDecUnidad)::double precision;
+										
+										--Restar la cantidad reservada anterior
+										UPDATE inv_exi SET reservado=(reservado::double precision - cant_reservada_anterior::double precision) WHERE inv_prod_id=id_producto AND inv_alm_id=id_almacen AND ano=ano_actual;
+										
+										--Le sumamos a la existencia la cantidad reservada anterior para tener la existencia real
+										total_existencia := total_existencia + cant_reservada_anterior;
+									END IF;
+									
+									IF total_existencia < str_filas[6]::double precision THEN
+										IF total_existencia <=0 THEN 
+											--Reservar cero
+											cant_reservar_nuevo=0;
+										ELSE
+											--Tomar la existencia para reservar
+											cant_reservar_nuevo:=total_existencia;
+										END IF;
+										
+										generar_requisicion:=false;
+									ELSE
+										--Reservar toda la cantidad del  pedido
+										cant_reservar_nuevo := str_filas[6]::double precision;
+										generar_requisicion:=false;
+									END IF;
+								end if;
+							END IF;
+							
+							--Redondear la nueva cantidad a reservar
+							cant_reservar_nuevo := round(cant_reservar_nuevo::numeric,noDecUnidad)::double precision;
+							
+							--RAISE EXCEPTION '%','incluye_modulo_produccion: '||incluye_modulo_produccion;
+							
+							--Reservar cantidad para el  pedido
+							UPDATE inv_exi SET reservado=(reservado::double precision + cant_reservar_nuevo::double precision) WHERE inv_prod_id=str_filas[3]::integer AND inv_alm_id=id_almacen AND ano=ano_actual;
+							
+							------inicia reservar existencias en presentaciones--------------------------
+							--verificar si hay que validar existencias de Presentaciones
+							IF controlExisPres=true THEN 
+								--Verificar si hay que validar las existencias de presentaciones desde el Pedido.
+								--TRUE = Validar presentaciones desde el Pedido
+								--FALSE = No validar presentaciones desde el Pedido
+								IF facpar.validar_pres_pedido=true THEN 
+									--buscar la equivalencia de la Presentacion
+									SELECT cantidad  FROM inv_prod_presentaciones WHERE id=str_filas[4]::integer 
+									INTO equivalenciaPres;
+									
+									IF equivalenciaPres IS NULL THEN equivalenciaPres:=0; END IF;
+									
+									--si es diferente de cero estamos en editar
+									IF str_filas[2]::integer > 0 THEN 
+										cantPresReservAnterior := cant_reservada_anterior::double precision / equivalenciaPres::double precision;
+
+										--redondear la cantidad de Presentaciones Reservada anteriormente
+										cantPresReservAnterior := round(cantPresReservAnterior::numeric,noDecUnidad)::double precision; 
+										
+										--Quitar la Cantidad Reservada anteriormente
+										UPDATE inv_exi_pres SET reservado=(reservado::double precision - cantPresReservAnterior::double precision)
+										WHERE inv_alm_id=id_almacen::integer AND inv_prod_id=str_filas[3]::integer AND inv_prod_presentacion_id=str_filas[4]::integer;
+									END IF;
+									
+									
+									--convertir a su equivalencia en Presentacion, la cantidad de la partida actual del pedido
+									cantPresAsignado := cant_reservar_nuevo::double precision / equivalenciaPres::double precision;
+									
+									--redondear la cantidad de Presentaciones Asignado en la partida
+									cantPresAsignado := round(cantPresAsignado::numeric,noDecUnidad)::double precision; 
+									
+									--Reservar existencia en inv_exi_pres
+									UPDATE inv_exi_pres SET reservado=(reservado::double precision + cantPresAsignado::double precision)
+									WHERE inv_alm_id=id_almacen::integer AND inv_prod_id=str_filas[3]::integer AND inv_prod_presentacion_id=str_filas[4]::integer;
+									
+								END IF;
+							END IF;
+							------termina reservar existencias de Presentaciones------------------------------------
+						ELSE
+							generar_backorder:=false;
+							cant_reservar_nuevo=0;
+						END IF;--termina if tipo_prod!=4
+						
+						--Dividir entre 100 la tasa del IEPS
+						IF str_filas[13]::double precision>0 THEN 
+							str_filas[13]:=str_filas[13]::double precision/100;
+						END IF;
+
+						--Tasa retencion
+						IF str_filas[23]::double precision>0 THEN 
+							str_filas[23]:=str_filas[23]::double precision/100;
+						END IF;
+
+						--requiere_aut=str_filas[20]::boolean, autorizado=str_filas[17]::boolean, precio_aut=str_filas[18]::double precision, gral_usr_id_aut=str_filas[19]::integer 
+						--requiere_aut, autorizado, precio_aut, gral_usr_id_aut
+						--str_filas[20]::boolean, str_filas[17]::boolean, str_filas[18]::double precision, str_filas[19]::integer 
+						
+						--str_filas[2]=0 Es registro Nuevo
+						--str_filas[2]>0 El registro ya existe, solo hay que actualizar
+						IF str_filas[2]::integer = 0 THEN
+							--Crea registro nuevo en tabla poc_pedidos_detalle
+							INSERT INTO poc_pedidos_detalle(poc_pedido_id,inv_prod_id,presentacion_id,gral_imp_id,cantidad,precio_unitario,valor_imp, reservado, backorder, inv_prod_unidad_id, gral_ieps_id, valor_ieps, descto, requisicion, requiere_aut, autorizado, precio_aut, gral_usr_id_aut, gral_imptos_ret_id, tasa_ret)
+							VALUES(str_data[4]::integer,str_filas[3]::integer,str_filas[4]::integer,str_filas[5]::integer, cantUnidadVenta::double precision,str_filas[7]::double precision,str_filas[8]::double precision, cant_reservar_nuevo, generar_backorder, str_filas[11]::integer, str_filas[12]::integer, str_filas[13]::double precision, str_filas[14]::double precision, generar_requisicion, str_filas[20]::boolean, str_filas[17]::boolean, str_filas[18]::double precision, str_filas[19]::integer, str_filas[22]::integer, str_filas[23]::double precision); 
+						ELSE
+							--Actualiza registro
+							UPDATE poc_pedidos_detalle SET poc_pedido_id=str_data[4]::integer, inv_prod_id=str_filas[3]::integer, presentacion_id=str_filas[4]::integer, gral_imp_id=str_filas[5]::integer, cantidad=cantUnidadVenta::double precision, precio_unitario=str_filas[7]::double precision, valor_imp=str_filas[8]::double precision, reservado=cant_reservar_nuevo, backorder=generar_backorder,inv_prod_unidad_id=str_filas[11]::integer, valor_ieps=str_filas[13]::double precision, descto=str_filas[14]::double precision, requisicion=generar_requisicion, requiere_aut=str_filas[20]::boolean, autorizado=str_filas[17]::boolean, precio_aut=str_filas[18]::double precision, gral_usr_id_aut=str_filas[19]::integer, gral_imptos_ret_id=str_filas[22]::integer, tasa_ret=str_filas[23]::double precision  
+							WHERE id=str_filas[2]::integer AND poc_pedido_id=str_data[4]::integer;
+						END IF;
+						
+						--Calcular el Importe de la partida y redondealo a 4 digitos
+						importe_partida := round((cantUnidadVenta::double precision * str_filas[7]::double precision)::numeric,4)::double precision;
+						
+						--Calcula el IEPS de la partida y redondear a 4 digitos
+						importe_ieps_partida := round((importe_partida::double precision * str_filas[13]::double precision)::numeric,4)::double precision;
+						
+						--Calcula el IVA de la Partida
+						impuesto_partida := (importe_partida::double precision + importe_ieps_partida::double precision) * str_filas[8]::double precision;
+
+						--Calcular el importe de la retencion de la partida si existe la tasa de retencion
+						if str_filas[23]::double precision>0 then 
+							retencion_partida := round((importe_partida::double precision * str_filas[23]::double precision)::numeric,4)::double precision;
+						end if;
+						
+						IF lower(str_data[43])='true' THEN
+							IF str_filas[14]::double precision>0 THEN
+								importe_del_descto_partida = round((importe_partida * (str_filas[14]::double precision/100))::numeric,4)::double precision;
+								
+								importe_partida_con_descto = round((importe_partida - importe_del_descto_partida)::numeric,4)::double precision;
+								
+								--Recalcular el IEPS de la partida tomando el importe_partida_con_descto
+								importe_ieps_partida := round((importe_partida_con_descto::double precision * str_filas[13]::double precision)::numeric,4)::double precision;
+								
+								--Recalcular el IVA de la Partida tomando el importe_partida_con_descto
+								impuesto_partida := (importe_partida_con_descto::double precision + importe_ieps_partida::double precision) * str_filas[8]::double precision;
+
+								--Reclacular el nuevo el importe de la retencion de la partida si existe la tasa de retencion
+								if str_filas[23]::double precision>0 then 
+									retencion_partida := round((importe_partida_con_descto::double precision * str_filas[23]::double precision)::numeric,4)::double precision;
+								end if;
+							END IF;
+						END IF;
+						
+						suma_descuento = suma_descuento + importe_del_descto_partida::double precision;
+						suma_subtotal_con_descuento = suma_subtotal_con_descuento + importe_partida_con_descto::double precision;
+						
+						monto_subtotal := monto_subtotal + importe_partida::double precision;
+						suma_ieps := suma_ieps + importe_ieps_partida::double precision; 
+						monto_impuesto := monto_impuesto + impuesto_partida::double precision;
+						suma_retencion_de_partidas := suma_retencion_de_partidas + retencion_partida::double precision;
+					ELSE
+						IF trim(str_filas[2])='' THEN
+							--Aqui solo entra cuando se ha eliminado un registro nuevo que nunca fue guardado
+							str_filas[2]:='0';
+						END IF;
+						
+						--Extraer datos del registro eliminado
+						sql_select:='SELECT * FROM poc_pedidos_detalle WHERE id='||str_filas[2]||'::integer AND poc_pedido_id='||str_data[4]::integer;
+						
+						--Regresar existencias reservadas
+						FOR fila IN EXECUTE (sql_select) LOOP
+							UPDATE inv_exi SET reservado=(reservado::double precision - fila.reservado::double precision) WHERE inv_prod_id=fila.inv_prod_id AND inv_alm_id=id_almacen AND ano=ano_actual;
+						END LOOP;
+						
+						--Elimina registro que se elimino en el grid del navegador
+						DELETE FROM poc_pedidos_detalle where id=str_filas[2]::integer AND poc_pedido_id=str_data[4]::integer;
+						
+						--Eliminar el registro de la tabla que relaciona la Cotizacion con el Pedido
+						DELETE FROM poc_ped_cot where poc_ped_det_id=str_filas[2]::integer AND poc_ped_id=str_data[4]::integer;
+					END IF;
+				END LOOP;
+				
+				--Verificar si hay que retener iva para este cliente
+				SELECT empresa_immex, case when tasa_ret_immex is null then 0 else tasa_ret_immex/100 end FROM cxc_clie WHERE id=str_data[5]::integer INTO retener_iva, tasa_retencion;
+				
+				--RAISE EXCEPTION '%','desct: '||str_data[43]||'        suma_descuento:'||suma_descuento;
+				IF lower(str_data[43])='true' AND suma_descuento>0 THEN
+					IF retener_iva=true THEN
+						total_retencion := suma_subtotal_con_descuento::double precision * tasa_retencion;
+					ELSE 
+						total_retencion :=0;
+					END IF;
+					
+					if suma_retencion_de_partidas > 0 then 
+						total_retencion := round((total_retencion + suma_retencion_de_partidas)::numeric,4)::double precision;
+					end if;
+					
+					---RAISE EXCEPTION '%','suma_subtotal_con_descuento:'||suma_subtotal_con_descuento||'        suma_ieps:'||suma_ieps||'        monto_impuesto:'||monto_impuesto;
+					--Calcula el monto del pedido
+					monto_total:= suma_subtotal_con_descuento::double precision + suma_ieps::double precision + monto_impuesto::double precision - total_retencion::double precision;
+					
+					--Actualiza campos subtotal, impuesto, retencion, total de tabla poc_pedidos
+					UPDATE poc_pedidos SET subtotal=suma_subtotal_con_descuento, monto_descto=suma_descuento, monto_ieps=suma_ieps, impuesto=monto_impuesto, monto_retencion=total_retencion, total=monto_total
+					WHERE id=str_data[4]::integer;
+				ELSE 
+					IF retener_iva=true THEN
+						total_retencion := monto_subtotal * tasa_retencion;
+					ELSE
+						total_retencion :=0;
+					END IF;
+					
+					if suma_retencion_de_partidas > 0 then 
+						total_retencion := round((total_retencion + suma_retencion_de_partidas)::numeric,4)::double precision;
+					end if;
+					
+					--Calcula el monto Total del pedido
+					monto_total:= monto_subtotal::double precision + suma_ieps::double precision + monto_impuesto::double precision - total_retencion::double precision;
+					
+					--Actualiza campos subtotal, impuesto, retencion, total de tabla poc_pedidos
+					UPDATE poc_pedidos SET subtotal=monto_subtotal, monto_ieps=suma_ieps, impuesto=monto_impuesto, monto_retencion=total_retencion, total=monto_total
+					WHERE id=str_data[4]::integer;
+				END IF;
+				
+				valor_retorno := '1';
+			ELSE
+				IF id_proceso_flujo=2 THEN 
+					valor_retorno := 'El pedido no pudo ser Actualizado ya fue autorizado. Se encuentra en proceso de Facturacion.';
+				END IF;
+				
+				IF id_proceso_flujo=3 THEN 
+					valor_retorno := 'El pedido no pudo ser Actualizado, ya fue Facturado.';
+				END IF;
+			END IF;
+		END IF;--termina edit pedido
+		
+		
+		
+		
+		--Aqui entra cuando la persona que cancela es la misma que hizo el pedido
+		IF command_selected = 'cancelar' THEN
+			
+			--Obtener el id del proceso para este pedido
+			SELECT proceso_id FROM poc_pedidos WHERE id=str_data[4]::integer INTO id_proceso;
+			
+			--obtener el id del flujo del proceso
+			SELECT proceso_flujo_id FROM erp_proceso WHERE id=id_proceso INTO id_proceso_flujo;
+			
+			IF id_proceso_flujo=4 THEN 
+				UPDATE poc_pedidos SET cancelado=true, momento_cancelacion=espacio_tiempo_ejecucion,gral_usr_id_cancelacion=usuario_id
+				WHERE id=str_data[4]::integer
+				RETURNING inv_alm_id INTO id_almacen;
+				
+				--extraer datos del detalle del pedido
+				sql_select:='SELECT * FROM poc_pedidos_detalle WHERE poc_pedido_id='||str_data[4]::integer;
+				
+				--crea devolver existencias reservadas
+				FOR fila IN EXECUTE (sql_select) LOOP
+					cantPresReservAnterior:=0;
+					noDecUnidad:=0;
+					equivalenciaPres:=0;
+					
+					--obtener el tipo de producto y el numero de Decimales Permitidos
+					SELECT inv_prod.tipo_de_producto_id AS tipo_producto,(CASE WHEN inv_prod_unidades.id IS NULL THEN 0 ELSE inv_prod_unidades.decimales END) AS no_dec
+					FROM inv_prod LEFT JOIN inv_prod_unidades ON inv_prod_unidades.id=inv_prod.unidad_id
+					WHERE inv_prod.id=fila.inv_prod_id 
+					INTO tipo_prod, noDecUnidad;
+					
+					IF noDecUnidad IS NULL THEN noDecUnidad:=0; END IF;
+					
+					--Redondear la cantidad reservada
+					fila.reservado := round(fila.reservado::numeric,noDecUnidad)::double precision;
+					
+					--Quitar reservado de la tabla inv_exi
+					UPDATE inv_exi SET reservado=(reservado::double precision - fila.reservado::double precision) WHERE inv_prod_id=fila.inv_prod_id AND inv_alm_id=id_almacen AND ano=ano_actual;
+					
+					------Inicia quitar existencias reservadas en inv_exi_pres--------------------------
+					--Verificar si la configuracion indica que se esta controlando existencias por presentaciones
+					IF controlExisPres=true THEN 
+						--Verificar si hay que validar las existencias de presentaciones desde el Pedido.
+						--TRUE = Validar presentaciones desde el Pedido
+						--FALSE = No validar presentaciones desde el Pedido
+						IF facpar.validar_pres_pedido=true THEN 
+							--buscar la equivalencia de la Presentacion
+							SELECT cantidad  FROM inv_prod_presentaciones WHERE id=fila.presentacion_id::integer 
+							INTO equivalenciaPres;
+							
+							IF equivalenciaPres IS NULL THEN equivalenciaPres:=0; END IF;
+							
+							--convertir a Presentaciones la cantidad Reservada
+							cantPresReservAnterior := fila.reservado::double precision / equivalenciaPres::double precision;
+							
+							--redondear la cantidad de Presentaciones Reservada anteriormente
+							cantPresReservAnterior := round(cantPresReservAnterior::numeric,noDecUnidad)::double precision; 
+							
+							--Quitar la Cantidad Reservada anteriormente
+							UPDATE inv_exi_pres SET reservado=(reservado::double precision - cantPresReservAnterior::double precision)
+							WHERE inv_alm_id=id_almacen::integer AND inv_prod_id=fila.inv_prod_id::integer AND inv_prod_presentacion_id=fila.presentacion_id::integer;
+						END IF;
+					END IF;
+					
+				END LOOP;
+				
+				valor_retorno := '1';
+			ELSE
+				IF id_proceso_flujo=2 THEN 
+					valor_retorno := 'El pedido ya fue Autorizado, se encuentra en Facturacion. No se puede Cancelar.';
+				END IF;
+				
+				IF id_proceso_flujo=3 THEN 
+					valor_retorno := 'El pedido ya fue Facturado. No se puede Cancelar.';
+				END IF;
+			END IF;
+		END IF;
+		
+	END IF;--termina aplicativo Pedidos de Clientes
+
+
+	RETURN valor_retorno;
+	
+END;$_$;
+
+
+ALTER FUNCTION public.poc_adm_procesos(campos_data text, extra_data text[]) OWNER TO sumar;
 
 SET default_tablespace = '';
 
@@ -6675,6 +9012,108 @@ ALTER SEQUENCE fac_cfds_conf_id_seq OWNED BY fac_cfds_conf.id;
 
 
 --
+-- Name: fac_docs; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE fac_docs (
+    id integer NOT NULL,
+    serie_folio character varying,
+    cxc_clie_id integer NOT NULL,
+    moneda_id integer,
+    subtotal double precision,
+    impuesto double precision,
+    total double precision,
+    tipo_cambio double precision DEFAULT 0,
+    fac_cfd_id integer DEFAULT 0,
+    proceso_id integer NOT NULL,
+    cxc_agen_id integer DEFAULT 0,
+    terminos_id integer DEFAULT 0,
+    orden_compra character varying DEFAULT ''::character varying,
+    observaciones text DEFAULT ''::text,
+    cancelado boolean DEFAULT false,
+    motivo_cancelacion text DEFAULT ''::text,
+    momento_creacion timestamp with time zone,
+    momento_cancelacion timestamp with time zone,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_cancelacion integer DEFAULT 0,
+    fac_docs_tipo_cancelacion_id integer,
+    fac_metodos_pago_id integer DEFAULT 0,
+    no_cuenta character varying DEFAULT ''::character varying,
+    monto_retencion double precision DEFAULT 0,
+    tasa_retencion_immex double precision DEFAULT 0,
+    salida boolean DEFAULT false,
+    nombre_archivo character varying DEFAULT ''::character varying,
+    folio_pedido character varying DEFAULT ''::character varying,
+    fecha_vencimiento timestamp with time zone,
+    enviar_ruta boolean DEFAULT false,
+    inv_alm_id smallint DEFAULT 0,
+    cxc_clie_df_id integer DEFAULT 0,
+    monto_ieps double precision DEFAULT 0,
+    ref_id character varying DEFAULT ''::character varying NOT NULL,
+    monto_descto double precision DEFAULT 0 NOT NULL,
+    motivo_descto character varying DEFAULT ''::character varying,
+    subtotal_sin_descto double precision DEFAULT 0,
+    ctb_tmov_id integer DEFAULT 0 NOT NULL,
+    procesado boolean DEFAULT false NOT NULL,
+    ctb_tmov_id_cancelacion integer DEFAULT 0 NOT NULL,
+    procesado_cancelacion boolean DEFAULT false NOT NULL,
+    fecha_procesa_cancelacion timestamp with time zone,
+    gral_usr_id_procesa_cancelacion integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE fac_docs OWNER TO sumar;
+
+--
+-- Name: COLUMN fac_docs.enviar_ruta; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_docs.enviar_ruta IS 'True=Debe aparecer en la busqueda de facturas para agregar a la ruta. False=No debe aparecer en la busqueda.';
+
+
+--
+-- Name: COLUMN fac_docs.inv_alm_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_docs.inv_alm_id IS 'Almacen de donde se dió salida los productos Facturados';
+
+
+--
+-- Name: COLUMN fac_docs.cxc_clie_df_id; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_docs.cxc_clie_df_id IS 'ID de la Direccion Fiscal(cxc_clie_df) para la Facturacion. Si el valor de este campo es 0, entonces por default toma la direccion de la tabla de Clientes (cxc_clie)';
+
+
+--
+-- Name: COLUMN fac_docs.procesado_cancelacion; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN fac_docs.procesado_cancelacion IS 'TRUE=Se ha incluido en una Poliza Contable.';
+
+
+--
+-- Name: fac_docs_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE fac_docs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE fac_docs_id_seq OWNER TO sumar;
+
+--
+-- Name: fac_docs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE fac_docs_id_seq OWNED BY fac_docs.id;
+
+
+--
 -- Name: fac_metodos_pago; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -7614,6 +10053,43 @@ ALTER TABLE gral_dias_no_laborables_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE gral_dias_no_laborables_id_seq OWNED BY gral_dias_no_laborables.id;
+
+
+--
+-- Name: gral_docs; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE gral_docs (
+    id integer NOT NULL,
+    titulo character varying NOT NULL,
+    gral_app_id integer,
+    gral_emp_id integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    momento_actualizacion timestamp with time zone
+);
+
+
+ALTER TABLE gral_docs OWNER TO sumar;
+
+--
+-- Name: gral_docs_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE gral_docs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE gral_docs_id_seq OWNER TO sumar;
+
+--
+-- Name: gral_docs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE gral_docs_id_seq OWNED BY gral_docs.id;
 
 
 --
@@ -10928,6 +13404,13 @@ ALTER TABLE ONLY fac_cfds_conf_folios ALTER COLUMN id SET DEFAULT nextval('fac_c
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY fac_docs ALTER COLUMN id SET DEFAULT nextval('fac_docs_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY fac_metodos_pago ALTER COLUMN id SET DEFAULT nextval('fac_metodos_pago_id_seq'::regclass);
 
 
@@ -11048,6 +13531,13 @@ ALTER TABLE ONLY gral_deptos_turnos ALTER COLUMN id SET DEFAULT nextval('gral_de
 --
 
 ALTER TABLE ONLY gral_dias_no_laborables ALTER COLUMN id SET DEFAULT nextval('gral_dias_no_laborables_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_docs ALTER COLUMN id SET DEFAULT nextval('gral_docs_id_seq'::regclass);
 
 
 --
@@ -12074,6 +14564,13 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 16	18.4970999999999997	2016-08-25 12:12:56.306087-04	2	DOF
 17	18.4460000000000015	2016-08-26 08:52:55.22621-04	2	DOF
 18	18.4460000000000015	2016-08-27 08:52:48.846369-04	2	DOF
+19	18.2830000000000013	2016-08-29 19:31:37.395461-04	2	DOF
+20	18.577300000000001	2016-08-30 09:35:09.688338-04	2	DOF
+21	18.795300000000001	2016-08-31 12:22:29.524107-04	2	DOF
+22	18.8522999999999996	2016-09-02 17:20:48.730913-04	2	DOF
+23	18.6588999999999992	2016-09-05 21:00:20.831291-04	2	DOF
+24	1	2011-08-23 08:01:15.878597-04	1	0.21
+25	18.5580999999999996	2016-09-06 20:20:23.593424-04	2	DOF
 \.
 
 
@@ -12081,7 +14578,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 -- Name: erp_monedavers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_monedavers_id_seq', 18, true);
+SELECT pg_catalog.setval('erp_monedavers_id_seq', 25, true);
 
 
 --
@@ -12221,6 +14718,80 @@ SELECT pg_catalog.setval('erp_tiempos_entrega_id_seq', 9, true);
 COPY fac_cfdis (id, tipo, ref_id, doc, gral_emp_id, gral_suc_id, fecha_crea, gral_usr_id_crea, cancelado, fecha_cancela, gral_usr_id_cancela) FROM stdin;
 1	3	1_KNG1	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-25T13:57:52" folio="1" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="X0+WM2FCczJ2MPxde40eIlymxiiXVRAVxiWbr9024yXmqa0qZtwu8IEZhstXgokS3wcCAEwWnlr4cmV+KwaCbfCp/1c6PhqycpQ3m9N+unhonGtwnFq1YMVs6Aar6RHk1LuouM1YAF3/tI8Z406/5KkQbYuVYd4J7cqNyDMgeDQ=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="1" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-04-07" FechaInicialPago="2016-04-01" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-04-08" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="F6953FAC-C3D4-47CA-894D-171C97B5CD74" FechaTimbrado="2016-08-25T13:57:57" noCertificadoSAT="00001000000301160463" selloCFD="X0+WM2FCczJ2MPxde40eIlymxiiXVRAVxiWbr9024yXmqa0qZtwu8IEZhstXgokS3wcCAEwWnlr4cmV+KwaCbfCp/1c6PhqycpQ3m9N+unhonGtwnFq1YMVs6Aar6RHk1LuouM1YAF3/tI8Z406/5KkQbYuVYd4J7cqNyDMgeDQ=" selloSAT="2MKtx2vKCTGCwCxzMKm7z5KLH8HOTi328sKnaCTv7hX+oKRC0orMqwj70A91YJrwoX2DurOh/YGazhwWvTW9lIZnfuw/NGUa9B+BhCgujWAfuJl2JOEPu3J/qSnfDslBAggYV4YPRjWnKFrDtMLLpw1t8uv+xl4qFPIFrIItC+E=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-25 13:57:56.092571-04	1	f	\N	0
 2	3	1_KNG2	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-25T17:02:16" folio="2" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="BZNa4+MMoFMPBNGg0H/DA4oJrSK7WwXWkdKiSr6b5Kz3cxhbXBUYK5co6AH8rcNnuz2gRNMfKk9Dug0dvrKy0bY89rXkay1preeDOsUD8xu2GcCejB8PNN9+REgpYpMsIXVGc/JMoXy1TXgd8HOT9hgzJfibtkLCMq1MLq6dqzg=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="2" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-04-14" FechaInicialPago="2016-04-08" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-04-15" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="7B07BAE1-D7D6-4EEF-ACF0-E69E21A94278" FechaTimbrado="2016-08-25T17:02:21" noCertificadoSAT="00001000000301160463" selloCFD="BZNa4+MMoFMPBNGg0H/DA4oJrSK7WwXWkdKiSr6b5Kz3cxhbXBUYK5co6AH8rcNnuz2gRNMfKk9Dug0dvrKy0bY89rXkay1preeDOsUD8xu2GcCejB8PNN9+REgpYpMsIXVGc/JMoXy1TXgd8HOT9hgzJfibtkLCMq1MLq6dqzg=" selloSAT="c8F0ef2h0V+ZmCyoHLV0ZEuevmYjg+RgpEwEjeWzlSEt5DCkMUlapQ8MuewWWVy05hx+4iG7gIdMSP0LXvBMXhpGUfYys0juwemJS+qhq0R/wuO2BNtV9O4AhpXlx3lWGI2V+SItvW1b9/wHhWjTCR/AAazbbMdHsNhGLUz7ovI=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-25 17:02:19.811979-04	1	f	\N	0
+3	3	1_KNG3	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T09:46:41" folio="3" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="OhDV79Z8z/Ju4pPoTO3r/D/fFRlBGVWLod2mpHYUpY3YdXlcvkz5GCIeVSG7vj0TaiVHexdD31FB2VYzL9v9jGTXHH/9RvmMmzQmFHpXH/nCSDyurAZoAntiGrd8MwaZFCw8kbbRernPNKjVe1QjFYHyakO43OkEeMReUHN2cWU=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="3" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-04-21" FechaInicialPago="2016-04-15" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-04-22" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="0B66BB9F-E9EE-49AD-B7B8-34D4B873773B" FechaTimbrado="2016-08-30T09:46:46" noCertificadoSAT="00001000000301160463" selloCFD="OhDV79Z8z/Ju4pPoTO3r/D/fFRlBGVWLod2mpHYUpY3YdXlcvkz5GCIeVSG7vj0TaiVHexdD31FB2VYzL9v9jGTXHH/9RvmMmzQmFHpXH/nCSDyurAZoAntiGrd8MwaZFCw8kbbRernPNKjVe1QjFYHyakO43OkEeMReUHN2cWU=" selloSAT="g/93u6n5kyE5H4MlXWRLZ8uZVd5I8ki1IzI94oInkC31ojIAs/PW6FVsv2MXFDGW0rQfUtvEyQu86NQ2m/S/Mwz0mbBKcJ2p/kj5b4kCVYkThfGX3EKrbDdXy7PY/sGvb/3tRli+dmsTbvqfn7147X6RgyeoWuEq2ZyM2zgwzjI=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 09:46:44.826452-04	1	f	\N	0
+4	3	1_KNG4	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T09:46:44" folio="4" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="bX6cWXoc7Sy3fRIX6O1vPphn0eClYJO5hAon2iFu9z+zHF8keJzOOhq9ca1t6rZN/UZAzZX4PgFq5WfowbkRnLjpMa6Qn9ik9MF8vb2pJ31/eh9NcROq4JY9pMaqraro5hbDSj2JbDJn5TfO7WO6nTFRK/hoPV1Z32tOr8rw+Pg=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="1" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-04-21" FechaInicialPago="2016-04-15" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-04-22" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="81EF18AA-ACB4-4193-AB14-C2CA871C110B" FechaTimbrado="2016-08-30T09:46:49" noCertificadoSAT="00001000000301160463" selloCFD="bX6cWXoc7Sy3fRIX6O1vPphn0eClYJO5hAon2iFu9z+zHF8keJzOOhq9ca1t6rZN/UZAzZX4PgFq5WfowbkRnLjpMa6Qn9ik9MF8vb2pJ31/eh9NcROq4JY9pMaqraro5hbDSj2JbDJn5TfO7WO6nTFRK/hoPV1Z32tOr8rw+Pg=" selloSAT="a5NgxrdlQBhcvtuyUlpK33kvt54EKTiQzb62lQc+a1eCCxQEP3dhIuLyPD9zj816TKUZrL4dxxFktnZ3pvBAtkjoJtztkQHbJnfx/oYvc2QDoToeTGfTQqqnaIk5LyZrtNbzSJ3tSylqhnJJnaP2XMrns6Dkt0/Wjr7eKheb0X0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 09:46:48.263157-04	1	f	\N	0
+5	3	1_KNG5	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T09:50:27" folio="5" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="YkesEtVaN1LJSWXZ7dxVRn5ZPzzunrLDzubZ0p0mYKzSswaRJhn1mzJpLCmR9bD1e4S/3RPlrtKk8uD7KcYgPAQ7q+mI9AKqMVspWoRn7BuHb5gsEbyyLF6N7EJLMz1iFX/ocvkP8JdeU2Mi6Wu4+fm9DnjoRj9yj9Kx2u5p9GA=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="4" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-04-28" FechaInicialPago="2016-04-22" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-04-29" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="D21EC295-20EA-4849-BBCC-E024751AD79B" FechaTimbrado="2016-08-30T09:50:32" noCertificadoSAT="00001000000301160463" selloCFD="YkesEtVaN1LJSWXZ7dxVRn5ZPzzunrLDzubZ0p0mYKzSswaRJhn1mzJpLCmR9bD1e4S/3RPlrtKk8uD7KcYgPAQ7q+mI9AKqMVspWoRn7BuHb5gsEbyyLF6N7EJLMz1iFX/ocvkP8JdeU2Mi6Wu4+fm9DnjoRj9yj9Kx2u5p9GA=" selloSAT="dPlGXhipX/NTuGfhQ7hJFfm1SbqW97JG0X+y4QiBeEe+qsq92VgyaDaR8UBX6XuAI9iIk5yB61BAsgZhaNkKNodhxcptv+fjeDWDJkovJiD8bVFO+GUclL+9gORRYQ6nMvWl0YyfpGo3GaxuMAhCbaCFjhkMzIdz2JLxJu/j+BM=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 09:50:31.870488-04	1	f	\N	0
+6	3	1_KNG6	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T09:50:31" folio="6" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="CLa8UvRywmMUbCjp1oHCNx0vFDerjwtiLnzH55PmWAonie6onjAI2U5ilCMYFFLF3r+kG0DVxlClvTyfyBWgvg/KVLcrbFKp9X0cb2k6URbSYD6kJ6SoSHdE7kPDFbb8ysG8CEOKD14KDKB+u+GZSnpsVRCQOVL/Hj8OX8/svus=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="2" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-04-28" FechaInicialPago="2016-04-22" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-04-29" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="AED55097-EBD8-4334-A991-B2036548B787" FechaTimbrado="2016-08-30T09:50:36" noCertificadoSAT="00001000000301160463" selloCFD="CLa8UvRywmMUbCjp1oHCNx0vFDerjwtiLnzH55PmWAonie6onjAI2U5ilCMYFFLF3r+kG0DVxlClvTyfyBWgvg/KVLcrbFKp9X0cb2k6URbSYD6kJ6SoSHdE7kPDFbb8ysG8CEOKD14KDKB+u+GZSnpsVRCQOVL/Hj8OX8/svus=" selloSAT="oC+kcHl7YyG5etvRhoyqB2cpztLEWjzmgbftw4WZ7U66onUsDd9Lt2Hgoilm9fHz11DpCcJ8msmlv3V9rK+M0TC/1F0AnaWkX7TRSWkOv7VwVqeZE7pCtOedXdEQlz8TzKb66iA6M3B2f/1AC/+moB4PckUPQ2AIMRwpjNOYLyM=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 09:50:35.406688-04	1	f	\N	0
+7	3	1_KNG7	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T09:55:27" folio="7" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="b0/9V9lU7TdTRrk46NsbGt/yVcd2SmiDDYJjYcNbtlnSyH+3gQjht7ywqzetsrVvaPfa08DDIR0hHQsKC3G7k3hh7jkgQ14uZVU1comG/yfKCjogE/0cF6Mm7rdZiX0P/g5OyhmlFwxSaO4hD212108FmixOB3SOe+Qtb4zCliw=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="5" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-05-05" FechaInicialPago="2016-04-29" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-05-06" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="3C479E4F-DB7F-4C4D-A20F-790396F051E1" FechaTimbrado="2016-08-30T09:55:32" noCertificadoSAT="00001000000301160463" selloCFD="b0/9V9lU7TdTRrk46NsbGt/yVcd2SmiDDYJjYcNbtlnSyH+3gQjht7ywqzetsrVvaPfa08DDIR0hHQsKC3G7k3hh7jkgQ14uZVU1comG/yfKCjogE/0cF6Mm7rdZiX0P/g5OyhmlFwxSaO4hD212108FmixOB3SOe+Qtb4zCliw=" selloSAT="cl0OcY36lSK3/iPBjwzLji4EzQWa70qXaFrTov2CUEeli8wDHHCHru/Zi+tm+27lqy+3HheEv4OHd5s0KnHBjeECbShQ4apktJJY2WcVuFpU/ssdgfKquQvn+nHdFDRlqWDUF58vozY3Q9Xm7M0/0ercy4sXeNGnBk3njV1ja6c=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 09:55:30.952981-04	1	f	\N	0
+8	3	1_KNG8	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T09:55:30" folio="8" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="fSCwtkQQf9//DlYM/Wlp+qKdeeOo+yXeYcb39lUJqpXjgesU5cOQDHhx4M6q3uW52nAt8S2nIZjy9DaqutVLBnaI/+iIkqea+kX+Bzzno2B2P8caqRCU1G6AepKyvlj5/5fkotOhFldeBPCUghi2hphjBzFoXE58pJLAhyrA8WU=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="3" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-05-05" FechaInicialPago="2016-04-29" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-05-06" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="8C67610B-D7B1-4240-99D1-88EC56789C77" FechaTimbrado="2016-08-30T09:55:35" noCertificadoSAT="00001000000301160463" selloCFD="fSCwtkQQf9//DlYM/Wlp+qKdeeOo+yXeYcb39lUJqpXjgesU5cOQDHhx4M6q3uW52nAt8S2nIZjy9DaqutVLBnaI/+iIkqea+kX+Bzzno2B2P8caqRCU1G6AepKyvlj5/5fkotOhFldeBPCUghi2hphjBzFoXE58pJLAhyrA8WU=" selloSAT="VRezVT3DOX2OvK1yHujYgU0fPXRarm2nOjQV1EMd5wO5754MNwiBs2rLfUq4QmQIbks6lHPR8ynNqz7Qo7hUGrR81+j32mqwhUcOE1F7D0fBaFc+WiRULabdq8S5DiFWFXzZck4xryjeCFL/omln6Zh9fanpzKcleVvd7nrAuIQ=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 09:55:34.269847-04	1	f	\N	0
+9	3	1_KNG9	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:06:55" folio="9" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="XrwjZ054Q4UOL7dmtus6x2MLTegVMs0Dtl+OY5rKr5AUSOjiFc5AOSAePkq6F1DwOgQOhIovAUxsMEGi3TKOZLuVMH0gGzQKQFb0mi25rC0CiNWa6Gc/rI4pmqF5HIcDUdHslh2hesY/+d2VfTZBXAT1n+l+3hAdREos7rrEMEk=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="6" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-05-12" FechaInicialPago="2016-05-06" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-05-13" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="A65C8716-ABDE-4B24-A8B8-732ADBF2A5E2" FechaTimbrado="2016-08-30T10:07:00" noCertificadoSAT="00001000000301160463" selloCFD="XrwjZ054Q4UOL7dmtus6x2MLTegVMs0Dtl+OY5rKr5AUSOjiFc5AOSAePkq6F1DwOgQOhIovAUxsMEGi3TKOZLuVMH0gGzQKQFb0mi25rC0CiNWa6Gc/rI4pmqF5HIcDUdHslh2hesY/+d2VfTZBXAT1n+l+3hAdREos7rrEMEk=" selloSAT="g5OmAUqNS7Ma9wCEIgPWt2+/o0x6oWIzZkv824zcXtbyna5UIVcaU3uvxt6L77GFuSKtbshZ4Dkw3v4dIfG5qZLV4xY7/9EFKLDhMG57kknhLp4gR7wJZ1tanlRSfuQk/Kp/0KW8ycWLXJqDQkiISj8dsvROChzPedyoZcPKK9g=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:06:59.22069-04	1	f	\N	0
+10	3	1_KNG10	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:06:59" folio="10" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="bpuzAtSXjBBQw/pEAZnaZC2rDp9BvAQdRRubaPKKfXvT23Ks8sdtRMdb63TIU6CXelZIEiajKZ8J5pruQYzVe/7QI0nubyRUJI7uS9zdIwQX54YnV6FiWxbhe7aAlQddmLAoI2tCUQcKUhNMi+jgf99PDm+w7Id9pJbE2ZR0lR0=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="4" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-05-12" FechaInicialPago="2016-05-06" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-05-13" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="9D4929DD-4BC5-438F-A097-0660D7D523AC" FechaTimbrado="2016-08-30T10:07:04" noCertificadoSAT="00001000000301160463" selloCFD="bpuzAtSXjBBQw/pEAZnaZC2rDp9BvAQdRRubaPKKfXvT23Ks8sdtRMdb63TIU6CXelZIEiajKZ8J5pruQYzVe/7QI0nubyRUJI7uS9zdIwQX54YnV6FiWxbhe7aAlQddmLAoI2tCUQcKUhNMi+jgf99PDm+w7Id9pJbE2ZR0lR0=" selloSAT="nH7xoCkSg41WhLm9xmoJe76EDEPkvJjqHkX5XwgZYbZVhNOJE4OyqxpjFfHBSPd5Gtnt1wwG9Kzf781M/n4lvNCaNSNXhCUvgVwbxOvqClIL6rdA0NPtOGEpmVrkPeXyZGfVM/8jD5JonhWVEeolBn9X51E2+VmWqeefqD2PnzU=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:07:02.628051-04	1	f	\N	0
+11	3	1_KNG11	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:07:02" folio="11" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="TLDQNmwWV+3li6xocRmLhvtm34PELiSXt248kdfIBMj/sPHqV0kowcErXq1FdzO/Af10+ekMT3KLbzctw7/Jzx8OTPX4ATzvpRrfy1xiIyQBlPwFQTDiqH8xBqgBz6EgXAyxsLvjdkQUf7Q0ybtRnZn5CamVgHzkFuVnEct3vFk=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="1" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-05-12" FechaInicialPago="2016-05-06" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-05-13" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="D183D2EF-F8DA-4819-9564-C30FB783D66D" FechaTimbrado="2016-08-30T10:07:07" noCertificadoSAT="00001000000301160463" selloCFD="TLDQNmwWV+3li6xocRmLhvtm34PELiSXt248kdfIBMj/sPHqV0kowcErXq1FdzO/Af10+ekMT3KLbzctw7/Jzx8OTPX4ATzvpRrfy1xiIyQBlPwFQTDiqH8xBqgBz6EgXAyxsLvjdkQUf7Q0ybtRnZn5CamVgHzkFuVnEct3vFk=" selloSAT="iJW+nXsiCFsXsqr4U/PeF0VUaJ1OiVDWqzX3HKQUb/VtM9X3+RcixzCHzb1AYkWJmrizVVDP6HDhZpWd/mN23859y0U8eoEuuY/joqMc1Ww84cz++dXL3kVWkqvTqWpNtKzZPsmB0ZUhkLfBhKKGnEhai9x1OmBn5V2G8UK6RDs=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:07:06.257615-04	1	f	\N	0
+12	3	1_KNG12	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:10:33" folio="12" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="JALdeNlmSLfP3VkQoZ4oQeywA7BxVAj+F48CWe6KxP3oTrbomK4N8YcVMmWbBb8HfdAKv3dbRm3IF59IIKhOVEhpcG2fjaGo5/CS7op1zkbmVaq86P+8NMCw1jDkvyL9PvIRVcBizglHQQGPJEjWbEsX2OsWellj3FvVce8ip1U=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="7" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-05-19" FechaInicialPago="2016-05-13" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-05-20" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="CF1B4D30-B090-4AE9-AC79-543F00C462D1" FechaTimbrado="2016-08-30T10:10:38" noCertificadoSAT="00001000000301160463" selloCFD="JALdeNlmSLfP3VkQoZ4oQeywA7BxVAj+F48CWe6KxP3oTrbomK4N8YcVMmWbBb8HfdAKv3dbRm3IF59IIKhOVEhpcG2fjaGo5/CS7op1zkbmVaq86P+8NMCw1jDkvyL9PvIRVcBizglHQQGPJEjWbEsX2OsWellj3FvVce8ip1U=" selloSAT="Z0nV0bPXRseL7LzSHhgR0G4D2SpQ8Xn3T3XjWJ7TuQICDivmtrQpZp7WmhJ2lgtB9QXLPYh0bM9UqTn8xRANV254Mpvj7/A6boM92FrVsTY8MfRkynH1G4HeNHcg4lZt6Ld4QNaRW5EQULl6XvlZjQk2XPCbpvwxaXwN9S5rUQA=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:10:37.089639-04	1	f	\N	0
+13	3	1_KNG13	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:10:37" folio="13" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="LeLVK3reyW3QxrkOYN4II/wIBmwF7vIaPa7D3qLTMdSaYtry7ni29z2nsqxIkNhp7z1Fu1OQrB8TdfYJNoKTQ7cAQR+6pRvdBZ0CmBbZkz4DBERjDnTEPTYvzCVa9kDagNmV2KhljLQBoBpFqKZ/2RHPwNKIEdlK3hrMCGxRYNs=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="5" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-05-19" FechaInicialPago="2016-05-13" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-05-20" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="658A4581-89AF-4F1A-B234-CF8B71ABDDA1" FechaTimbrado="2016-08-30T10:10:42" noCertificadoSAT="00001000000301160463" selloCFD="LeLVK3reyW3QxrkOYN4II/wIBmwF7vIaPa7D3qLTMdSaYtry7ni29z2nsqxIkNhp7z1Fu1OQrB8TdfYJNoKTQ7cAQR+6pRvdBZ0CmBbZkz4DBERjDnTEPTYvzCVa9kDagNmV2KhljLQBoBpFqKZ/2RHPwNKIEdlK3hrMCGxRYNs=" selloSAT="MGN7dBn0zwUnDqhU8xQKs89HKO2C4yHX3kTWZ5Fomw3S0eOMr9sUH+1t2t7xdQt1RdHhuiRgKXmfVpmEj4uXKQnH9Xi9hrndzV+NEU8ygbxUqULO0g2/A5g+htzfRP9EeW4GzIKWcwAGPqxo7pzYxeMhZeKqMhxYPLi7R24gKRQ=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:10:40.509238-04	1	f	\N	0
+14	3	1_KNG14	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:10:40" folio="14" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="UKD4JEul6/LJM/pc3zLgz2hvjJYd8Ei1CvU+3UdLboF2aLgTNLKDG5m6H+ryCRypj8wg7pIS6PeUO/9ju+2CPxtUh5dwSLoVApTl+SOd9JWymgaDCOOJWWP6pOJzKzmFGoJTH2id2zTyasIoK8i2WZy0B8/Yapo9T3vObxcJ1Pg=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="2" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-05-19" FechaInicialPago="2016-05-13" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-05-20" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="757B13F0-3579-435D-A3EE-950DCF0EB601" FechaTimbrado="2016-08-30T10:10:45" noCertificadoSAT="00001000000301160463" selloCFD="UKD4JEul6/LJM/pc3zLgz2hvjJYd8Ei1CvU+3UdLboF2aLgTNLKDG5m6H+ryCRypj8wg7pIS6PeUO/9ju+2CPxtUh5dwSLoVApTl+SOd9JWymgaDCOOJWWP6pOJzKzmFGoJTH2id2zTyasIoK8i2WZy0B8/Yapo9T3vObxcJ1Pg=" selloSAT="C1HEok23O5Pk+2zfNZpRK20KLnT+2BPdQuKeG77PaJV3sGjWaI3lsi7lQLurMIXX1nuOz5jRMdKr4G3jdmdPvV7CkjkiFipw/RVkNhHuK+Ypoj2YUOpmZ+4lqnUqGCTrRVEOlMMh8S1VRKzRxBXWL2kK2IJsQ0VK+/ZvM4Tw5I4=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:10:44.096285-04	1	f	\N	0
+15	3	1_KNG15	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:13:28" folio="15" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="E/jy23+2N2gHoQ+3PepmHR/8CXm2CpjwGy4x+YXGFt2XBzItCVEf+5/T/PEWEgaZwlD9LFpZYyDJHz66dFMyyMuoqxXqx3I2GVe584WiZqmq6a715cTCPbEkSssLLKI/8Fr0TPAaRWyDd7PfD+9XP0kvAx97Zk3yXxHcQI0e9OE=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="8" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-05-26" FechaInicialPago="2016-05-20" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-05-27" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="7204B9DB-C9C8-43C7-8637-C762A2111B78" FechaTimbrado="2016-08-30T10:13:33" noCertificadoSAT="00001000000301160463" selloCFD="E/jy23+2N2gHoQ+3PepmHR/8CXm2CpjwGy4x+YXGFt2XBzItCVEf+5/T/PEWEgaZwlD9LFpZYyDJHz66dFMyyMuoqxXqx3I2GVe584WiZqmq6a715cTCPbEkSssLLKI/8Fr0TPAaRWyDd7PfD+9XP0kvAx97Zk3yXxHcQI0e9OE=" selloSAT="GFDthJ6L+IVK8KjaWL+WBRRh+0glYtwW5m0g4eLwLcvqiRjbbWXjGRiEQDm6FOva/0/YJdBGCr4omNY43YlXOFHsaIW1o9OfkvDcay+3d2qWhP2eVg95TJl+gLp5uRbL8/WB3IpxAFoTouo1W+XTCdcbc7jWAReI+dNQX9fJlL8=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:13:31.475417-04	1	f	\N	0
+16	3	1_KNG16	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:13:31" folio="16" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="SERFH6wmKYdEH8MmLp67G64u4N3U1X5pe1opHhu9dt+0GIc8eqBJwr3fWqEc0r6fhw7cNs7QZsKhdEpGPhrzKxwU5iURrwdJq57YB9iB9RVEsvDkqExzpu/3YDHjD1/D3z5QqlRAL8VubwewhOs6hJUwCubNw3PXsFQRWAxXtws=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="6" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-05-26" FechaInicialPago="2016-05-20" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-05-27" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="72C94526-EE42-41FB-8816-862D64D5FD38" FechaTimbrado="2016-08-30T10:13:36" noCertificadoSAT="00001000000301160463" selloCFD="SERFH6wmKYdEH8MmLp67G64u4N3U1X5pe1opHhu9dt+0GIc8eqBJwr3fWqEc0r6fhw7cNs7QZsKhdEpGPhrzKxwU5iURrwdJq57YB9iB9RVEsvDkqExzpu/3YDHjD1/D3z5QqlRAL8VubwewhOs6hJUwCubNw3PXsFQRWAxXtws=" selloSAT="4I5PAZPGoFvSescIEeTo/meauwoqLEF19gbx+dciu22+Uof0llmUcUSOucMce1keX/dL/Ce0j0RdIP+uWotTMq9LK5vV5+hgLSfPow6brSj2HzkpcPRkcIwGIB3ZNWiSi3cT36Bmj3yP1mKiwqI9DbkJqgACgweYbGpfTS6M204=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:13:34.83858-04	1	f	\N	0
+17	3	1_KNG17	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:13:34" folio="17" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="YEcc5XOmyr3ZBvoe+OMC8jaioo6Cq/21cMhqksLL2qUXM6jHOEE6USoDFHiZYc9iWNehxFQyGcNtf4K1AfZLEJrNmA+DA0xA6te7w6pqpdWrIC3kif1UXt478QgQlJW3mjEeFWsjvL8oc/mmtSDrp3QbOKnRHe9fB2quLQJYdM4=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="3" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-05-26" FechaInicialPago="2016-05-20" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-05-27" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="DBE3237E-37F3-4DC9-B274-B8589A8F60D3" FechaTimbrado="2016-08-30T10:13:39" noCertificadoSAT="00001000000301160463" selloCFD="YEcc5XOmyr3ZBvoe+OMC8jaioo6Cq/21cMhqksLL2qUXM6jHOEE6USoDFHiZYc9iWNehxFQyGcNtf4K1AfZLEJrNmA+DA0xA6te7w6pqpdWrIC3kif1UXt478QgQlJW3mjEeFWsjvL8oc/mmtSDrp3QbOKnRHe9fB2quLQJYdM4=" selloSAT="hCASyyWDDFhONrrvkHMZQGJAmPJoZlN7+OjTvDEm/kTSIX4Igd757ZdHvCq7ZqGdhkwhKcsAdo2eCj4/DE6GrSRErtuhUtaEtsC/Ag2uJPksFI28b7pLRgfgDPjBX1wEsputmw48v10GagVGYS5S6NPe08iqx+oLTZjVEmVeBdc=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:13:38.263799-04	1	f	\N	0
+18	3	1_KNG18	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:16:13" folio="18" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="P4KkEVN/pen5S6gQBYbnmTidvAYWarJtuKbLykjNNo29YlXokJ2N/zc0Ld8+Hoc5CC8va/Jth0fZdR4jPTz8AA7M6vxyfz/ye7lMffQ1sM07ol+0dRdagIq0MNiiFj0QDUsuotJlfPGsQpzyeTcSHLKuSlR/c9KpU3jWDHx55FM=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="9" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-06-02" FechaInicialPago="2016-05-27" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-06-02" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="E6E6A09E-5C1E-437A-965F-798CE9C5F8E7" FechaTimbrado="2016-08-30T10:16:18" noCertificadoSAT="00001000000301160463" selloCFD="P4KkEVN/pen5S6gQBYbnmTidvAYWarJtuKbLykjNNo29YlXokJ2N/zc0Ld8+Hoc5CC8va/Jth0fZdR4jPTz8AA7M6vxyfz/ye7lMffQ1sM07ol+0dRdagIq0MNiiFj0QDUsuotJlfPGsQpzyeTcSHLKuSlR/c9KpU3jWDHx55FM=" selloSAT="Amlv5+6Ep/+qGodeh14mQbLeiZKDMtUunCH9C8OGGbD8+E3VIcGItEs+FUCYGEoMxgskQ6+c/nruuzaDTEYRy7jAUkYsmOBl7OmJ3MkO4subIyI3v0v7i9nSVCVZFHJ8Yop71LxVPHYCt00x7q1aAvbMuC8kUc9vB2fs0F+EvwQ=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:16:17.377119-04	1	f	\N	0
+19	3	1_KNG19	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:16:17" folio="19" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="FIdigJSxVc60G8qU7ywZR71s1+q0hFggccy5zYyiul5wURSJ6HPMUSJ5elXi3E7vGWbqk3ELgHn5mTJ2xBHsPdf2P5+70XzRvld7142Kcc9h3SvyerElzhqKWqliPXW+ucZCes3gH3326rnRE3b1mFTaCtWgrrQ3tM5YK7daK3g=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="7" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-06-02" FechaInicialPago="2016-05-27" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-06-02" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="91214E9B-C0B4-40FB-91CF-443B44174287" FechaTimbrado="2016-08-30T10:16:22" noCertificadoSAT="00001000000301160463" selloCFD="FIdigJSxVc60G8qU7ywZR71s1+q0hFggccy5zYyiul5wURSJ6HPMUSJ5elXi3E7vGWbqk3ELgHn5mTJ2xBHsPdf2P5+70XzRvld7142Kcc9h3SvyerElzhqKWqliPXW+ucZCes3gH3326rnRE3b1mFTaCtWgrrQ3tM5YK7daK3g=" selloSAT="F69Marx6LtFufX4mqQgTEpYr4chQUpyZnPlxqj31UVDsL3Qm2JYcFhxN4vK+IPY/GAt5KEsvkdDd0XrWWvp3wrClg8IXETYCt2MXvyiDN+3Knqx+tb2kCDFzrK4X2ZTmM5hWl/dbT7HVTvTHr/v310GmCjHPoVyxVQyiaAQfo5k=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:16:20.721091-04	1	f	\N	0
+20	3	1_KNG20	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:16:20" folio="20" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="LwiPhcbt54Qrz5ZdI7moZtHFlbnqP+X2bGbrisUeczLQGGqgFbc3kaF5Wzt7/KwxOp0iu2dwmGN5dCIE1VqmB+PG/Nku728t4IhL6HVuz8Vrx0fX8AoQG6JCkE3AwpUT/slUg9+/DmsHjJO4skUmvzHAE3EZf7ZwKNR6WCStWUc=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="4" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-06-02" FechaInicialPago="2016-05-27" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-06-02" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="C6822828-41F8-49E4-9F21-9BF5AB2BC084" FechaTimbrado="2016-08-30T10:16:25" noCertificadoSAT="00001000000301160463" selloCFD="LwiPhcbt54Qrz5ZdI7moZtHFlbnqP+X2bGbrisUeczLQGGqgFbc3kaF5Wzt7/KwxOp0iu2dwmGN5dCIE1VqmB+PG/Nku728t4IhL6HVuz8Vrx0fX8AoQG6JCkE3AwpUT/slUg9+/DmsHjJO4skUmvzHAE3EZf7ZwKNR6WCStWUc=" selloSAT="ha68q7idFaf3GeMVJ3Kr8C2SfIitat0LS6nCcGPWVN9M1BBt/j+g7JBqqVmSMd6WSdlJ5UZIyueG5rfd7ztS/JPgYmNaAKCahP2qF9fmo+kWc0YDXFSvQixdvsMDxMnvhVLqtlUg+MbVRZvv9462q46Juni5IVYdfi3VWwrtt3M=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:16:24.200152-04	1	f	\N	0
+21	3	1_KNG21	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:24:18" folio="21" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="YfmwgMb7CjXFXYiEW4ia3YFK3QTYZD/Qfm3VGclvtTkKPZHp0NRge1kauJUXC5TOTlEwAL5LMe0ldtrXvcJ4trGFceqD0ws3y9IQjUmIxFGTyr/ftNCGlDwgnOC7dczEHJxFyDgWZXHztxv5OljZNx6Adps8KuTQQ9Ut3WvJuvk=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="10" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-06-09" FechaInicialPago="2016-06-03" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-06-10" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="28EA740C-2C71-4B0D-96A2-7FC068ECAA03" FechaTimbrado="2016-08-30T10:24:23" noCertificadoSAT="00001000000301160463" selloCFD="YfmwgMb7CjXFXYiEW4ia3YFK3QTYZD/Qfm3VGclvtTkKPZHp0NRge1kauJUXC5TOTlEwAL5LMe0ldtrXvcJ4trGFceqD0ws3y9IQjUmIxFGTyr/ftNCGlDwgnOC7dczEHJxFyDgWZXHztxv5OljZNx6Adps8KuTQQ9Ut3WvJuvk=" selloSAT="dCMgG1hX1/J0HiLsbkphIpDG8srr95DpHbN4jrW6WdHf1PE6Jo+0zk9ufjtw276qsSZmrrv0481hnU77yHq2TqP5Q4O9zBKSstex9kcNxgQmOAlVU8ghzdBWmiHVxqArghARdR65mbZq3Y9aFJN+iywkgXRQXUHAXXGQIlCFJ8Y=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:24:21.529839-04	1	f	\N	0
+22	3	1_KNG22	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:24:21" folio="22" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="D6RjcVWgbslMa7ddqDfhDprrUh9OxinMKvOTlLry08UY+sYk+gSkQSxZDv6SLTV6KXglDolG2QMlC5GPk7EfOG9bRBY9T5b4HqBn/uVT+O9H27AuEsqZoBZ3A+Fpyqp8hLuv9g3ORQz3Fu+Jdw3NrFJMcbJymELLDhJgWQyPVIo=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="8" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-06-09" FechaInicialPago="2016-06-03" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-06-10" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="ED2BD2ED-8FF4-4718-B274-3D8C9FD76BDE" FechaTimbrado="2016-08-30T10:24:26" noCertificadoSAT="00001000000301160463" selloCFD="D6RjcVWgbslMa7ddqDfhDprrUh9OxinMKvOTlLry08UY+sYk+gSkQSxZDv6SLTV6KXglDolG2QMlC5GPk7EfOG9bRBY9T5b4HqBn/uVT+O9H27AuEsqZoBZ3A+Fpyqp8hLuv9g3ORQz3Fu+Jdw3NrFJMcbJymELLDhJgWQyPVIo=" selloSAT="1pvF9I/UsFDT1rlCS+qFX7fgc7uId+i4w5eaFOfYSWEXw8AU+mSmcPERfwY4/8JwEPPXXzYSIrJECNGk35xvQMRMJULLHiAOGOT/ooOFXfHeAGRwllajUWjvLv4XxG7xUtojOBgDbCb6PTw7NfFoATLJhLmG8TpH5cXlhFCTFg0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:24:24.878002-04	1	f	\N	0
+23	3	1_KNG23	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:24:24" folio="23" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="TY0lYak9SbnaXskWPeiJsgeb9obyqi2kWppg7YIdanA+0TDMCLfevYmabWrmFaNdKBBxYDaiFlWkDfCg1dr+k8JsYFTuTpZsgGcTqzYY2yBUzciGBl6+MSWPNk6wTbe2+3LMvwHIkkJx/J1YiIBtRrCmORJYGFZNfFfj3gjV+sM=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="5" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-06-09" FechaInicialPago="2016-06-03" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-06-10" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="6E8C8E7A-DED2-433E-84E5-351398113DCE" FechaTimbrado="2016-08-30T10:24:29" noCertificadoSAT="00001000000301160463" selloCFD="TY0lYak9SbnaXskWPeiJsgeb9obyqi2kWppg7YIdanA+0TDMCLfevYmabWrmFaNdKBBxYDaiFlWkDfCg1dr+k8JsYFTuTpZsgGcTqzYY2yBUzciGBl6+MSWPNk6wTbe2+3LMvwHIkkJx/J1YiIBtRrCmORJYGFZNfFfj3gjV+sM=" selloSAT="K8DFpeBA9/1EEDWnPK3Zkl9Efb/JS5bPcmHg4L2kEo7BphL03XNIJRj6E+Wut9ja9eOj0wuoPbrNhNKT4GvidNZeGgPG31oIA24QlBIEwYTsbOxPznKRnrzp2dK8N6dy5zJfmg5MxhNslYFND0n3Bcu+6lju5iTqHUY9kjedVDw=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:24:28.071667-04	1	f	\N	0
+24	3	1_KNG24	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:29:07" folio="24" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="hZGBbEcKNYkn73s50/CM7o2xUTrk+StBvrDvNZA44ycmY7La9WC99y4tMkudev19+5NKdLX4czphgQs8vgeAJCGCwyXEKjaybqMO6eV8GzgozMrJmf4IhiWwnIzAZnabuNhQOnVUo0NZs+HpDbQI5imMz19BOp2Mt6NJXDLoBe8=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="11" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-06-16" FechaInicialPago="2016-06-10" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-06-17" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="51FA6AE8-6292-481E-8C65-AB547603EB02" FechaTimbrado="2016-08-30T10:29:12" noCertificadoSAT="00001000000301160463" selloCFD="hZGBbEcKNYkn73s50/CM7o2xUTrk+StBvrDvNZA44ycmY7La9WC99y4tMkudev19+5NKdLX4czphgQs8vgeAJCGCwyXEKjaybqMO6eV8GzgozMrJmf4IhiWwnIzAZnabuNhQOnVUo0NZs+HpDbQI5imMz19BOp2Mt6NJXDLoBe8=" selloSAT="kTcsP+bFzIsMdb7hhyN1kGXs7Soz9pKviTCkVosiy2Pg36m6uAh0IPcv8CrQ/Topw0ePMsf43wFmTB/5CJh4BQRHiKS0X8lNwKIT8XIGsqyuLW/6oB6wTM1F7kUrezyjwByfIzAaH9w17bwdGIXYwi+X2gAGDhVLVm6XLyektCs=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:29:11.167004-04	1	f	\N	0
+25	3	1_KNG25	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:29:11" folio="25" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Y9e5kOaOhJASsA7lFr14nEgl2WMYNIPrJJgLJ7iWcdJ/0C6C2WrArYr04VI5IXWmj3EPB1Msz5NCIvO+2FEAVrgJPYekoOruwTAqIvbmJDQK9b/NVGyPT6U6tdXH4HkspPi6XDgTmGL4XVW6KwbzivCZ1x1AyuwImq5ITM3AR1Q=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="9" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-06-16" FechaInicialPago="2016-06-10" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-06-17" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="5471FF72-8417-4881-B326-71036B18AD9F" FechaTimbrado="2016-08-30T10:29:16" noCertificadoSAT="00001000000301160463" selloCFD="Y9e5kOaOhJASsA7lFr14nEgl2WMYNIPrJJgLJ7iWcdJ/0C6C2WrArYr04VI5IXWmj3EPB1Msz5NCIvO+2FEAVrgJPYekoOruwTAqIvbmJDQK9b/NVGyPT6U6tdXH4HkspPi6XDgTmGL4XVW6KwbzivCZ1x1AyuwImq5ITM3AR1Q=" selloSAT="GE4s/H/GG+GKm3Xn/RKeAez+QiLuOnBsouvELHLq4dz4BczUvulfW2BFbVMkLfzaxfEZd7w3ISL1hPt38ZQqIgynqJUFQp6qQxzyiqy3AaKVuw6obqPPsgY499Tvi+lX0Z08wELUbb/Sm4LE1l9Sc1YOjfp5NJ0blM0q1PeVYm4=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:29:14.529499-04	1	f	\N	0
+26	3	1_KNG26	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:29:14" folio="26" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="NtHWJaE4bC5R7/DIOsPPwcsNEaB2CYqskSEUTq034zcdr9rSR68Sx6Lh6eeraCUSsthp9LtctyNZIq5rizrjy4sDPKVkBWgElEW/kR7hy6F4OahMocwgGyB1pYK1cflM7cXbXikoMF4M2YLzkdiQVDPedGD6V6uKGyIywK+7hWQ=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="6" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-06-16" FechaInicialPago="2016-06-10" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-06-17" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="B7C84FC3-A9AA-4704-A1FE-06C93887031D" FechaTimbrado="2016-08-30T10:29:19" noCertificadoSAT="00001000000301160463" selloCFD="NtHWJaE4bC5R7/DIOsPPwcsNEaB2CYqskSEUTq034zcdr9rSR68Sx6Lh6eeraCUSsthp9LtctyNZIq5rizrjy4sDPKVkBWgElEW/kR7hy6F4OahMocwgGyB1pYK1cflM7cXbXikoMF4M2YLzkdiQVDPedGD6V6uKGyIywK+7hWQ=" selloSAT="rLBRQnw4rWrCIvEEnPfOF0JqVCbD2lH//Jmn5Hvnwa8piBnbZDgfi1pfH9RFUQUoBz37rIDkWyH/eRahRpLqMNsoIuS6ZTalWrz0zYL962+HJ4DJW8YgN7h90SgNlcb3iZVWXiQ80/CZO6Jfk2DykWsIQEFldqfbe3XBlYETutM=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:29:17.992638-04	1	f	\N	0
+27	3	1_KNG27	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-30T10:33:46" folio="27" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="IlHN/z/AoRRpR1P47/4EPPYqjaxXTD+lkmDJzGAX1SOV6ddlnwnOEjvyWEqpYbZZ1mx0Mj//NMjvwN3CLObuj8qT1GOSUMeIO6u9ltR6qoJF1ymBJAjSoPxotqK7d+dokikSUtOtCCAs4RW1WlSnV6w1Ehewl6ACrk18yMy9sAc=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="12" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-06-23" FechaInicialPago="2016-06-17" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-06-24" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="6DF574C3-FA97-43D9-BBB2-DCCFE64FAD8C" FechaTimbrado="2016-08-30T10:33:51" noCertificadoSAT="00001000000301160463" selloCFD="IlHN/z/AoRRpR1P47/4EPPYqjaxXTD+lkmDJzGAX1SOV6ddlnwnOEjvyWEqpYbZZ1mx0Mj//NMjvwN3CLObuj8qT1GOSUMeIO6u9ltR6qoJF1ymBJAjSoPxotqK7d+dokikSUtOtCCAs4RW1WlSnV6w1Ehewl6ACrk18yMy9sAc=" selloSAT="NKJw/w2of2j0fXllSS5X5qjU0sDTP8azoujTGVVX2jfmIOHbvLBmdz48ZPtIJdMQcLZ/U+zW/AOlJes9bkmKhb0S7T0kfMQZhsbTxkq6HASbsnZSuTjJMdCREptSUeI11FqqK6yqkgbJKw68xXwHTx5rRb898AHMEcBQM/xGgtY=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-30 10:33:49.836724-04	1	f	\N	0
+28	3	1_KNG28	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T12:36:38" folio="28" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="QwtHzqXHl2ZjVl89AE1MiDTCZlH2YtZsOC8FNtlAAoZxkTdNHNVAQTjp5XhJ5dafEwXGuYK9E0Lkk/4TpmFpWxry6uk0f3SI1nmeFldTEWhVI8BFr5g4hkDWGu5gPYTKHYNMAZZkBf2MO4r2TY8dRMmZTCLxq3HJ5NhfYGBghSo=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="10" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-06-23" FechaInicialPago="2016-06-17" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-06-24" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="8EB426D6-A75C-411C-979F-8AD29190FA96" FechaTimbrado="2016-08-31T12:36:43" noCertificadoSAT="00001000000301160463" selloCFD="QwtHzqXHl2ZjVl89AE1MiDTCZlH2YtZsOC8FNtlAAoZxkTdNHNVAQTjp5XhJ5dafEwXGuYK9E0Lkk/4TpmFpWxry6uk0f3SI1nmeFldTEWhVI8BFr5g4hkDWGu5gPYTKHYNMAZZkBf2MO4r2TY8dRMmZTCLxq3HJ5NhfYGBghSo=" selloSAT="Ze6Qdxe7cA4LWHzjM+SlJVyIYzX0nRv8iVSwz6lPuFWT4FrU2A7jrf+Ob8lFHeP1rkaX/XSg8ztLlgXxzoKeTQkmYvDH8x7/GT8vLo15Z/QUPlE4apqa8CID0Ov6zXBpbOjt0TVrbQ4r/loMHui9URJHSuze++iLaJIK4EFNcLI=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 12:36:42.531135-04	1	f	\N	0
+29	3	1_KNG29	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T12:36:42" folio="29" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="S1L9cdUBJsLTN+qjB81luxuqKmBfw7qlfvaZ1mvAsavKqgbYhUaBHDA3SaEnmB0t81n0elT7bnEcWZ5otXjpj3iQLqIwNzg2kWx62I9gt6Ii2L9wO6iNKFw5dvDyMy6DDfeTkbUmWZ+CytaB5FlUONfTQLfdydJ6rwT+H/lb5YA=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="7" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-06-23" FechaInicialPago="2016-06-17" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-06-24" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="51B1A3DA-95C5-4797-A0E6-2DABDDB31896" FechaTimbrado="2016-08-31T12:36:47" noCertificadoSAT="00001000000301160463" selloCFD="S1L9cdUBJsLTN+qjB81luxuqKmBfw7qlfvaZ1mvAsavKqgbYhUaBHDA3SaEnmB0t81n0elT7bnEcWZ5otXjpj3iQLqIwNzg2kWx62I9gt6Ii2L9wO6iNKFw5dvDyMy6DDfeTkbUmWZ+CytaB5FlUONfTQLfdydJ6rwT+H/lb5YA=" selloSAT="AZnedTd7sn8XwvkY5vQbRAGhbUAiQu4vyC5p0mUVQ1qfTCWiBTxFdC4OzoW0Z865nLJjUUguxQ6gGykZfIWQT0b2BhiJ24fZgRsfWiplanYdZWb6ZzLjd7SPOH+aaehwmCiorP04Sh5l8f0um7uHAmhW42t0blLDwzOdR8aLg+M=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 12:36:45.871555-04	1	f	\N	0
+30	3	1_KNG30	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T12:36:45" folio="30" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Zw0srbH29lulkCXKLBWr81zH6e/Gj/Z0gdQWUnhvh3dJX7dB1kcl59s0WsZUEg9tvTkCbJXsjgQ4VJlspLG0bxF4qvetjGeSHja0Z89l7BKZIpxABC3IMlHk5WBjhpMbi6QIZ7Xno3njS1qfVNdZY8LatR0LZIcd3D8GYR35BZU=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="1" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-06-23" FechaInicialPago="2016-06-17" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-06-24" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="547399CE-05D4-4A10-A599-3FDCB423DA16" FechaTimbrado="2016-08-31T12:36:50" noCertificadoSAT="00001000000301160463" selloCFD="Zw0srbH29lulkCXKLBWr81zH6e/Gj/Z0gdQWUnhvh3dJX7dB1kcl59s0WsZUEg9tvTkCbJXsjgQ4VJlspLG0bxF4qvetjGeSHja0Z89l7BKZIpxABC3IMlHk5WBjhpMbi6QIZ7Xno3njS1qfVNdZY8LatR0LZIcd3D8GYR35BZU=" selloSAT="AlACDULXpsbeIcRov6QezU7ZM5AuYDBDcHLv076peczY2HbqB0+3x7BQovke7M2TKT3BTFxjP9viYBvwLvw7kAxozFFEYDiZLdiC9wEFeeJFbpX1G6vnXnf/8YrB9nuW/OUjgEpTGbAhiSAlfzIVKQ9ihC6cJat9FYs+8SO/lxI=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 12:36:49.193942-04	1	f	\N	0
+31	3	1_KNG31	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T12:58:06" folio="31" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="VjfU8rIk/nL8pwfcufTalCIuLIYeVsTQW1JJOzl7Q4sc+k3QBMdaPAqlm2pxbaiXayjrlc9iQciFmqF0IXMicbMDhxVfsXM9LhzOAlebJjr2Lm7acwXFdl3FKiYnKjpEX80WsKzJZLHoti8Vc34OtazAv6maLC9z6MyiJ9o50bA=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="13" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-06-30" FechaInicialPago="2016-06-24" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-07-01" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="BC889D17-512A-408A-93D6-D53752B1A879" FechaTimbrado="2016-08-31T12:58:11" noCertificadoSAT="00001000000301160463" selloCFD="VjfU8rIk/nL8pwfcufTalCIuLIYeVsTQW1JJOzl7Q4sc+k3QBMdaPAqlm2pxbaiXayjrlc9iQciFmqF0IXMicbMDhxVfsXM9LhzOAlebJjr2Lm7acwXFdl3FKiYnKjpEX80WsKzJZLHoti8Vc34OtazAv6maLC9z6MyiJ9o50bA=" selloSAT="iyNd/tjdL3LsU0Vhh51ro9dkz07gG59DAxhaA0y+TyV9e2U8APJKPohg1ONvt0qVbANXDHoZawlEm5KZxcCmbnr49Cb9DdrwrUeQNwMhrc7j6J7BMhL91uK7RvqdCwYoo2N5qJ4kWoBHi+86lH8gBLE2UOo+COk2TZ7s59t2OgU=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 12:58:11.092053-04	1	f	\N	0
+32	3	1_KNG32	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T12:58:11" folio="32" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Coec/eOKW9DCwqFpHJV3OCeSzzM8wcdsBuWvsrY3AvRhrYL4twtg7KfHnq0FsJleyeuP8WiFyNWO8zuG2uFuNYPb2OakvGMJHsUwEXqpuGRuIrwNQdIKHHzIkpnwQtHAhOhzr0KqMopfAwUbqbk775jQ/wtJ5GGN6ppv9cA9P28=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="11" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-06-30" FechaInicialPago="2016-06-24" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-07-01" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="896BE7F3-BC31-4C25-AA06-EB1245BBAA22" FechaTimbrado="2016-08-31T12:58:16" noCertificadoSAT="00001000000301160463" selloCFD="Coec/eOKW9DCwqFpHJV3OCeSzzM8wcdsBuWvsrY3AvRhrYL4twtg7KfHnq0FsJleyeuP8WiFyNWO8zuG2uFuNYPb2OakvGMJHsUwEXqpuGRuIrwNQdIKHHzIkpnwQtHAhOhzr0KqMopfAwUbqbk775jQ/wtJ5GGN6ppv9cA9P28=" selloSAT="DvJ6+Q4rbj4/DK7K6IGMCP5uo8p5RGBvgcIBktSdPz08Of2k7QEyuo/vc0xKQ7prz2+DVXYPEwIrAkkj7TtC9htkUAUkKRF9Ozqpp7z648rRt6VW3mcKoiBx+GrltfQqY22XgS5Ut3L4uC1yH5bhj2Px/GR+El0kmygHO4d8d+A=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 12:58:15.580274-04	1	f	\N	0
+33	3	1_KNG33	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T12:58:15" folio="33" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="WP/Og/ABKFObXXtchX6ifLpS53G7USb/clPPzPNanQ+v8Ag6z4BuiQh4/WS8PGF2HRKGlkDzyG4NrxUSd+l/4YuCWb4fWEUY4DkOu1lWdfEwgLuHDHCIYbNLhfu1leisiowxmjVEbZCyVex7v6aTNiylwEJbKBiG/iHOuss0PvY=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="8" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-06-30" FechaInicialPago="2016-06-24" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-07-01" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="666DD228-F593-484C-BB59-6F58A1465473" FechaTimbrado="2016-08-31T12:58:20" noCertificadoSAT="00001000000301160463" selloCFD="WP/Og/ABKFObXXtchX6ifLpS53G7USb/clPPzPNanQ+v8Ag6z4BuiQh4/WS8PGF2HRKGlkDzyG4NrxUSd+l/4YuCWb4fWEUY4DkOu1lWdfEwgLuHDHCIYbNLhfu1leisiowxmjVEbZCyVex7v6aTNiylwEJbKBiG/iHOuss0PvY=" selloSAT="aTDTIiETBz0iYMX1jZHL8v4kPRMqG/59gzt/GCjuHdnE3I1U1qvMMNC/SIYqFx+s85pm7y4g7Vb/1ItMxoyZyAIpPLPZJ3MwCWzMfuW6Wdj+Aa4PJYyDgn+tURVqIEx+Ex2TeLaGFKEaRwTdJOSIntJ5zbKkrEGGGZOg2+VA/3I=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 12:58:19.194924-04	1	f	\N	0
+34	3	1_KNG34	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T12:58:19" folio="34" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="BJ33gPNpbJz+COoMC1rXVR5chVu8cfR7TdCZe+uGHYEBMM3X6cgY08r3+lCKTyRaHxnodDX2MsdH0Tp7erWMca3KvYmvcdXjx8yF4Wi8xuOVVuQXTKjcytyQlkI1vPqRBOPEXTCr/v6+MWyc0SlvrjiyeDJmdE2bG8Z1HOSE70s=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="2" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-06-30" FechaInicialPago="2016-06-24" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-07-01" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="C59F8668-82D8-497D-A5F0-D12964073B45" FechaTimbrado="2016-08-31T12:58:24" noCertificadoSAT="00001000000301160463" selloCFD="BJ33gPNpbJz+COoMC1rXVR5chVu8cfR7TdCZe+uGHYEBMM3X6cgY08r3+lCKTyRaHxnodDX2MsdH0Tp7erWMca3KvYmvcdXjx8yF4Wi8xuOVVuQXTKjcytyQlkI1vPqRBOPEXTCr/v6+MWyc0SlvrjiyeDJmdE2bG8Z1HOSE70s=" selloSAT="xwrsXhSdAo3XlHrr553F1WsHooydVjC+ZNA2IXOejHVeXIUxVf9fIi16GhciYULPH+APsr7WoPcEt8O4Eiy51wGTsROoHMdBZSi6ZIs/ZEqB1qQ0KFZKpd7ELYzRvRtzwfCI3GlIAHqnOO3jUmzk+cMOpUKkx3YvL6ACfPr261M=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 12:58:22.528935-04	1	f	\N	0
+35	3	1_KNG35	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:03:31" folio="35" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="ZB0+pucJ8jj/HqNdCVXu7lehkxnuRgdugybZZKa4dm4/EaHJ9DFGfVhZSG6xQw813hZJwqV5YM4cT6rV7MBXcCOOKtue/y87lhe3rNNd/FDX5lDfL8B0oWXUmN72iPMFdy1C81tqpKo++cHzlCjJ2oHGKWvZdVluQ/g08myt/U8=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="14" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-07-07" FechaInicialPago="2016-07-01" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-07-08" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="ACF5D9E2-991B-43A8-8A3D-0E5CA36993C4" FechaTimbrado="2016-08-31T13:03:36" noCertificadoSAT="00001000000301160463" selloCFD="ZB0+pucJ8jj/HqNdCVXu7lehkxnuRgdugybZZKa4dm4/EaHJ9DFGfVhZSG6xQw813hZJwqV5YM4cT6rV7MBXcCOOKtue/y87lhe3rNNd/FDX5lDfL8B0oWXUmN72iPMFdy1C81tqpKo++cHzlCjJ2oHGKWvZdVluQ/g08myt/U8=" selloSAT="gUOEG10/aiCpcoVPipm7pRLDNQl+QAYFY0/pvVsLyiKJAL0oFXwFVM6cZmS1WnhEyz5spVNOQ9T5NFixoqC1VFtAd57+6oO2+OySdtC8z3Z8a4sNHOe2kC1Bgfkw7clewsDv/ZZb0lDOZ6pX1u9H2QxRXiALX9dKv5l4y2Kt0RA=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:03:34.825989-04	1	f	\N	0
+36	3	1_KNG36	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:03:34" folio="36" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="DvK/QyFEc8vOSQq81ZHoX57+IJpSkL7mQ3yy62Bn74fpQn05tZxHBsB3Pwt+YsWP0TWH1NiQjCDRggr/7Z/EBn8MMXf84LVh/KAy9kBBfmzM+EpfoQ73nS/3Bq9rC98ZCgKOpt/L/n+kEUYTZyouG3DqGuoNEVVdjt45VS78YAA=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="12" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-07-07" FechaInicialPago="2016-07-01" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-07-08" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="A975D945-A6E7-46BC-9685-1C95690AC9CE" FechaTimbrado="2016-08-31T13:03:39" noCertificadoSAT="00001000000301160463" selloCFD="DvK/QyFEc8vOSQq81ZHoX57+IJpSkL7mQ3yy62Bn74fpQn05tZxHBsB3Pwt+YsWP0TWH1NiQjCDRggr/7Z/EBn8MMXf84LVh/KAy9kBBfmzM+EpfoQ73nS/3Bq9rC98ZCgKOpt/L/n+kEUYTZyouG3DqGuoNEVVdjt45VS78YAA=" selloSAT="PNKa+8PSfWPWfbIHmFFU+DhhaZ5dJHluWCs2ioO1C9nmTs994WZ6B0oAQh1BBo/0QyZSUBy1iYQTYD2plBvnVo3QypU/k2JHH/n9LQbf5OS0pE0priTL7h1sw0LM2fU1wvQlj5HQABzlA2nhesqhNsCkPjR8WVWnLNJK7ZvCOHE=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:03:38.168535-04	1	f	\N	0
+37	3	1_KNG37	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:03:38" folio="37" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="PJspMAz4cFkYQ9O7Kgbk6DZRmo7xpQgKIZojjLkUnSkGCqfZnH338Y7Ra10luMvoVc+h90yFxGqtWXgxA/tEYjZockF5CA5YUG/eI9HzOPkmVyREzq3mkes85FmXXBPUtcGmoQRVi2nKUGSXsH7kljIZu7RleVYpIIL/PzeWb7o=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="9" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-07-07" FechaInicialPago="2016-07-01" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-07-08" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="07BC86AE-F49F-40C0-893B-884431C4ABCA" FechaTimbrado="2016-08-31T13:03:43" noCertificadoSAT="00001000000301160463" selloCFD="PJspMAz4cFkYQ9O7Kgbk6DZRmo7xpQgKIZojjLkUnSkGCqfZnH338Y7Ra10luMvoVc+h90yFxGqtWXgxA/tEYjZockF5CA5YUG/eI9HzOPkmVyREzq3mkes85FmXXBPUtcGmoQRVi2nKUGSXsH7kljIZu7RleVYpIIL/PzeWb7o=" selloSAT="TN32kXbcMmBGaIGvRdarJA1JrPSCa2C1182PnYVmBuUNb72kPvqcOW5k6xz0bqULRwtCPiZKUYhGbhqREyLc4q4SBpi4QbHV5Vdh+eeVwUim6g979Eg6diQZjcY/zdqM7XmSNN7lM89uw5FviUhYYEMD2PeN7xMek+qhUO1vdx4=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:03:41.880477-04	1	f	\N	0
+38	3	1_KNG38	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:03:41" folio="38" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="EEBjKYiSJL9aHYgPYlNGrcLM1XZl5iCUJKkh/ydJGcYe5e0O0kWHneIUJpbdAhzVWI+kufvc++V4TEkS5w75zJNZu3wb0jNoSnCJmNA8BEPQOSO6ImtP2ugLfUn3b4e0UwIG8030Ln+kgx9iIyvq5KnXkIqcnjIjzwYTSst8Cmo=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="3" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-07-07" FechaInicialPago="2016-07-01" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-07-08" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="F6819C63-DDA0-40FB-9B0C-8C16EBDDD83B" FechaTimbrado="2016-08-31T13:03:46" noCertificadoSAT="00001000000301160463" selloCFD="EEBjKYiSJL9aHYgPYlNGrcLM1XZl5iCUJKkh/ydJGcYe5e0O0kWHneIUJpbdAhzVWI+kufvc++V4TEkS5w75zJNZu3wb0jNoSnCJmNA8BEPQOSO6ImtP2ugLfUn3b4e0UwIG8030Ln+kgx9iIyvq5KnXkIqcnjIjzwYTSst8Cmo=" selloSAT="Ep6MMrpLZno+b2O0KZW4F6szUm6ZjSI8guYX7YrPBJyyIeV4Wz7+HHKdaL5NoqWzv9SCYX5fG/gYNTcQxwhqKw00EZvKFm+G/pJ3/NadFft7gK0K37Mn3IFHV2bvHMe7P1XEcbD4qflS8dB5je0zst1adr0U7CAMiDbzC6rTGu8=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:03:46.615891-04	1	f	\N	0
+39	3	1_KNG39	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:09:51" folio="39" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="KXeM+P5G8c2306E4GyZgeKTI3H1CNqXWecyPY+a57nR8Lf0jgtcmRpRfQS8gONUX91pbz3U6b/tamSMa1Xs/fDxGybuL+rZB+FoM5la9DEV5dKFrTWuXtKYh+AAAmmOcHLS6wzmrIZSKUa3Yu2v76HA2/uodJGBpFEGQMjWOhL8=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="15" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-07-14" FechaInicialPago="2016-07-08" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-07-15" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="9B985884-E42D-4B58-8B6C-8D93ED112CCC" FechaTimbrado="2016-08-31T13:09:56" noCertificadoSAT="00001000000301160463" selloCFD="KXeM+P5G8c2306E4GyZgeKTI3H1CNqXWecyPY+a57nR8Lf0jgtcmRpRfQS8gONUX91pbz3U6b/tamSMa1Xs/fDxGybuL+rZB+FoM5la9DEV5dKFrTWuXtKYh+AAAmmOcHLS6wzmrIZSKUa3Yu2v76HA2/uodJGBpFEGQMjWOhL8=" selloSAT="X8Br+kL0e2fa53rOlT7LaGd+JC7tDfQjz9KcT8KI7fuKP0mRwLIChIBqLXMomjgvPw9Or4c8CEoUmwTg29iCmXMooqIXL+wQIoXcqkz4ssEnUY7gL7t4LDp9tCVOQRgWbzXtuYP3c/5OkusckjbIW3VmxhtGGlxvJbxTY8ioSxo=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:09:56.594075-04	1	f	\N	0
+40	3	1_KNG40	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:09:56" folio="40" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Sxst+js2uNBekhjLfihjgkDhhBHUogCj5tldifefhQBRxoJvkqPW7SMPFsT+1BvEMIUz0M38jCx4F8/zg1oCgc2uNPDgvNElGpA6ijO82BJAC7BSGWzT9+yT5yuPjkiaVx9BiaQA+l20JYUrZ94X2fnSITo1GxLNptLdFislUUI=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="13" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-07-14" FechaInicialPago="2016-07-08" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-07-15" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="8FA9C588-0734-41E1-BFAD-00478E1A3BF0" FechaTimbrado="2016-08-31T13:10:01" noCertificadoSAT="00001000000301160463" selloCFD="Sxst+js2uNBekhjLfihjgkDhhBHUogCj5tldifefhQBRxoJvkqPW7SMPFsT+1BvEMIUz0M38jCx4F8/zg1oCgc2uNPDgvNElGpA6ijO82BJAC7BSGWzT9+yT5yuPjkiaVx9BiaQA+l20JYUrZ94X2fnSITo1GxLNptLdFislUUI=" selloSAT="CIC6tu13nQ5zZ/7vuCuuocgw4mGU6KnKbJ54ss6McmaP2fbS+vmFCFcUQNrkm5hvJtbsR8A2fsoMu49bChxpk6r4/ZxelLpQQ+tNOPeONKxKbZChaxjhCkemq0wYjKu7FjS6uq5OduEShu6nBxipB3jpSZYnUWR6woazEKOJPss=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:09:59.90728-04	1	f	\N	0
+41	3	1_KNG41	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:09:59" folio="41" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="S1h5lxmnbJoo7AzjpZAFNkR2zMctRl9aWt44ZAd1Yo5oxrqACXrF+/yq/PAaKNnXHAn/u943n1miJ/xt9AD3mY0CgA3Lxz80aw1dneHKu1fXhqW3HytJyq92/7JX2ZlXyhVIeHOvUwtmP4PUFF+9IvxBQ9lyrdPwGVQ9NHf7ONk=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="10" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-07-14" FechaInicialPago="2016-07-08" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-07-15" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="6250A117-885F-4D26-887F-3F41B7C50592" FechaTimbrado="2016-08-31T13:10:04" noCertificadoSAT="00001000000301160463" selloCFD="S1h5lxmnbJoo7AzjpZAFNkR2zMctRl9aWt44ZAd1Yo5oxrqACXrF+/yq/PAaKNnXHAn/u943n1miJ/xt9AD3mY0CgA3Lxz80aw1dneHKu1fXhqW3HytJyq92/7JX2ZlXyhVIeHOvUwtmP4PUFF+9IvxBQ9lyrdPwGVQ9NHf7ONk=" selloSAT="RSGwAC4aSpz7X1GhpiuvyEJvzih/F8Ii6Vz4IQ/V6Tb7DZ7lbooW7GXr7FwGaVcOZPnL9YNX+Ukmztk97oNJj/+3gKqHaaAMhFG/QvEziWrd6P5vcFAsbaP2Gu5m3DZDXSIZPLpcLnsWIRvABhHNjsShyJv8ufFwbIPFJDg5m/A=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:10:03.241623-04	1	f	\N	0
+42	3	1_KNG42	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:10:03" folio="42" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Vo6foM4dImipxCojSreDpFeW52siPUmVudVY++I2wJiY9OOVt+07+n6pSrCnxlJy+JrcIP6NA3ygxrVzFLymd7DyppOeY1qSqgToHxKL9dDLB483ro+tXCg+eGdKzv8iRtPx060fdiRXyq1f4HKggBzMdFXpISiHdclB7u2u2PI=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="4" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-07-14" FechaInicialPago="2016-07-08" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-07-15" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="5034B5A8-C57C-4CC5-9824-738ED9412EF4" FechaTimbrado="2016-08-31T13:10:08" noCertificadoSAT="00001000000301160463" selloCFD="Vo6foM4dImipxCojSreDpFeW52siPUmVudVY++I2wJiY9OOVt+07+n6pSrCnxlJy+JrcIP6NA3ygxrVzFLymd7DyppOeY1qSqgToHxKL9dDLB483ro+tXCg+eGdKzv8iRtPx060fdiRXyq1f4HKggBzMdFXpISiHdclB7u2u2PI=" selloSAT="avGKNu2kYz1Nt12V4zgDjOUITWl7Tfx0CdbRzu2jP+ZyTXRy4VOXfwPZ7d0C8IYTjeRRZErfPj4v2i2oIuUfcn0K+ftDLyWVMGmfEgDrvBVwb0vOk1LsM5QUUUGO+DoqZD8Fv3MgSDGVCexEjiWQE5LQXIGnIwYF0nSIvc0tbg0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:10:06.839931-04	1	f	\N	0
+43	3	1_KNG43	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:13:51" folio="43" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="BMsXWOFoInu+cZLNL/q1KPbxXVZN+WJNxWJn8DY6uVLteSHFSBDgie95o+YFbk7Zh1r3ZR2RJKn8oSdHmGBomfEa+/ZMPqw/eew62vCnmhlolqCVQjFQj7jG5rRL5tTxJAr3wA/oII2t+A6JzY2xPxiBlBOACNZ1y2PJbIz8qzQ=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="16" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-07-21" FechaInicialPago="2016-07-15" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-07-22" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="CCDF73F2-A601-463C-AE99-41A12819FB14" FechaTimbrado="2016-08-31T13:13:56" noCertificadoSAT="00001000000301160463" selloCFD="BMsXWOFoInu+cZLNL/q1KPbxXVZN+WJNxWJn8DY6uVLteSHFSBDgie95o+YFbk7Zh1r3ZR2RJKn8oSdHmGBomfEa+/ZMPqw/eew62vCnmhlolqCVQjFQj7jG5rRL5tTxJAr3wA/oII2t+A6JzY2xPxiBlBOACNZ1y2PJbIz8qzQ=" selloSAT="0nfZdhkXU3jBE3XP31a5RwFwWWDn6+CkGz/80FGdcSXqwEnj6csqKhoVrG2JMnV69StSU11M0tAsTmMYhgQTgVvI6qs/FUt/iv1cN+aj0CuPX1Bme7Tk3fC1uOxTScgqOi00dmvQoSHVNq241mI8QNaoxaTl3RyphGHawjfAwk8=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:13:54.492817-04	1	f	\N	0
+44	3	1_KNG44	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:13:54" folio="44" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="CgIUqL/f1KWtlKcEAeAzgql8qVDUCYW/NbaZ6lnlbWGBwhzatq/+M39rkQSSYAoFqpkfyvfe8q+qSXVOCGEvd2Z0vK063wmjSqtWs9yuB8IsYQ6+o/I9zhdytBpi42bt4B2g3AMMLdgTPZsjiBbE3oF8gqpF4EJvd5tU0B1IK5U=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="14" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-07-21" FechaInicialPago="2016-07-15" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-07-22" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="81960F24-84FE-42AF-BD5B-9A50089F67CE" FechaTimbrado="2016-08-31T13:13:59" noCertificadoSAT="00001000000301160463" selloCFD="CgIUqL/f1KWtlKcEAeAzgql8qVDUCYW/NbaZ6lnlbWGBwhzatq/+M39rkQSSYAoFqpkfyvfe8q+qSXVOCGEvd2Z0vK063wmjSqtWs9yuB8IsYQ6+o/I9zhdytBpi42bt4B2g3AMMLdgTPZsjiBbE3oF8gqpF4EJvd5tU0B1IK5U=" selloSAT="lwbvVQdL+FZQSXOzBiSDpaIn0dpKWnVe7Q02mqrbfWoE4aZmLrXv5jOEWSodN4+rJu80PvlcX55NP3EkHL0FG+JCs1NaqAMRD2+Fnl2D4BEMbxCm1ahwFq4E/w2U3Ao1xKjK4ftdRNoKhRbP++XfKmbdjhy7trl+fPCaZBDMKls=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:13:59.003078-04	1	f	\N	0
+45	3	1_KNG45	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:13:59" folio="45" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="NhwV0iECuPkARi/m89TeEDqJueopgq03kMW6jvBYuSsxk+vP1GPiAUCJZDI5biaRPWGG+91nONaXQeb1AWpTosdgnAPFfu9tXdlb98CVUAPMlAob5RKwghvYO5ZsDEXzO08gs1QRr7l5tU24WcuEScaY2jxU2ztNCZxqv+Pocnc=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="11" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-07-21" FechaInicialPago="2016-07-15" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-07-22" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="4182BFED-E685-440D-AAA2-178923BECDE5" FechaTimbrado="2016-08-31T13:14:04" noCertificadoSAT="00001000000301160463" selloCFD="NhwV0iECuPkARi/m89TeEDqJueopgq03kMW6jvBYuSsxk+vP1GPiAUCJZDI5biaRPWGG+91nONaXQeb1AWpTosdgnAPFfu9tXdlb98CVUAPMlAob5RKwghvYO5ZsDEXzO08gs1QRr7l5tU24WcuEScaY2jxU2ztNCZxqv+Pocnc=" selloSAT="gF7szuq1lxnOWi+voNqlSk/v+EYn96lmu4FbHB86/y0ZsUfCK9LUD6ek8PMTFBr/CBK7do5AlctVTecYsYAvTYbk+Oe9YwLOFRlIgkGPoMzoB12V1AKNEEygDZoMHJKinGjCTAzFaoBgW8Cdcsdj4ABc3PRKfqErZvOspkoIRek=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:14:02.481454-04	1	f	\N	0
+46	3	1_KNG46	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:14:02" folio="46" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="KJN74thtvAUHv9v1sTs3NaXRUYKXrmIEDdDODfNm1cSuCT+Cj8C9hbAbsy855x3KK38TbUXoJOwa0NqUa0v00DggVX/O3zhgDRVFPOj83S0VtqUupB6sgjtwrR+NE2HJ1ieaZCtGLYwqR3IAendqLJByVeHQirDJorr6Suuo6ss=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="5" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-07-21" FechaInicialPago="2016-07-15" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-07-22" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="9206DA68-A665-4BF5-910A-7BCBE2CC6FE5" FechaTimbrado="2016-08-31T13:14:07" noCertificadoSAT="00001000000301160463" selloCFD="KJN74thtvAUHv9v1sTs3NaXRUYKXrmIEDdDODfNm1cSuCT+Cj8C9hbAbsy855x3KK38TbUXoJOwa0NqUa0v00DggVX/O3zhgDRVFPOj83S0VtqUupB6sgjtwrR+NE2HJ1ieaZCtGLYwqR3IAendqLJByVeHQirDJorr6Suuo6ss=" selloSAT="3ras9B7CvXsqCVCWvPeiHf1VizKV3owd2uOWnV/Kf+Zf6VjSA562iPDh49KvxAE50FNhwwis6LqVQHjxWIgkqizo7NajsbsfSSQBoH2c7vG3OHjl0tktIVOF3h9ASRQFpYOnbFW58GYmOQE8fODVJg6Vf3QpshC0yH+E6BUbdV0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:14:06.985535-04	1	f	\N	0
+47	3	1_KNG47	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:18:51" folio="47" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="GH97CchoV8TEDOOuj1L3J0V083exj2cFmZnTFh0uRpqAhY077Qoe7C+sYNK/aNjd8piCt+0zVXd4oU3w2Ei69iRf/K8hsfKvfDQVXQ9tiO97HWayBncz+EkyZOT39jykRIB+y1z01iUt55lPE6XA1MS2+VP/M8Opeh7J92kBC5c=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="17" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-07-28" FechaInicialPago="2016-07-22" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-07-29" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="18A1DE3B-2946-4E81-914F-630F12332A52" FechaTimbrado="2016-08-31T13:18:56" noCertificadoSAT="00001000000301160463" selloCFD="GH97CchoV8TEDOOuj1L3J0V083exj2cFmZnTFh0uRpqAhY077Qoe7C+sYNK/aNjd8piCt+0zVXd4oU3w2Ei69iRf/K8hsfKvfDQVXQ9tiO97HWayBncz+EkyZOT39jykRIB+y1z01iUt55lPE6XA1MS2+VP/M8Opeh7J92kBC5c=" selloSAT="2Mr4gmI1m0M/bUPaeSmg0gTqbVbIevVyuzcrU4E/+8sRcZ7PVbdr7sf/SH95fIDaLLKrVZuLl4Z84YoV0aabkpgwXaoOEFU21Iym6SOWX20OFrgx6F3M85uwauHKWHaiXeLGPZ1h0RnFjSL3I62bsKI1YnJiArk1fk6uLKnTyzg=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:18:55.461522-04	1	f	\N	0
+48	3	1_KNG48	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:18:55" folio="48" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="K5d+stnU17t8JG233pXVz0YphrQcgmK064s78xdisRq5gKAgrdpcoBNAOT173otVeKm0YW0IC8AcfvWtgj5/0u1VJ/cn4wiJmbZGEo1Y9nRmy3ZDjs6tLuAXrRRg1uUjFd04xxZWpwK5WvVacyaxHn4KgACWEok/faRwv0iUsYY=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="15" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-07-28" FechaInicialPago="2016-07-22" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-07-29" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="DA5EBA57-4CEC-4ADB-B417-4EB4A0AC4A00" FechaTimbrado="2016-08-31T13:19:00" noCertificadoSAT="00001000000301160463" selloCFD="K5d+stnU17t8JG233pXVz0YphrQcgmK064s78xdisRq5gKAgrdpcoBNAOT173otVeKm0YW0IC8AcfvWtgj5/0u1VJ/cn4wiJmbZGEo1Y9nRmy3ZDjs6tLuAXrRRg1uUjFd04xxZWpwK5WvVacyaxHn4KgACWEok/faRwv0iUsYY=" selloSAT="yJydRklndj2F4baQQgImIwZeQNmP5Wnyy49zzBHPyxmRWyb4xW3bPQSJAxxtF1FJV+S+R0mQ59Q5xjV8cUghZEbg7doJ4iE9S7VXf++yhA2+g+IXjoyf/cAHaSZlM9FwK4nK9R6nhk2peXKekieZUb08YkR/ZAl0DxL3Oy9ahIo=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:18:58.953081-04	1	f	\N	0
+49	3	1_KNG49	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:18:58" folio="49" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Ddh/F71zZO/7xEg0ukALaKJK9bXytbbFMMa5I2x7rF0UF+aje096jmqXSUlW4DU5fzvSt2DBNKJsOArKkLtMnwv9EE1nFIRHh2Tiuy8OAwd+LsPqdo+PbnGxpEiritlZyN/Rv5wZoGIkdwFyMjZlXERJBoUIMVi4ne7htdD5V1Q=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JOSE LUIS TAMEZ TAMEZ" rfc="TATL820816766"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="1" CURP="TATL820816HNLMMS07" Departamento="VENTAS" FechaFinalPago="2016-07-28" FechaInicialPago="2016-07-22" FechaInicioRelLaboral="2016-07-19" FechaPago="2016-07-29" NumDiasPagados="7" NumEmpleado="3" NumSeguridadSocial="43038202081" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="B754B7C4-B9E9-422C-8C02-CEC403B0F64A" FechaTimbrado="2016-08-31T13:19:03" noCertificadoSAT="00001000000301160463" selloCFD="Ddh/F71zZO/7xEg0ukALaKJK9bXytbbFMMa5I2x7rF0UF+aje096jmqXSUlW4DU5fzvSt2DBNKJsOArKkLtMnwv9EE1nFIRHh2Tiuy8OAwd+LsPqdo+PbnGxpEiritlZyN/Rv5wZoGIkdwFyMjZlXERJBoUIMVi4ne7htdD5V1Q=" selloSAT="NHq41PjJwBfL1mquszy/JEKUR4w67Of9dwRC+JW8gO/JmHPMEt8Nbu6QcorKxrsWCZDXNiHWoztgLuv0LNDYE2nOD99wUB3dof9KAaaMGB49w9JDbtoHz+fEmJfDd9k50zlx9H5QLIiJvg70UzZNKofKp3SWUEZv0Xb4Lspzpr0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:19:02.598854-04	1	f	\N	0
+50	3	1_KNG50	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:19:02" folio="50" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="ObMZvpicnuVLRIFRX4GWzIsW4ZzYM5/2crYIvp0krl35hegmKA0NBvwi0wnFl5wxFRP2F6AiDGyfVdk5/tE8YU6OdvVLc9XtfX2s8vO01Us0tNPgbkNZfouMCZQSpXZ/t7167bK20+9olqsKmyRiVIz1wA5AjYoB7ZUkAfmFwMc=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="6" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-07-28" FechaInicialPago="2016-07-22" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-07-29" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="DDF5F4ED-5B67-415B-BFA6-7F6C8F1DA0AC" FechaTimbrado="2016-08-31T13:19:07" noCertificadoSAT="00001000000301160463" selloCFD="ObMZvpicnuVLRIFRX4GWzIsW4ZzYM5/2crYIvp0krl35hegmKA0NBvwi0wnFl5wxFRP2F6AiDGyfVdk5/tE8YU6OdvVLc9XtfX2s8vO01Us0tNPgbkNZfouMCZQSpXZ/t7167bK20+9olqsKmyRiVIz1wA5AjYoB7ZUkAfmFwMc=" selloSAT="ArrfzALJIZd6q/gabyyxQ7G/WOtmock4ExNoN64R4gvdG8qXiQv5zS+Vqu6sjNrT+qcBIYvQdQU7A+x9qcEM/2tmmm6sLWiad9G162oLezOYdbRaN0Uaez4JXRWmxotJeaK6IXz0a+PxEVIlNmTwPuCg1hWcJ19ddqdXkg8LXYU=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:19:06.166594-04	1	f	\N	0
+51	3	1_KNG51	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:27:42" folio="51" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Vqa5WcqaOYA8OxIKG05dHu/Jb6MniVuArRLGCeHCdmX/ZAbPy2hVk1JcOymNtKELK+5c+QkmTo0+HhnZgXO5GvE35ULfGRylA0+1M1yu/1aA9gPpvvDUxNQI+IhVB6NR/wDGerBErt5otufKgYJvZzXga6jcHkrmryfP7UDuWSo=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="18" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-08-04" FechaInicialPago="2016-07-29" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-08-05" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="645743E0-5377-4D38-B173-45A5CB93D991" FechaTimbrado="2016-08-31T13:27:47" noCertificadoSAT="00001000000301160463" selloCFD="Vqa5WcqaOYA8OxIKG05dHu/Jb6MniVuArRLGCeHCdmX/ZAbPy2hVk1JcOymNtKELK+5c+QkmTo0+HhnZgXO5GvE35ULfGRylA0+1M1yu/1aA9gPpvvDUxNQI+IhVB6NR/wDGerBErt5otufKgYJvZzXga6jcHkrmryfP7UDuWSo=" selloSAT="SN3VkqagB7Cj1O5Zr816v3AHFqyp3rMZcILXFp8KMXoDGCJoUwrinZV4rgxZqUnkD4MCKZuc2Po8+zwVE8l+anHg7r8eky6YvdIef/F8IIL57L0+v5nVcHvdMCZQu9S0vqnRjjyDbw41wvtHcZE6/o/1Gt5OParEFrdkkAyf2A0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:27:46.696428-04	1	f	\N	0
+52	3	1_KNG52	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:27:46" folio="52" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="aamv7C/NbLo+m06lRK8mRjBcsMVpTGSMltrBB3kiOESO10mXRdLh2d03Z3Jv5lzzrTIvj2VNhle0cKpCdXsajW9lVu2R4TiefCquU5xpEOrf766tjy1NgZ2XoJ+5QQdrH5gdLM/4SsLOZPifu5nkfn/vHYewzz1HtT043nOKogg=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="16" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-08-04" FechaInicialPago="2016-07-29" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-08-05" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="6593CC1E-212F-45A4-854E-55382DF4DEC9" FechaTimbrado="2016-08-31T13:27:51" noCertificadoSAT="00001000000301160463" selloCFD="aamv7C/NbLo+m06lRK8mRjBcsMVpTGSMltrBB3kiOESO10mXRdLh2d03Z3Jv5lzzrTIvj2VNhle0cKpCdXsajW9lVu2R4TiefCquU5xpEOrf766tjy1NgZ2XoJ+5QQdrH5gdLM/4SsLOZPifu5nkfn/vHYewzz1HtT043nOKogg=" selloSAT="VpAFdWOHrh1j9ldvAqAO48QnIGm4ctETwCVDpc7SZ+P8LYjtNMmgmfdcYLDCXavzTyjJEq39bzoWVKRFm8aejEwUokU03iHI1OkDrynO6r5g6wpImpWanRdzMX3abEhGXTOFkpcE+lIP7pWVdvZp8IJ7+j7U3OExX6BWOts66nA=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:27:50.250011-04	1	f	\N	0
+53	3	1_KNG53	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:27:50" folio="53" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="CE5bof6UrNr6CdVEL5ZLQTbatvjvk7rdiPIuCMryCZDrgsZ0W+5m/jiyt6p4fM/SNuL92pTdMp55VsipO3A1G8P/UwHqpe8kWxLoRwpLHJOBejm4o2GzVUB0shoFJgu/mDzIrkUxuKqxV5OoG5kyY43Ald2m6JFgDH2F0bevJTU=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JOSE LUIS TAMEZ TAMEZ" rfc="TATL820816766"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="2" CURP="TATL820816HNLMMS07" Departamento="VENTAS" FechaFinalPago="2016-08-04" FechaInicialPago="2016-07-29" FechaInicioRelLaboral="2016-07-19" FechaPago="2016-08-05" NumDiasPagados="7" NumEmpleado="3" NumSeguridadSocial="43038202081" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="9238F74D-D935-4598-AEC8-860F0ED7D389" FechaTimbrado="2016-08-31T13:27:55" noCertificadoSAT="00001000000301160463" selloCFD="CE5bof6UrNr6CdVEL5ZLQTbatvjvk7rdiPIuCMryCZDrgsZ0W+5m/jiyt6p4fM/SNuL92pTdMp55VsipO3A1G8P/UwHqpe8kWxLoRwpLHJOBejm4o2GzVUB0shoFJgu/mDzIrkUxuKqxV5OoG5kyY43Ald2m6JFgDH2F0bevJTU=" selloSAT="Nad4PEv7Pmy5UYiRFbhfJVw0TOkBxPrp3dcZlp4RhzO3maq+v9DgiPPws2hULbsOV6ImWBZK5ag2EFmogYWa86sjPjyoewtiyT3ftM7iFT1bBGk9PEMRvlUyfd5F2D08WPKhzeAbOuvmRK3pCQ0u6/lkW1v/r+leJa1muEdAIAU=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:27:53.53671-04	1	f	\N	0
+54	3	1_KNG54	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:27:53" folio="54" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="CfSP5fFxnLJyZB8qWKNEJTOeP98V/qDMlHx83xzg0njpnwXi151ZuQnr4dGVR4/07z+Qen/NUdupoUHswqjOM3MwI8aVK8VUXouxn5Yo/c5a3GQqY0NB9LZbaM4mhFgeB2N9Zi4+oJJchXDxStURffwIs0+Fg2YEHUYMceNMj7c=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="12" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-08-04" FechaInicialPago="2016-07-29" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-08-05" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="FDBCECCA-205A-4854-9303-44E09EEB7F19" FechaTimbrado="2016-08-31T13:27:58" noCertificadoSAT="00001000000301160463" selloCFD="CfSP5fFxnLJyZB8qWKNEJTOeP98V/qDMlHx83xzg0njpnwXi151ZuQnr4dGVR4/07z+Qen/NUdupoUHswqjOM3MwI8aVK8VUXouxn5Yo/c5a3GQqY0NB9LZbaM4mhFgeB2N9Zi4+oJJchXDxStURffwIs0+Fg2YEHUYMceNMj7c=" selloSAT="xhEfBJcsWHfQhH5yjgemYjMgqYl+MWTvgnJ5OHzEAdJKHhK8HDEgFVnlOM3fHIySkUVE38/Y+Yw5llIQhpoXHgjRkTsIi+E4bhXsndu+w1hHbYiK+/9gjsoOwljM4Vx7BSeWrpB5CP+YK05cwWCyHTKqqJCOz/xm+q2YUCROaEA=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:27:56.979627-04	1	f	\N	0
+55	3	1_KNG55	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:27:57" folio="55" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="B9yqiT/+hVJMf0Oux986a89Ub4qlpa+BeroBrRz9cGwGS1MztdO/6T4e78uF1qRDW7CjShSitMhobWBbVMFyGLMR67EQ1opsa5RRibPyAYiCdq0xK4Wt9lx2cgnboMeohHZ1rbBHMwgZ1MTkta2FoQZIyJv2fXmjUlsolEGbelc=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="7" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-08-04" FechaInicialPago="2016-07-29" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-08-05" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="721F83F7-4902-4E4B-BACE-4DF2232C7667" FechaTimbrado="2016-08-31T13:28:02" noCertificadoSAT="00001000000301160463" selloCFD="B9yqiT/+hVJMf0Oux986a89Ub4qlpa+BeroBrRz9cGwGS1MztdO/6T4e78uF1qRDW7CjShSitMhobWBbVMFyGLMR67EQ1opsa5RRibPyAYiCdq0xK4Wt9lx2cgnboMeohHZ1rbBHMwgZ1MTkta2FoQZIyJv2fXmjUlsolEGbelc=" selloSAT="xkMmP/xqFq8h8qlDNnq+mf3krThfflbZyOYQCuycMHgGSd3xhqFiXVtJVjFosOWfrrOAUrkPGcmQ6YTRJ7Xbm2iWzetrHSKENdBjtR3ZRI41HjYVXzIXc0HT4dJ/8YH9vG6Cm1q+TvnJHh1enw6e10go0vrtTp9DlImWDJYXm9I=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:28:00.162383-04	1	f	\N	0
+56	3	1_KNG56	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:38:13" folio="56" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="BYD+4PilLA5rBhZUqlrtg7Jz0ENEhLSJin3Vb3I8IKWTFZUc9qYFEI0vHSPJGEN++4Qbg5ajXH3Ai/ag/WAw1+2Bq93jjMkOWvazw/eRXcPJO/NhCA+nWndkgKCISF6nVurS3IdxOR6DTSEXa8j9lWEeD64GqrXDtnTOXCTUGtU=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="19" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-08-11" FechaInicialPago="2016-08-05" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-08-12" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="FB785496-2219-44B8-844D-A009FE252432" FechaTimbrado="2016-08-31T13:38:18" noCertificadoSAT="00001000000301160463" selloCFD="BYD+4PilLA5rBhZUqlrtg7Jz0ENEhLSJin3Vb3I8IKWTFZUc9qYFEI0vHSPJGEN++4Qbg5ajXH3Ai/ag/WAw1+2Bq93jjMkOWvazw/eRXcPJO/NhCA+nWndkgKCISF6nVurS3IdxOR6DTSEXa8j9lWEeD64GqrXDtnTOXCTUGtU=" selloSAT="C7K1W+xGJSUON0HKm8esNGGyJogyy5cVLZ8Xalf1QmAzxLsctOWBwegljNDxzJB0naE/ZoGP2wFzP1KfvUNVzOgMVH4572nPtn2FwVPcEyBQdu3AkgjA2VWm0riPcV4G+RFg1fYvaBn4ig4OIx7eHRjTglnuWCWBk8hqlRBDg9k=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:38:17.339569-04	1	f	\N	0
+57	3	1_KNG57	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:38:17" folio="57" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="h8NQx3iqcoWUfCXPLRZdcveMz9HoPNDOwoERGKpCxGaq3CJD2VCmmqZuEUgqMSJqxCoc8Db0o9RmU3MHjEpl4MGWJzcyFsa6NVBXGe5w2+cDS6OCe15J27PdzhmfKPmtKkTs9CBEa9u/Z1RjumvqRr6gx8Qy5huzZI1LQA7HKQU=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="17" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-08-11" FechaInicialPago="2016-08-05" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-08-12" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="623D6C88-AD5C-43BD-B24C-FC068C6D8EA9" FechaTimbrado="2016-08-31T13:38:22" noCertificadoSAT="00001000000301160463" selloCFD="h8NQx3iqcoWUfCXPLRZdcveMz9HoPNDOwoERGKpCxGaq3CJD2VCmmqZuEUgqMSJqxCoc8Db0o9RmU3MHjEpl4MGWJzcyFsa6NVBXGe5w2+cDS6OCe15J27PdzhmfKPmtKkTs9CBEa9u/Z1RjumvqRr6gx8Qy5huzZI1LQA7HKQU=" selloSAT="Ea0LP9th5ZzyEIxn9QtGxrxqLhHCmE3PayTumB/S2tYPwHutL7B2pSZrFFO4UuZfG/U5zYrXVlnybjQRfLFUiT+xTUJMWhzkahQYatjhTjBU746cqmA+F5dYJM1yrEiOTxHittoMbxlh1E5q4K6mp7VsS5ENCcd9IWIRG3hrMwU=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:38:20.82632-04	1	f	\N	0
+58	3	1_KNG58	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:38:20" folio="58" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="DYBE3q1hCXf0jVRKaPp42m4/pBDbRG4C5EPYwlzGG358mhJg1B+4bOtOzCbPNqh9qnMM4QKOKKWMqcB5bHrMbAgizZ/XMtFX5BtLw2JDGUT0Qm08P7iNGFRiqjjQ3kZ3FP1GCWK6ueqkdiC5SQv4L3TXVSphEG9yOKenurDWgK0=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JOSE LUIS TAMEZ TAMEZ" rfc="TATL820816766"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="3" CURP="TATL820816HNLMMS07" Departamento="VENTAS" FechaFinalPago="2016-08-11" FechaInicialPago="2016-08-05" FechaInicioRelLaboral="2016-07-19" FechaPago="2016-08-12" NumDiasPagados="7" NumEmpleado="3" NumSeguridadSocial="43038202081" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="3D2D5A6D-8A10-4AC9-8E5D-B9E6681EB204" FechaTimbrado="2016-08-31T13:38:25" noCertificadoSAT="00001000000301160463" selloCFD="DYBE3q1hCXf0jVRKaPp42m4/pBDbRG4C5EPYwlzGG358mhJg1B+4bOtOzCbPNqh9qnMM4QKOKKWMqcB5bHrMbAgizZ/XMtFX5BtLw2JDGUT0Qm08P7iNGFRiqjjQ3kZ3FP1GCWK6ueqkdiC5SQv4L3TXVSphEG9yOKenurDWgK0=" selloSAT="RKhOJnJLM9L/+vjMwXxg0G6kHkpS2jX0DhtKoLaL/XTDHhD48JBtGMvbsUrz9vAS24zYAgDhWCDkpfbhWDAqp5D4IclzJvQG3SFwoxauK4+meqN3SLVOibISSwjYjVxBmI2GJTnbcQNgyR8rOBaOuW06cCiZzSC3elW723LomWY=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:38:24.085738-04	1	f	\N	0
+59	3	1_KNG59	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:38:24" folio="59" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="AKkrYmBmlsPhwRGTBpF2X/66h2tMom7iZxJtxnTsGMvViyjpZyR8TQ9BzfBONZr+mFQ7nZSO+B+q43WliQ7vDXLOuAw9jLUBFkJAkiTlouC6HvPqkkjHeiOmxjyxKr5yJnG8sBQWWMzi3LeX4lJLM9jjKul8x9aLtAyChavKthc=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="13" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-08-11" FechaInicialPago="2016-08-05" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-08-12" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="EB7605B3-9F9C-45AD-B95E-686381B75B7B" FechaTimbrado="2016-08-31T13:38:29" noCertificadoSAT="00001000000301160463" selloCFD="AKkrYmBmlsPhwRGTBpF2X/66h2tMom7iZxJtxnTsGMvViyjpZyR8TQ9BzfBONZr+mFQ7nZSO+B+q43WliQ7vDXLOuAw9jLUBFkJAkiTlouC6HvPqkkjHeiOmxjyxKr5yJnG8sBQWWMzi3LeX4lJLM9jjKul8x9aLtAyChavKthc=" selloSAT="1/G3IX3ZiUbj3r54DairmY4DEjLuDA7elCc8MZpE7LqfDocqdaNadCLskGF2gLz96KI/n1+0j+P7DJH3UkbtKsLuwwo7WfFheOR7Lp7o5wCVQJpk0XFnInYffPnru0DCXh1UHvzXf09Zrt8JhrdQ5mgYs4kzFjNafQ32vNdFGVY=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:38:28.62199-04	1	f	\N	0
+60	3	1_KNG60	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:38:28" folio="60" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="H0Fuf5VA2wbnx8VUO9NQJ4tMIBVUNRCpbZOc1rHnIpwSVGzJjVX3rkXfNHghhZBRj6k0F6cjJjE4WpOM0xGQusAhPqDHR0/8Kk5LpcUqE4NbXo1DeKxMfdwPBNbwhi1yrYh3xZ41ItvIDa7czgScueiPgq+DETkVf7tdAY+t16Y=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="8" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-08-11" FechaInicialPago="2016-08-05" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-08-12" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="E3927717-B71E-4C04-B8B4-D3A787B87EBC" FechaTimbrado="2016-08-31T13:38:33" noCertificadoSAT="00001000000301160463" selloCFD="H0Fuf5VA2wbnx8VUO9NQJ4tMIBVUNRCpbZOc1rHnIpwSVGzJjVX3rkXfNHghhZBRj6k0F6cjJjE4WpOM0xGQusAhPqDHR0/8Kk5LpcUqE4NbXo1DeKxMfdwPBNbwhi1yrYh3xZ41ItvIDa7czgScueiPgq+DETkVf7tdAY+t16Y=" selloSAT="oN3GjC0jE7CU4HmGRcxwTyHbu9fJ1Nx66WO1D+Zx7ceeBGFro1ESVsCji/9rgJGJXm21XAfMUw3geWLw2X5roTORMWoXl9hE5rBrg3ig6LFly6RU/nAZplvcWQ4r75J6GQt01L3YMX63MJ9Am4b0uBvktS4r3s9GUXulcPulR5I=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:38:31.996412-04	1	f	\N	0
+61	3	1_KNG61	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:42:14" folio="61" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="X/Ra7J1BY9D9Jp+sx4Lm75klCAUSd5ai6OEMUxdE1Att8+eXzxw8AWurSF36OcKxMpyBpn6/nqMj3EhsATtrLlRy6KnzbbLA5k8QqNaGnHS935LGnzuaQg0umGVZDq2TYyS08evG8y0N4JahEpr4AoIw5P773OPZy45xVAb3pqk=" serie="KNG" subTotal="793.60" tipoDeComprobante="egreso" total="736.56" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016" importe="793.6000" unidad="SERVICIO" valorUnitario="793.6000" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="20" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-08-18" FechaInicialPago="2016-08-12" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-08-19" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.60"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.60" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="0A2F2586-9618-49E6-BBC5-BD75ECC9B014" FechaTimbrado="2016-08-31T13:42:19" noCertificadoSAT="00001000000301160463" selloCFD="X/Ra7J1BY9D9Jp+sx4Lm75klCAUSd5ai6OEMUxdE1Att8+eXzxw8AWurSF36OcKxMpyBpn6/nqMj3EhsATtrLlRy6KnzbbLA5k8QqNaGnHS935LGnzuaQg0umGVZDq2TYyS08evG8y0N4JahEpr4AoIw5P773OPZy45xVAb3pqk=" selloSAT="KZr/yjDq5zbh1TUC2Hgw+lHdLkBmUhj55m76Uov5Cf1oz9XKSjJxvxUfYooEYzs3IzxJIh1hJ1nmT5UoXAIy2iaDJPAccsyJ5ezfOPnXH7Uf0rR62EI8nEHLVNbJfpfdFDiFxbjUBhiEXQjiFQcV2mJk1hRnd8nBVE/txDWuLH4=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:42:19.586537-04	1	f	\N	0
+62	3	1_KNG62	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:42:19" folio="62" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="iR7WiiUwb8SLrY92eE4BuISKrDIZxnF8ZqWj3Aza1P8sHce364tNb9xGZLouJDokYOPs1gmqXcX2e1qhQDAco2axkHB0tW33R8HwpYCOUn8dXRRP/zQKBXxVZX1/hPTSSLxng2RCC7g8brk01LK+5oMQQV6uJrv/aW9mIVouK5U=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="18" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-08-18" FechaInicialPago="2016-08-12" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-08-19" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="82E56D27-740B-4CFB-B0D6-30413A1FBAB6" FechaTimbrado="2016-08-31T13:42:24" noCertificadoSAT="00001000000301160463" selloCFD="iR7WiiUwb8SLrY92eE4BuISKrDIZxnF8ZqWj3Aza1P8sHce364tNb9xGZLouJDokYOPs1gmqXcX2e1qhQDAco2axkHB0tW33R8HwpYCOUn8dXRRP/zQKBXxVZX1/hPTSSLxng2RCC7g8brk01LK+5oMQQV6uJrv/aW9mIVouK5U=" selloSAT="BKUp5Lop/Eo3ow5HcswZy1hsKF7Nhb2hcYtwPL5l8MUGgjEoL0BYSeZo0VTjHjWZypWQXrCJkGwhMwWSMgcHBaobbQbSwJ6n+ZWdYTesCNebzZgWzQaLIKt7ZXnBqZrV6E1+9wggoN8vQolUBHqEUv+TlwKawgse0dfGRxNqhR0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:42:23.055855-04	1	f	\N	0
+63	3	1_KNG63	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:42:23" folio="63" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="XaQqbUqhI2oAsmq5yuTmhLw3dzx4GAFrVori80pBuhgBIC5pnHn8Etzj3UqRUq8asU0OTAJjGtHEg/fvxzbD5FgEYI7i+MeLvpDXlxozOUx6xudeoA92tVDNd60QyAtpCxITmp9F6HgJODCkYoTdnagbtZXwph/sIZwjskWV3SI=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JOSE LUIS TAMEZ TAMEZ" rfc="TATL820816766"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="4" CURP="TATL820816HNLMMS07" Departamento="VENTAS" FechaFinalPago="2016-08-18" FechaInicialPago="2016-08-12" FechaInicioRelLaboral="2016-07-19" FechaPago="2016-08-19" NumDiasPagados="7" NumEmpleado="3" NumSeguridadSocial="43038202081" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="1C7090F0-9DAC-4CDB-BC3C-7A451FBF8BD5" FechaTimbrado="2016-08-31T13:42:28" noCertificadoSAT="00001000000301160463" selloCFD="XaQqbUqhI2oAsmq5yuTmhLw3dzx4GAFrVori80pBuhgBIC5pnHn8Etzj3UqRUq8asU0OTAJjGtHEg/fvxzbD5FgEYI7i+MeLvpDXlxozOUx6xudeoA92tVDNd60QyAtpCxITmp9F6HgJODCkYoTdnagbtZXwph/sIZwjskWV3SI=" selloSAT="cKAcIqp/Cy+wB4xlrEp8ZIgIonRzYP54655D3KadhYoslQqIRiQJZSdBY5gi2tW10PsQm0rIMB2oIOosiVx266xE0lLpKDBirSwY2UaSO2sZb1kkr9iRVjsXMKVh3jInU2wBdVv9ydbyD77MTjNP9SHnlas5zwW4Vku3ApgLsos=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:42:26.331345-04	1	f	\N	0
+64	3	1_KNG64	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:42:26" folio="64" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="H5N39ZNe+U+NY0Nl6L/gXFXy51aStOjZOUoia/YqoXayPbpHSMOJ8MuW6iqxolwuekl03By1JRMrZPdwW0OuPENI+kuq39jsnu7tG2macFgg2AeUINsEMJN1u3Fx2DE/C8roRnGWT20jlWG4rQ63AiLEquCF/Ek/PahknZf9Se4=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="14" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-08-18" FechaInicialPago="2016-08-12" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-08-19" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="80BA67E0-14BD-44C3-B28D-4C581918D436" FechaTimbrado="2016-08-31T13:42:31" noCertificadoSAT="00001000000301160463" selloCFD="H5N39ZNe+U+NY0Nl6L/gXFXy51aStOjZOUoia/YqoXayPbpHSMOJ8MuW6iqxolwuekl03By1JRMrZPdwW0OuPENI+kuq39jsnu7tG2macFgg2AeUINsEMJN1u3Fx2DE/C8roRnGWT20jlWG4rQ63AiLEquCF/Ek/PahknZf9Se4=" selloSAT="JedR6s70thwte/D1baw6qxR6QzskDxqOfjkxBrcEQWo9GVCEDD28jkN6cFGFrTHEutnkrfTE1a28yoH5wDJBk2oDBYwKG8c95Y0gAqlw5xdj+Bfyz8z0ambhR0I8AQkl5ePq3wLIigjpRhmK5TfWNdS/FAkFP8prTV5OJkfYbMU=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:42:29.988484-04	1	f	\N	0
+65	3	1_KNG65	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:42:30" folio="65" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="bimGWvQJdR0ktywYquYTM2MuVR7i9ojutQhlvmwZ4ujZeGsPzV8ninfs/Ca4tGEKIeDflfmCCXdTIhPRzI2+tmBfmVzdT0RXdpTOWwcKWXE5KXi+9B0T2IgjpS+XCNuxG2FZTRDojIGgpUu39nHzbW2YWCGENc/i8ZYmO+YA3sA=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="9" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-08-18" FechaInicialPago="2016-08-12" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-08-19" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="FC99E2A6-1A60-4B65-8CE6-C05D59E6D26E" FechaTimbrado="2016-08-31T13:42:35" noCertificadoSAT="00001000000301160463" selloCFD="bimGWvQJdR0ktywYquYTM2MuVR7i9ojutQhlvmwZ4ujZeGsPzV8ninfs/Ca4tGEKIeDflfmCCXdTIhPRzI2+tmBfmVzdT0RXdpTOWwcKWXE5KXi+9B0T2IgjpS+XCNuxG2FZTRDojIGgpUu39nHzbW2YWCGENc/i8ZYmO+YA3sA=" selloSAT="CwG36L3TZhPi1sP1GvLtnGml6hdVgy8xyknMiNfKsb422yCIhe5IrMMymhQj0Cb3KNqMzW5zHcVMypyj1tSoTGTIKSc0OSMthUjxsmix5stpEfu0ttyHvybd3O6f5FjOyK+mp77oLvlhtciCx3nLRt9+GDj/OYh/hsJ+Dra/Wog=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:42:34.783815-04	1	f	\N	0
+66	3	1_KNG66	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:52:36" folio="66" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Nl+yZuCcD5Rgdhy0QnNZkN0Qzgpmm+N6OrEi2vNGAGFIV6fuJJx4TY1dRkxMGweGnwg7K6cx+mqJTSqXazhFSLGXIiK1KcCM/R1u5uksp2b/VR14pWFiY99HTYUYPyFPbc7E9IFRDfcZuxhcG5NBouZZvclzEosJOoS8XhP9f/o=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="21" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-08-25" FechaInicialPago="2016-08-19" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-08-26" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="308B7928-5698-4F97-A174-F744EB7CBFB9" FechaTimbrado="2016-08-31T13:52:41" noCertificadoSAT="00001000000301160463" selloCFD="Nl+yZuCcD5Rgdhy0QnNZkN0Qzgpmm+N6OrEi2vNGAGFIV6fuJJx4TY1dRkxMGweGnwg7K6cx+mqJTSqXazhFSLGXIiK1KcCM/R1u5uksp2b/VR14pWFiY99HTYUYPyFPbc7E9IFRDfcZuxhcG5NBouZZvclzEosJOoS8XhP9f/o=" selloSAT="KuMXzNbsfR6TU+tPpTW5u6TBTigpfKnbcDssOY6Rw/qxNERWmULf2WDzjAFMHSXGKVFwX3UySDir71ZHedR4HM2ZvNyQk7gAg5aHpsUQ9eNjWzFf7HLWx+BpNnS0bFgMxTXi2Jqbw+VXXCoARyw6rHZBpJb/L6UZqWg7ctwgG0c=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:52:39.745732-04	1	f	\N	0
+67	3	1_KNG67	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:52:39" folio="67" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="RyK0O/QyZypwS100GmpnOlRUruNO2eFH5APAh+f/1CyUb9NU4JNOb3gME7kMwWMLhA+np94/c9mBV59Hi8qMzAxcEPsOs5MprMyusCieopna1wzymhqgufyc/Qni9rNB6p3CMkAddPy2hHH31/nNI1EYUzeUAH6SlXXXzOvK/yc=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="19" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-08-25" FechaInicialPago="2016-08-19" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-08-26" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="2A00FE05-7970-44AF-9D6B-C611255291B3" FechaTimbrado="2016-08-31T13:52:44" noCertificadoSAT="00001000000301160463" selloCFD="RyK0O/QyZypwS100GmpnOlRUruNO2eFH5APAh+f/1CyUb9NU4JNOb3gME7kMwWMLhA+np94/c9mBV59Hi8qMzAxcEPsOs5MprMyusCieopna1wzymhqgufyc/Qni9rNB6p3CMkAddPy2hHH31/nNI1EYUzeUAH6SlXXXzOvK/yc=" selloSAT="oc7BgHPCfhWj0jwyQeMTUsKRbSl7cKUxpWrcDi5vFtUI7IW5uHY81NGFZgNQ6BLwC9J3RQJX6QxwcEDkcwTnqgJDB9acrElnOppSf3OVqPqVRsqLvBjCy+JX4qLvLoKGmcwStvPuU5FYONUBaiq/HGDWzN/ZXUaZi2d9P4vUq4s=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:52:43.051893-04	1	f	\N	0
+68	3	1_KNG68	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:52:43" folio="68" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="HxxVARVFWmh/aLkZfmOCvETsarokstkMt6syTh+//grW+whlyB1vfe+nXjAS7Bqhhot86iplsiKUsyM7g7IoDZ8yph5H+t3XwztaeQYil/B6Z5tfDacfa7h+GDQpkKbRc+xYOsyukreIAONC2s9ElpecC52Ny+L8Nh7bWfq9gBo=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JOSE LUIS TAMEZ TAMEZ" rfc="TATL820816766"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="5" CURP="TATL820816HNLMMS07" Departamento="VENTAS" FechaFinalPago="2016-08-25" FechaInicialPago="2016-08-19" FechaInicioRelLaboral="2016-07-19" FechaPago="2016-08-26" NumDiasPagados="7" NumEmpleado="3" NumSeguridadSocial="43038202081" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="C6206C80-F43C-45C9-B48F-A7A512A6CD62" FechaTimbrado="2016-08-31T13:52:48" noCertificadoSAT="00001000000301160463" selloCFD="HxxVARVFWmh/aLkZfmOCvETsarokstkMt6syTh+//grW+whlyB1vfe+nXjAS7Bqhhot86iplsiKUsyM7g7IoDZ8yph5H+t3XwztaeQYil/B6Z5tfDacfa7h+GDQpkKbRc+xYOsyukreIAONC2s9ElpecC52Ny+L8Nh7bWfq9gBo=" selloSAT="SgTxqsvCvASndtIMzFTgb811GKrvDNNJGYA9eCIKkR0nPhfBIaJ/zkQiARRANorjJZbwZA7ax1+nIPUoKjhUeVFqG2f7icgQCjCiFmZOROGhUCmOvvQ7R1e7roJhEN6Dd5M8ro0rqxZRf9h6wxZdGY/0BtRQ19XRKa9NVD8Mfl0=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:52:46.421161-04	1	f	\N	0
+69	3	1_KNG69	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-08-31T13:52:46" folio="69" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="A5t6nUvhLRVrZ+MP3AZFOdAE5NyhsqXYWkiUB9SWGlbUOqxrYDdrTcjEkedn2DJhnTYLPuGDxB8COeoY/+owUHGjYFkQ/0pg6jglX2wdKLorgKMj5iGXY6wocc0jeekapBlgtwNurUMt8s4TmpVUaigR+hj4jtiFlIiqnLPUk80=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="15" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-08-25" FechaInicialPago="2016-08-19" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-08-26" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="5F080BA5-8FB6-4373-8721-63ED87A68A83" FechaTimbrado="2016-08-31T13:52:51" noCertificadoSAT="00001000000301160463" selloCFD="A5t6nUvhLRVrZ+MP3AZFOdAE5NyhsqXYWkiUB9SWGlbUOqxrYDdrTcjEkedn2DJhnTYLPuGDxB8COeoY/+owUHGjYFkQ/0pg6jglX2wdKLorgKMj5iGXY6wocc0jeekapBlgtwNurUMt8s4TmpVUaigR+hj4jtiFlIiqnLPUk80=" selloSAT="Mw+xvYj8kP+1cKuHhxVDvt21Dtspvqf/BxqP9IY+bb/r3pS/pHY1LDW0aAzfdV/9NSh+WIQammG9xImEC7KPezX7nUbt2KFrj9TOPkX2S7jbRH0WJx+EVUDv64QKxGZT0723zWS5dUk+SVHZvp5nCTpKXfXB187oOejbKZli5Vg=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:52:50.271128-04	1	f	\N	0
+70	3	1_KNG70	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-08-31T13:52:50" folio="70" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="aEU0U5hTJFMWcNgDk6Zz59NMJ0KyBGHa8KbrBNzhXHlput+SI7YitNTIE5Ky82/WIN9gEzFeQdQkPbD5jUBXonQknK8g5nstMm4IoXGryyufCGxDD20uGd9zq9pY1UJ4fex+6J49xBuwvZMvnv3ge3/F0V0Tv5AZ0kZwgs+MmkI=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="10" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-08-25" FechaInicialPago="2016-08-19" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-08-26" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="21E72E20-289D-4834-875F-84C45E56CD5C" FechaTimbrado="2016-08-31T13:52:55" noCertificadoSAT="00001000000301160463" selloCFD="aEU0U5hTJFMWcNgDk6Zz59NMJ0KyBGHa8KbrBNzhXHlput+SI7YitNTIE5Ky82/WIN9gEzFeQdQkPbD5jUBXonQknK8g5nstMm4IoXGryyufCGxDD20uGd9zq9pY1UJ4fex+6J49xBuwvZMvnv3ge3/F0V0Tv5AZ0kZwgs+MmkI=" selloSAT="U9N0OPjIgS7hMp6rniNXapVz7eCPviSVZjAovuRpyOOu0aSKZwP5JiHOyeQ1qQp8kVcYhQZW+3sN4dyC3UdTnJZiFYSZvn3rJakS9l7qZCtoJfdZd2MY9OA9E0zfscl8jaVe7XoLVk+s2hq2ON/M+F5Odo5LCQtW9UtzYpDlzmE=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-08-31 13:52:54.058366-04	1	f	\N	0
+71	3	1_KNG71	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-09-02T17:55:51" folio="71" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="cpUjRm1yeH4SOdfNSeHT+N1TeiOArWsvjBgeqOFlPxd8x2hcDHU0cby6n8qKwNqujoLT3g/LsKYxGj2+isLCadqY8nY45mIYx4DzBglcG/yfE0pb5eYZeqvm11lsgE8/MT6GYAmUjKyvx4YMtoiUVs77ZycJoYpK1ps0r6EXwm4=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN ARTURO RIOS VARGAS" rfc="RIVJ830922296"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="22" CURP="RIVJ830922HNLSRN06" Departamento="VENTAS" FechaFinalPago="2016-09-01" FechaInicialPago="2016-08-26" FechaInicioRelLaboral="2016-04-01" FechaPago="2016-09-02" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43008368748" PeriodicidadPago="SEMANAL" Puesto="ADMINISTRADOR" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="E8C3546A-990D-41EE-803C-01988FBFBE68" FechaTimbrado="2016-09-02T17:55:56" noCertificadoSAT="00001000000301160463" selloCFD="cpUjRm1yeH4SOdfNSeHT+N1TeiOArWsvjBgeqOFlPxd8x2hcDHU0cby6n8qKwNqujoLT3g/LsKYxGj2+isLCadqY8nY45mIYx4DzBglcG/yfE0pb5eYZeqvm11lsgE8/MT6GYAmUjKyvx4YMtoiUVs77ZycJoYpK1ps0r6EXwm4=" selloSAT="g4g4mugJo9JhJ98b9iYq3qZM47l0q7LKjTJ5uqEViZSjGJOZLpKohrMGZxc48SOV3m8/hNt5jiEy2SJr2u3Zp/Y+z1P2OF9CmR8seDzHDakNEF/NG/Sinhdmhr8UzZI1SeQ0I7vm0AKIKrW7GKoVxj0PgylkLsrAolP9LljTNac=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-09-02 17:55:55.417486-04	1	f	\N	0
+72	3	1_KNG72	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-09-02T17:55:55" folio="72" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="Uews5Wo08f8jX4ClBAweg7EvgS9bIOWAJ7qYJxprrQlBb7qI1/hzJVHtYVr/Xp325N4f8Eib9ZxnNemLz7JbgYJ6jiG/l2ottSbeGg8aWVOZKR7xEkq9GzQH+okvtngvETtTgug0RvOGvfaCQWPUDky+ctmYieEb/etwrvj1CLY=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="GASPAR TAMEZ GARZA" rfc="TAGG6107261L5"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="20" CURP="TAGG610726HNLMRS04" Departamento="VENTAS" FechaFinalPago="2016-09-01" FechaInicialPago="2016-08-26" FechaInicioRelLaboral="2016-04-15" FechaPago="2016-09-02" NumDiasPagados="7" NumEmpleado="2" NumSeguridadSocial="43806183124" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="A47F467E-F166-43FC-AD30-FF02A7BFE281" FechaTimbrado="2016-09-02T17:56:00" noCertificadoSAT="00001000000301160463" selloCFD="Uews5Wo08f8jX4ClBAweg7EvgS9bIOWAJ7qYJxprrQlBb7qI1/hzJVHtYVr/Xp325N4f8Eib9ZxnNemLz7JbgYJ6jiG/l2ottSbeGg8aWVOZKR7xEkq9GzQH+okvtngvETtTgug0RvOGvfaCQWPUDky+ctmYieEb/etwrvj1CLY=" selloSAT="uVw7ex40ZKyCtZFJFCn1inbge3b3BvDn68/LglIsSMebtNEEqcWSgDD6RXZRHSnGZzH+Pu4zQKQuaFpqAZ1OrEAFRwCCZWghQsZM6yuLvpnFHOzcB9uky0bnz0vh+jHdCuGRO5v/7TsgkQW+cTivmMPEULxekdetanzPWc8jMeE=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-09-02 17:55:58.617802-04	1	f	\N	0
+73	3	1_KNG73	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-09-02T17:55:58" folio="73" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="JDTSuY4f8PFLwohIJ/nitXmHbKz2Jyhe6L1auhkkAM5Hxe9lwhyx8jVgiJA/OfXZ1elMi7meoz0y+XgTSx4Ad40qb/PpSJ381MU98Lh4rxQVZGosqPBqJwoc09KI6BfPYhUzFXtd7Fn3Koygh/zipGwps3D1iLQJckQNnJlCqAs=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JOSE LUIS TAMEZ TAMEZ" rfc="TATL820816766"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="6" CURP="TATL820816HNLMMS07" Departamento="VENTAS" FechaFinalPago="2016-09-01" FechaInicialPago="2016-08-26" FechaInicioRelLaboral="2016-07-19" FechaPago="2016-09-02" NumDiasPagados="7" NumEmpleado="3" NumSeguridadSocial="43038202081" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="F10BDD71-03A2-4E4C-9D97-1F5A3C42DAD4" FechaTimbrado="2016-09-02T17:56:03" noCertificadoSAT="00001000000301160463" selloCFD="JDTSuY4f8PFLwohIJ/nitXmHbKz2Jyhe6L1auhkkAM5Hxe9lwhyx8jVgiJA/OfXZ1elMi7meoz0y+XgTSx4Ad40qb/PpSJ381MU98Lh4rxQVZGosqPBqJwoc09KI6BfPYhUzFXtd7Fn3Koygh/zipGwps3D1iLQJckQNnJlCqAs=" selloSAT="zE3wh2rX98bjLP/qtBGsbuog57Gk3LGXtGCoK6k5ijLLK41eE1+U2duD0bZ2iGWnVdidDESPsYnm4VTOVvqebqkkTKHSkrA9uPEZqg0/v/NQ9tAnQE6B0lTHgTwb/eX6cFyBbwngpLv9netE626hnDW1eCaFxFcdhUBKTdJtWPo=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-09-02 17:56:01.705778-04	1	f	\N	0
+74	3	1_KNG74	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-09-02T17:56:01" folio="74" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="cgHbtCv5l8B8qRISuGcynaq3yjwI25qvuuC5R1e4OVnmcxY6rxsJp8LqAaWo+pf61Aib/IEdGd6WyR6Sqlf7vaCGamXlPiVDaU+8+iPDZlTxiE1/ZxBXfxEmcDBdnPjJxwNIPXVs2JyAg6eJs6rmDJfPSsyp9xvWCPnlj39/z8Q=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="JUAN EDGAR BALBOA RIVERA" rfc="BARJ8707085S9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="16" CURP="BARJ870708HNLLVN02" Departamento="VENTAS" FechaFinalPago="2016-09-01" FechaInicialPago="2016-08-26" FechaInicioRelLaboral="2016-05-05" FechaPago="2016-09-02" NumDiasPagados="7" NumEmpleado="4" NumSeguridadSocial="43048719199" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="4DA9C909-A967-4D49-9C69-BEF1E9A90EA4" FechaTimbrado="2016-09-02T17:56:06" noCertificadoSAT="00001000000301160463" selloCFD="cgHbtCv5l8B8qRISuGcynaq3yjwI25qvuuC5R1e4OVnmcxY6rxsJp8LqAaWo+pf61Aib/IEdGd6WyR6Sqlf7vaCGamXlPiVDaU+8+iPDZlTxiE1/ZxBXfxEmcDBdnPjJxwNIPXVs2JyAg6eJs6rmDJfPSsyp9xvWCPnlj39/z8Q=" selloSAT="AiURJlHv55znTD8ph/qXSD1YmsKak7ORM+yiVw3DKwGnMPoRQrH/h3Ozl31s7MekNgNSkbOMGB1X6m/w6a3c5OKbnjuxKW4njYkkAPPFUShPSjLMYTZuaztgp7SDwsxyythQUaBR2ZlTIAtGrMCUSS+e7srJW9zW9WsgZejxjag=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-09-02 17:56:04.941146-04	1	f	\N	0
+75	3	1_KNG75	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="38.54" fecha="2016-09-02T17:56:04" folio="75" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="ai+6VKvVYoGv/RTOTEZ6PbbVCF091thiWxoAgoxTr93V4NiB7RqwTngaGK8Grdpai/p2oeommRGhQwDqnSV5VcrW/PIwbxwDg0zgr803cPC/sXOwgd2QDOeBkGvG+TqSKWY8E3AAOVY6xsv7ragdS+kbjQKVbARBrvuouPOyNi8=" serie="KNG" subTotal="1598.73" tipoDeComprobante="egreso" total="1441.18" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="ALBERTO JORGE SUAREZ CAVAZOS" rfc="SUCA780502PG9"><cfdi:Domicilio estado="Nuevo Leon" municipio="Allende" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016" importe="1598.7300" unidad="SERVICIO" valorUnitario="1598.7300" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="119.01"><cfdi:Retenciones><cfdi:Retencion importe="119.01" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="11" CURP="SUCA780502HNLRVL00" Departamento="VENTAS" FechaFinalPago="2016-09-01" FechaInicialPago="2016-08-26" FechaInicioRelLaboral="2016-06-13" FechaPago="2016-09-02" NumDiasPagados="7" NumEmpleado="5" NumSeguridadSocial="03967836382" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="1598.73"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="1540.35" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="58.38" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="157.55" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="38.54" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="119.01" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="1AE8B2B7-EDBC-4128-B6FB-FFBC21588ECF" FechaTimbrado="2016-09-02T17:56:09" noCertificadoSAT="00001000000301160463" selloCFD="ai+6VKvVYoGv/RTOTEZ6PbbVCF091thiWxoAgoxTr93V4NiB7RqwTngaGK8Grdpai/p2oeommRGhQwDqnSV5VcrW/PIwbxwDg0zgr803cPC/sXOwgd2QDOeBkGvG+TqSKWY8E3AAOVY6xsv7ragdS+kbjQKVbARBrvuouPOyNi8=" selloSAT="FGJiJhN2DQybpnKkLp0P7ixNC2UL5fPdOVcbIIwYJunb3dg1qhmIhwIXYN0K5uIoVZFccryM1GPevrr8H7XE6tiG8o42IaZynMWR6FGlnk6esAI8xKn6eecXOQzWaxipN5TCDM/dVdaNVmO8HQAjKjd7uIaTGy7WeKHQOZj0c3o=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-09-02 17:56:08.163957-04	1	f	\N	0
+76	3	1_KNG76	<?xml version="1.0" encoding="utf-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" LugarExpedicion="MONTERREY, NUEVO LEON" Moneda="MXN" TipoCambio="1.0000" certificado="MIIElzCCA3+gAwIBAgIUMDAwMDEwMDAwMDAzMDE2OTg5NjYwDQYJKoZIhvcNAQEFBQAwggGKMTgwNgYDVQQDDC9BLkMuIGRlbCBTZXJ2aWNpbyBkZSBBZG1pbmlzdHJhY2nDs24gVHJpYnV0YXJpYTEvMC0GA1UECgwmU2VydmljaW8gZGUgQWRtaW5pc3RyYWNpw7NuIFRyaWJ1dGFyaWExODA2BgNVBAsML0FkbWluaXN0cmFjacOzbiBkZSBTZWd1cmlkYWQgZGUgbGEgSW5mb3JtYWNpw7NuMR8wHQYJKoZIhvcNAQkBFhBhY29kc0BzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMRkwFwYDVQQIDBBEaXN0cml0byBGZWRlcmFsMRQwEgYDVQQHDAtDdWF1aHTDqW1vYzEVMBMGA1UELRMMU0FUOTcwNzAxTk4zMTUwMwYJKoZIhvcNAQkCDCZSZXNwb25zYWJsZTogQ2xhdWRpYSBDb3ZhcnJ1YmlhcyBPY2hvYTAeFw0xMzEyMTExODI4MDVaFw0xNzEyMTExODI4MDVaMIHjMSUwIwYDVQQDExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQpExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQKExxFWFBPUlRBQ0lPTkVTIFNVTUFSIFNBIERFIENWMSUwIwYDVQQtExxFU1UxMzExMjJTWjYgLyBTVU1SNzkwODE4UEpBMR4wHAYDVQQFExUgLyBTVU1SNzkwODE4SE5MUlJEMTgxJTAjBgNVBAsTHEVYUE9SVEFDSU9ORVMgU1VNQVIgU0EgREUgQ1YwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAIvgyF3vNy8+Nh72Bc1nfLWmnubJ5rXKZWnHeR8fGNYsCSkpqzeHPHKVF7fejsZirQYu7f1B0YpqdaGcoGuJQWZpgx+YhnHSDpsJ4Y0Hs0XfxqIezWZvJS2vO1QhfUq8rpICdufbGtsP0u24lbP6kAPmUIEtUxW6vINbRKggZDuJAgMBAAGjHTAbMAwGA1UdEwEB/wQCMAAwCwYDVR0PBAQDAgbAMA0GCSqGSIb3DQEBBQUAA4IBAQB2hMtrrBIi6mRjTzKeUdLlm2s7M5JtL9R2r58NSWxwcU9ApngmdUYGwhsoMr04IBL7Es9UuEpk4udjOX7Y/qvZT0OoWlX7AHVJUWcdG+Dfsd6HyuMXF5S6u22C6gJV5ZWJjFaGfpocZvfLL9jjRZj25JDEjNiyTcmdxTDYghsCFoVC88CTUGHvqzpQ8w1UvvSAVnnD72OEax+mgbKS07riM+AyzxacZT5TRwSorpdS4/cjX9BOisuqRQB5aW3V98zFRQBF2YoJaOjNML4vuR57uWlwUai9WfhnO3pI6asrzYfBKNZ9jXs180c+v/a+tVfGlYaO/i2TqAH59xLBZhvE" descuento="17.38" fecha="2016-09-02T17:56:08" folio="76" formaDePago="PAGO EN UNA SOLA EXIBICION" metodoDePago="02" motivoDescuento="DEDUCCIONES DE NOMINA" noCertificado="00001000000301698966" sello="XoclvlWC70Jh1GeeBwfjQ7myWR17H32H2j58qze3ZKcpD76nyB/QaT0RWzRBOH5Y1DkzwqyO3TrOnf/kQ5ZbnNC86mSwz5BqxIQuptvtiLPj3ZLlgCkWZW34NEP9Ig6MgVLOxKnxplPEXqODwwiyvRhrMG1XT2aDoBnVoN5XRq4=" serie="KNG" subTotal="793.66" tipoDeComprobante="egreso" total="736.62" version="3.2" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/TimbreFiscalDigital/TimbreFiscalDigital.xsd http://www.sat.gob.mx/cfd/3 http://www.sat.gob.mx/sitio_internet/cfd/3/cfdv32.xsd"><cfdi:Emisor nombre="EXPORTACIONES SUMAR S.A. DE C.V." rfc="ESU131122SZ6"><cfdi:DomicilioFiscal calle="ISAAC GARZA" codigoPostal="64000" colonia="CENTRO" estado="Nuevo Leon" municipio="Monterrey" noExterior="1810" pais="Mexico" /><cfdi:RegimenFiscal Regimen="REGIMEN GENERAL DE LEY PERSONAS MORALES" /></cfdi:Emisor><cfdi:Receptor nombre="LUIS MARIO GONZALEZ TAMEZ" rfc="GOTL791210P7A"><cfdi:Domicilio calle="VENUSTIANO CARRANZA" codigoPostal="67350" colonia="BENITO JUAREZ" estado="Nuevo Leon" municipio="Allende" noInterior="1401" pais="Mexico" /></cfdi:Receptor><cfdi:Conceptos><cfdi:Concepto cantidad="1.00" descripcion="PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016" importe="793.6600" unidad="SERVICIO" valorUnitario="793.6600" /></cfdi:Conceptos><cfdi:Impuestos totalImpuestosRetenidos="39.66"><cfdi:Retenciones><cfdi:Retencion importe="39.66" impuesto="ISR" /></cfdi:Retenciones></cfdi:Impuestos><cfdi:Complemento><nomina:Nomina xmlns:nomina="http://www.sat.gob.mx/nomina" Antiguedad="1" CURP="GOTL791210HNLNMS00" Departamento="VENTAS" FechaFinalPago="2016-09-01" FechaInicialPago="2016-08-26" FechaInicioRelLaboral="2016-08-30" FechaPago="2016-09-02" NumDiasPagados="7" NumEmpleado="1" NumSeguridadSocial="43977982362" PeriodicidadPago="SEMANAL" Puesto="AGENTE DE VENTAS" RegistroPatronal="D37-15870-10-0" RiesgoPuesto="3" SalarioBaseCotApor="104.52" SalarioDiarioIntegrado="100.00" TipoContrato="Base" TipoJornada="Diurna" TipoRegimen="2" Version="1.1" xsi:schemaLocation="http://www.sat.gob.mx/nomina http://www.sat.gob.mx/sitio_internet/cfd/nomina/nomina11.xsd"><nomina:Percepciones TotalExento="0.00" TotalGravado="793.66"><nomina:Percepcion Clave="001" Concepto="SUELDO" ImporteExento="0.00" ImporteGravado="700.00" TipoPercepcion="001" /><nomina:Percepcion Clave="008" Concepto="SUBSIDIO AL EMPLEO" ImporteExento="0.00" ImporteGravado="93.66" TipoPercepcion="017" /></nomina:Percepciones><nomina:Deducciones TotalExento="57.04" TotalGravado="0.00"><nomina:Deduccion Clave="001" Concepto="I.M.S.S." ImporteExento="17.38" ImporteGravado="0.00" TipoDeduccion="001" /><nomina:Deduccion Clave="002" Concepto="I.S.P.T." ImporteExento="39.66" ImporteGravado="0.00" TipoDeduccion="002" /></nomina:Deducciones></nomina:Nomina><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" version="1.0" UUID="1CCC2313-4ECF-4C1F-A924-1EA0AA71C167" FechaTimbrado="2016-09-02T17:56:13" noCertificadoSAT="00001000000301160463" selloCFD="XoclvlWC70Jh1GeeBwfjQ7myWR17H32H2j58qze3ZKcpD76nyB/QaT0RWzRBOH5Y1DkzwqyO3TrOnf/kQ5ZbnNC86mSwz5BqxIQuptvtiLPj3ZLlgCkWZW34NEP9Ig6MgVLOxKnxplPEXqODwwiyvRhrMG1XT2aDoBnVoN5XRq4=" selloSAT="X8oa8s2OVY/xPOH2RPKDmAKfPSuHQcbEib+ARhQbgea20btKu9R50/ZpNFjzwWO2oCqnP1WcW0DXeNdTh8ufhpgp3zd+JfJrMAxTwEzCIKXWiHYRxL8gWXua2sgjRV/nGi3g2CDbLwAZGo1HR+s1tu8cjeWRbY8gSJ9NG/Iw1Zc=" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/TimbreFiscalDigital/TimbreFiscalDigital.xsd" /></cfdi:Complemento></cfdi:Comprobante>	1	1	2016-09-02 17:56:11.318049-04	1	f	\N	0
 \.
 
 
@@ -12228,7 +14799,7 @@ COPY fac_cfdis (id, tipo, ref_id, doc, gral_emp_id, gral_suc_id, fecha_crea, gra
 -- Name: fac_cfdis_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('fac_cfdis_id_seq', 2, true);
+SELECT pg_catalog.setval('fac_cfdis_id_seq', 76, true);
 
 
 --
@@ -12245,8 +14816,8 @@ COPY fac_cfds_conf (empresa_id, archivo_certificado, numero_certificado, archivo
 --
 
 COPY fac_cfds_conf_folios (id, no_aprobacion, ano_aprobacion, serie, folio_inicial, folio_final, fac_cfds_conf_id, proposito, folio_actual) FROM stdin;
-6	0	0	KNG	1	99999	1	NOM	3
 4	0	0	KNG	1	99999	1	FAC	512
+6	0	0	KNG	1	99999	1	NOM	77
 \.
 
 
@@ -12262,6 +14833,21 @@ SELECT pg_catalog.setval('fac_cfds_conf_folios_id_seq', 1, false);
 --
 
 SELECT pg_catalog.setval('fac_cfds_conf_id_seq', 1, true);
+
+
+--
+-- Data for Name: fac_docs; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY fac_docs (id, serie_folio, cxc_clie_id, moneda_id, subtotal, impuesto, total, tipo_cambio, fac_cfd_id, proceso_id, cxc_agen_id, terminos_id, orden_compra, observaciones, cancelado, motivo_cancelacion, momento_creacion, momento_cancelacion, gral_usr_id_creacion, gral_usr_id_cancelacion, fac_docs_tipo_cancelacion_id, fac_metodos_pago_id, no_cuenta, monto_retencion, tasa_retencion_immex, salida, nombre_archivo, folio_pedido, fecha_vencimiento, enviar_ruta, inv_alm_id, cxc_clie_df_id, monto_ieps, ref_id, monto_descto, motivo_descto, subtotal_sin_descto, ctb_tmov_id, procesado, ctb_tmov_id_cancelacion, procesado_cancelacion, fecha_procesa_cancelacion, gral_usr_id_procesa_cancelacion) FROM stdin;
+\.
+
+
+--
+-- Name: fac_docs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('fac_docs_id_seq', 1, false);
 
 
 --
@@ -12309,26 +14895,28 @@ SELECT pg_catalog.setval('fac_namespaces_id_seq', 1, false);
 --
 
 COPY fac_nomina (id, tipo_comprobante, forma_pago, tipo_cambio, no_cuenta, fecha_pago, fac_metodos_pago_id, gral_mon_id, nom_periodicidad_pago_id, nom_periodos_conf_det_id, momento_creacion, momento_actualizacion, momento_baja, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_emp_id, gral_suc_id, status) FROM stdin;
-72	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-29	4	1	1	17	2016-08-23 13:24:16.121344-04	\N	\N	1	0	0	1	1	0
 54	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-15	4	1	1	2	2016-08-23 11:22:38.225531-04	2016-08-25 17:02:16.326959-04	\N	1	1	0	1	1	1
-73	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-05	4	1	1	18	2016-08-23 13:39:24.720854-04	2016-08-23 13:42:07.307362-04	\N	1	1	0	1	1	0
-74	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-12	4	1	1	19	2016-08-23 13:44:05.673497-04	2016-08-23 13:46:24.132163-04	\N	1	1	0	1	1	0
-56	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-22	4	1	1	3	2016-08-23 11:27:15.57167-04	\N	\N	1	0	0	1	1	0
-57	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-29	4	1	1	4	2016-08-23 11:30:07.868303-04	2016-08-23 11:31:21.817712-04	\N	1	1	0	1	1	0
-59	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-06	4	1	1	5	2016-08-23 12:21:33.703492-04	\N	\N	1	0	0	1	1	0
-75	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-19	4	1	1	20	2016-08-23 13:49:22.02297-04	2016-08-23 13:52:31.850051-04	\N	1	1	0	1	1	0
-61	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-13	4	1	1	6	2016-08-23 12:28:27.73169-04	\N	\N	1	0	0	1	1	0
-62	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-20	4	1	1	7	2016-08-23 12:32:08.860923-04	\N	\N	1	0	0	1	1	0
-63	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-27	4	1	1	8	2016-08-23 12:34:35.300803-04	\N	\N	1	0	0	1	1	0
-64	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-02	4	1	1	9	2016-08-23 12:40:38.392867-04	\N	\N	1	0	0	1	1	0
-65	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-10	4	1	1	10	2016-08-23 12:45:02.963601-04	\N	\N	1	0	0	1	1	0
-66	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-17	4	1	1	11	2016-08-23 12:48:15.070174-04	\N	\N	1	0	0	1	1	0
-67	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-24	4	1	1	12	2016-08-23 12:50:51.267114-04	2016-08-23 12:55:16.884425-04	\N	1	1	0	1	1	0
-68	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-01	4	1	1	13	2016-08-23 12:57:22.271777-04	2016-08-23 13:00:58.161212-04	\N	1	1	0	1	1	0
-69	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-08	4	1	1	14	2016-08-23 13:05:18.764354-04	\N	\N	1	0	0	1	1	0
-70	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-15	4	1	1	15	2016-08-23 13:10:24.887826-04	\N	\N	1	0	0	1	1	0
-71	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-22	4	1	1	16	2016-08-23 13:17:56.844385-04	\N	\N	1	0	0	1	1	0
+76	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-26	4	1	1	21	2016-08-31 13:48:20.675297-04	2016-08-31 13:52:36.247815-04	\N	1	1	0	1	1	2
+56	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-22	4	1	1	3	2016-08-23 11:27:15.57167-04	2016-08-30 09:46:41.051911-04	\N	1	1	0	1	1	1
+66	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-17	4	1	1	11	2016-08-23 12:48:15.070174-04	2016-08-30 10:29:07.612116-04	\N	1	1	0	1	1	1
+57	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-29	4	1	1	4	2016-08-23 11:30:07.868303-04	2016-08-30 09:50:27.79653-04	\N	1	1	0	1	1	1
+72	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-29	4	1	1	17	2016-08-23 13:24:16.121344-04	2016-08-31 13:18:51.807031-04	\N	1	1	0	1	1	1
+59	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-06	4	1	1	5	2016-08-23 12:21:33.703492-04	2016-08-30 09:55:27.250602-04	\N	1	1	0	1	1	1
+77	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-09-02	4	1	1	22	2016-09-02 17:51:11.356722-04	2016-09-02 17:55:51.636077-04	\N	1	1	0	1	1	2
+67	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-24	4	1	1	12	2016-08-23 12:50:51.267114-04	2016-08-31 12:36:38.660488-04	\N	1	1	0	1	1	1
+61	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-13	4	1	1	6	2016-08-23 12:28:27.73169-04	2016-08-30 10:06:55.743041-04	\N	1	1	0	1	1	1
+73	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-05	4	1	1	18	2016-08-23 13:39:24.720854-04	2016-08-31 13:27:42.648228-04	\N	1	1	0	1	1	2
+62	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-20	4	1	1	7	2016-08-23 12:32:08.860923-04	2016-08-30 10:10:33.375855-04	\N	1	1	0	1	1	1
+68	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-01	4	1	1	13	2016-08-23 12:57:22.271777-04	2016-08-31 12:58:06.566049-04	\N	1	1	0	1	1	1
+63	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-05-27	4	1	1	8	2016-08-23 12:34:35.300803-04	2016-08-30 10:13:28.028254-04	\N	1	1	0	1	1	1
+74	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-12	4	1	1	19	2016-08-23 13:44:05.673497-04	2016-08-31 13:38:13.666213-04	\N	1	1	0	1	1	2
+64	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-02	4	1	1	9	2016-08-23 12:40:38.392867-04	2016-08-30 10:16:13.805284-04	\N	1	1	0	1	1	1
+69	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-08	4	1	1	14	2016-08-23 13:05:18.764354-04	2016-08-31 13:03:31.155801-04	\N	1	1	0	1	1	1
 53	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-04-08	4	1	1	1	2016-08-23 11:17:31.674088-04	2016-08-25 13:57:52.500297-04	\N	1	1	0	1	1	1
+65	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-06-10	4	1	1	10	2016-08-23 12:45:02.963601-04	2016-08-30 10:24:17.972997-04	\N	1	1	0	1	1	1
+70	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-15	4	1	1	15	2016-08-23 13:10:24.887826-04	2016-08-31 13:09:51.913657-04	\N	1	1	0	1	1	1
+75	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-08-19	4	1	1	20	2016-08-23 13:49:22.02297-04	2016-08-31 13:42:14.949418-04	\N	1	1	0	1	1	2
+71	EGRESO	PAGO EN UNA SOLA EXIBICION	1		2016-07-22	4	1	1	16	2016-08-23 13:17:56.844385-04	2016-08-31 13:13:50.989521-04	\N	1	1	0	1	1	1
 \.
 
 
@@ -12346,97 +14934,108 @@ COPY fac_nomina_det (id, fac_nomina_id, gral_empleado_id, no_empleado, rfc, nomb
 28	54	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 29	54	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 30	54	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
+31	56	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	3	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-15	2016-04-21	7	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 09:46:44.826452-04	1	t	KNG	3	1_KNG3	f	\N	0
 33	56	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 34	56	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 35	56	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-31	56	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	3	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-15	2016-04-21	7	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-32	56	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	1	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-15	2016-04-21	7	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+32	56	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	1	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-15	2016-04-21	7	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 09:46:48.263157-04	1	t	KNG	4	1_KNG4	f	\N	0
+36	57	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	4	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-22	2016-04-28	7	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 09:50:31.870488-04	1	t	KNG	5	1_KNG5	f	\N	0
 38	57	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 39	57	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 40	57	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-37	57	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	2	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-22	2016-04-28	7	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-36	57	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	4	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-22	2016-04-28	7	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+41	59	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	5	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-29	2016-05-05	7	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 09:55:30.952981-04	1	t	KNG	7	1_KNG7	f	\N	0
+37	57	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	2	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-22	2016-04-28	7	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 09:50:35.406688-04	1	t	KNG	6	1_KNG6	f	\N	0
 43	59	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 44	59	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 45	59	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-41	59	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	5	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-29	2016-05-05	7	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-42	59	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	3	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-29	2016-05-05	7	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+46	61	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	6	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:06:59.22069-04	1	t	KNG	9	1_KNG9	f	\N	0
+47	61	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	4	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:07:02.628051-04	1	t	KNG	10	1_KNG10	f	\N	0
 48	61	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-46	61	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	6	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-47	61	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	4	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
 26	54	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	2	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-04-08	2016-04-14	7	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-25 17:02:19.811979-04	1	t	KNG	2	1_KNG2	f	\N	0
 50	61	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-49	61	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	1	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
 53	62	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 55	62	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-51	62	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	7	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-52	62	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	5	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-54	62	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	2	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+52	62	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	5	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:10:40.509238-04	1	t	KNG	13	1_KNG13	f	\N	0
+54	62	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	2	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:10:44.096285-04	1	t	KNG	14	1_KNG14	f	\N	0
+56	63	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	8	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:13:31.475417-04	1	t	KNG	15	1_KNG15	f	\N	0
 58	63	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 60	63	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-56	63	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	8	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-57	63	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	6	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-59	63	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	3	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+57	63	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	6	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:13:34.83858-04	1	t	KNG	16	1_KNG16	f	\N	0
+59	63	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	3	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-20	2016-05-26	7	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:13:38.263799-04	1	t	KNG	17	1_KNG17	f	\N	0
+61	64	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	9	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:16:17.377119-04	1	t	KNG	18	1_KNG18	f	\N	0
 63	64	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 65	64	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-61	64	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	9	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-62	64	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	7	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-64	64	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	4	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+62	64	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	7	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:16:20.721091-04	1	t	KNG	19	1_KNG19	f	\N	0
+64	64	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	4	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-27	2016-06-02	7	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:16:24.200152-04	1	t	KNG	20	1_KNG20	f	\N	0
+66	65	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	10	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:24:21.529839-04	1	t	KNG	21	1_KNG21	f	\N	0
 68	65	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 70	65	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-66	65	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	10	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-67	65	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	8	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-69	65	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	5	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+67	65	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	8	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:24:24.878002-04	1	t	KNG	22	1_KNG22	f	\N	0
+51	62	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	7	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-05-13	2016-05-19	7	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:10:37.089639-04	1	t	KNG	12	1_KNG12	f	\N	0
 73	66	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
 75	66	5					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-71	66	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	11	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-72	66	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	9	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-74	66	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	6	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+76	67	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	12	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:33:49.836724-04	1	t	KNG	27	1_KNG27	f	\N	0
+77	67	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	10	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 12:36:42.531135-04	1	t	KNG	28	1_KNG28	f	\N	0
 78	67	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-76	67	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	12	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-77	67	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	10	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-79	67	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	7	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-84	68	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	8	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-80	67	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	1	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+79	67	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	7	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 12:36:45.871555-04	1	t	KNG	29	1_KNG29	f	\N	0
+80	67	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	1	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-06-17	2016-06-23	7	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 12:36:49.193942-04	1	t	KNG	30	1_KNG30	f	\N	0
+81	68	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	13	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 12:58:11.092053-04	1	t	KNG	31	1_KNG31	f	\N	0
+85	68	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	2	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 12:58:22.528935-04	1	t	KNG	34	1_KNG34	f	\N	0
+82	68	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	11	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 12:58:15.580274-04	1	t	KNG	32	1_KNG32	f	\N	0
 83	68	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-81	68	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	13	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-82	68	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	11	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-86	69	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	14	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-85	68	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	2	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+84	68	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	8	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-24	2016-06-30	7	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 12:58:19.194924-04	1	t	KNG	33	1_KNG33	f	\N	0
+86	69	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	14	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:03:34.825989-04	1	t	KNG	35	1_KNG35	f	\N	0
+87	69	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	12	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:03:38.168535-04	1	t	KNG	36	1_KNG36	f	\N	0
+89	69	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	9	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:03:41.880477-04	1	t	KNG	37	1_KNG37	f	\N	0
 88	69	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-87	69	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	12	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-89	69	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	9	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-90	69	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	3	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+90	69	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	3	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-01	2016-07-07	7	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:03:46.615891-04	1	t	KNG	38	1_KNG38	f	\N	0
+71	66	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	11	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:29:11.167004-04	1	t	KNG	24	1_KNG24	f	\N	0
+72	66	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	9	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:29:14.529499-04	1	t	KNG	25	1_KNG25	f	\N	0
 93	70	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-91	70	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	15	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-92	70	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	13	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-94	70	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	10	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-95	70	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	4	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+95	70	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	4	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:10:06.839931-04	1	t	KNG	42	1_KNG42	f	\N	0
+96	71	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	16	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:13:54.492817-04	1	t	KNG	43	1_KNG43	f	\N	0
 98	71	3					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-96	71	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	16	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-97	71	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	14	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-99	71	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	11	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-100	71	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	5	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
+99	71	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	11	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:14:02.481454-04	1	t	KNG	45	1_KNG45	f	\N	0
+100	71	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	5	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:14:06.985535-04	1	t	KNG	46	1_KNG46	f	\N	0
+101	72	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	17	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:18:55.461522-04	1	t	KNG	47	1_KNG47	f	\N	0
+102	72	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	15	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:18:58.953081-04	1	t	KNG	48	1_KNG48	f	\N	0
 104	72	4					0	0	\N	0	0	0	0	0		0	0			0	0	\N	\N	0			0	0	0	0		0	0	0	0	0	0	0	0	0	0	f	\N	\N	f				f	\N	0
-101	72	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	17	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-102	72	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	15	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-105	72	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	6	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
-103	72	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	1	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-106	73	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	18	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-107	73	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	16	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-109	73	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	12	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-110	73	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	7	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
-108	73	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	2	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-111	74	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	19	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-112	74	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	17	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-114	74	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	13	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-115	74	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	8	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
-113	74	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	3	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-116	75	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	20	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.600000000000023	793.600000000000023	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.600000000000023	17.379999999999999	39.6599999999999966	736.559999999999945	793.600000000000023	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-117	75	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	18	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-119	75	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	14	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
-120	75	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	9	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	f	\N	\N	t				f	\N	0
-118	75	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	4	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	f	\N	\N	t				f	\N	0
+103	72	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	1	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:19:02.598854-04	1	t	KNG	49	1_KNG49	f	\N	0
+105	72	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	6	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-22	2016-07-28	7	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:19:06.166594-04	1	t	KNG	50	1_KNG50	f	\N	0
+106	73	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	18	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:27:46.696428-04	1	t	KNG	51	1_KNG51	f	\N	0
+107	73	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	16	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:27:50.250011-04	1	t	KNG	52	1_KNG52	f	\N	0
+109	73	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	12	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:27:56.979627-04	1	t	KNG	54	1_KNG54	f	\N	0
+110	73	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	7	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:28:00.162383-04	1	t	KNG	55	1_KNG55	f	\N	0
+91	70	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	15	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:09:56.594075-04	1	t	KNG	39	1_KNG39	f	\N	0
+92	70	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	13	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:09:59.90728-04	1	t	KNG	40	1_KNG40	f	\N	0
+94	70	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	10	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-07-08	2016-07-14	7	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:10:03.241623-04	1	t	KNG	41	1_KNG41	f	\N	0
+112	74	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	17	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:38:20.82632-04	1	t	KNG	57	1_KNG57	f	\N	0
+113	74	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	3	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:38:24.085738-04	1	t	KNG	58	1_KNG58	f	\N	0
+115	74	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	8	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:38:31.996412-04	1	t	KNG	60	1_KNG60	f	\N	0
+116	75	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	20	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.600000000000023	793.600000000000023	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.600000000000023	17.379999999999999	39.6599999999999966	736.559999999999945	793.600000000000023	0	0	57.0399999999999991	t	2016-08-31 13:42:19.586537-04	1	t	KNG	61	1_KNG61	f	\N	0
+114	74	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	13	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:38:28.62199-04	1	t	KNG	59	1_KNG59	f	\N	0
+117	75	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	18	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:42:23.055855-04	1	t	KNG	62	1_KNG62	f	\N	0
+118	75	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	4	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:42:26.331345-04	1	t	KNG	63	1_KNG63	f	\N	0
+120	75	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	9	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:42:34.783815-04	1	t	KNG	65	1_KNG65	f	\N	0
+119	75	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	14	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-12	2016-08-18	7	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:42:29.988484-04	1	t	KNG	64	1_KNG64	f	\N	0
+42	59	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	3	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-04-29	2016-05-05	7	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 09:55:34.269847-04	1	t	KNG	8	1_KNG8	f	\N	0
+49	61	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	1	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-05-06	2016-05-12	7	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:07:06.257615-04	1	t	KNG	11	1_KNG11	f	\N	0
+69	65	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	5	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-03	2016-06-09	7	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:24:28.071667-04	1	t	KNG	23	1_KNG23	f	\N	0
+74	66	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	6	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-06-10	2016-06-16	7	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-30 10:29:17.992638-04	1	t	KNG	26	1_KNG26	f	\N	0
+97	71	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	14	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-07-15	2016-07-21	7	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:13:59.003078-04	1	t	KNG	44	1_KNG44	f	\N	0
+108	73	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	2	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-07-29	2016-08-04	7	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:27:53.53671-04	1	t	KNG	53	1_KNG53	f	\N	0
+111	74	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	19	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-05	2016-08-11	7	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:38:17.339569-04	1	t	KNG	56	1_KNG56	f	\N	0
+123	76	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	5	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-19	2016-08-25	7	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:52:46.421161-04	1	t	KNG	68	1_KNG68	f	\N	0
+121	76	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	21	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-19	2016-08-25	7	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:52:39.745732-04	1	t	KNG	66	1_KNG66	f	\N	0
+122	76	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	19	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-19	2016-08-25	7	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:52:43.051893-04	1	t	KNG	67	1_KNG67	f	\N	0
+124	76	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	15	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-19	2016-08-25	7	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-08-31 13:52:50.271128-04	1	t	KNG	69	1_KNG69	f	\N	0
+125	76	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	10	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-19	2016-08-25	7	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-08-31 13:52:54.058366-04	1	t	KNG	70	1_KNG70	f	\N	0
+126	77	1	1	RIVJ830922296	JUAN ARTURO RIOS VARGAS	RIVJ830922HNLSRN06	1	1	2016-04-01	22	2	1	1	1		6	3	43008368748	D37-15870-10-0	104.519999999999996	100	2016-08-26	2016-09-01	7	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-09-02 17:55:55.417486-04	1	t	KNG	71	1_KNG71	f	\N	0
+127	77	2	2	TAGG6107261L5	GASPAR TAMEZ GARZA	TAGG610726HNLMRS04	1	2	2016-04-15	20	2	1	1	1		6	3	43806183124	D37-15870-10-0	104.519999999999996	100	2016-08-26	2016-09-01	7	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-09-02 17:55:58.617802-04	1	t	KNG	72	1_KNG72	f	\N	0
+128	77	3	3	TATL820816766	JOSE LUIS TAMEZ TAMEZ	TATL820816HNLMMS07	1	2	2016-07-19	6	2	1	1	1		6	3	43038202081	D37-15870-10-0	104.519999999999996	100	2016-08-26	2016-09-01	7	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-09-02 17:56:01.705778-04	1	t	KNG	73	1_KNG73	f	\N	0
+129	77	4	4	BARJ8707085S9	JUAN EDGAR BALBOA RIVERA	BARJ870708HNLLVN02	1	2	2016-05-05	16	2	1	1	1		6	3	43048719199	D37-15870-10-0	104.519999999999996	100	2016-08-26	2016-09-01	7	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-09-02 17:56:04.941146-04	1	t	KNG	74	1_KNG74	f	\N	0
+130	77	5	5	SUCA780502PG9	ALBERTO JORGE SUAREZ CAVAZOS	SUCA780502HNLRVL00	1	2	2016-06-13	11	2	1	1	1		6	3	03967836382	D37-15870-10-0	104.519999999999996	100	2016-08-26	2016-09-01	7	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	SERVICIO	1	1598.73000000000002	1598.73000000000002	38.5399999999999991	DEDUCCIONES DE NOMINA	1	119.010000000000005	1598.73000000000002	38.5399999999999991	119.010000000000005	1441.18000000000006	1598.73000000000002	0	0	157.550000000000011	t	2016-09-02 17:56:08.163957-04	1	t	KNG	75	1_KNG75	f	\N	0
+131	77	7	1	GOTL791210P7A	LUIS MARIO GONZALEZ TAMEZ	GOTL791210HNLNMS00	1	2	2016-08-30	1	2	1	1	1		6	3	43977982362	D37-15870-10-0	104.519999999999996	100	2016-08-26	2016-09-01	7	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	SERVICIO	1	793.659999999999968	793.659999999999968	17.379999999999999	DEDUCCIONES DE NOMINA	1	39.6599999999999966	793.659999999999968	17.379999999999999	39.6599999999999966	736.620000000000005	793.659999999999968	0	0	57.0399999999999991	t	2016-09-02 17:56:11.318049-04	1	t	KNG	76	1_KNG76	f	\N	0
 \.
 
 
@@ -12579,6 +15178,28 @@ COPY fac_nomina_det_deduc (id, fac_nomina_det_id, nom_deduc_id, gravado, excento
 159	120	2	0	119.010000000000005
 160	118	1	0	17.379999999999999
 161	118	2	0	39.6599999999999966
+162	121	1	0	17.379999999999999
+163	121	2	0	39.6599999999999966
+164	122	1	0	17.379999999999999
+165	122	2	0	39.6599999999999966
+166	123	1	0	17.379999999999999
+167	123	2	0	39.6599999999999966
+168	124	1	0	17.379999999999999
+169	124	2	0	39.6599999999999966
+172	125	1	0	38.5399999999999991
+173	125	2	0	119.010000000000005
+174	126	1	0	17.379999999999999
+175	126	2	0	39.6599999999999966
+176	127	1	0	17.379999999999999
+177	127	2	0	39.6599999999999966
+178	129	1	0	17.379999999999999
+179	129	2	0	39.6599999999999966
+180	130	1	0	38.5399999999999991
+181	130	2	0	119.010000000000005
+182	128	1	0	17.379999999999999
+183	128	2	0	39.6599999999999966
+184	131	1	0	17.379999999999999
+185	131	2	0	39.6599999999999966
 \.
 
 
@@ -12586,7 +15207,7 @@ COPY fac_nomina_det_deduc (id, fac_nomina_det_id, nom_deduc_id, gravado, excento
 -- Name: fac_nomina_det_deduc_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('fac_nomina_det_deduc_id_seq', 161, true);
+SELECT pg_catalog.setval('fac_nomina_det_deduc_id_seq', 185, true);
 
 
 --
@@ -12608,7 +15229,7 @@ SELECT pg_catalog.setval('fac_nomina_det_hrs_extra_id_seq', 1, false);
 -- Name: fac_nomina_det_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('fac_nomina_det_id_seq', 120, true);
+SELECT pg_catalog.setval('fac_nomina_det_id_seq', 131, true);
 
 
 --
@@ -12767,6 +15388,28 @@ COPY fac_nomina_det_percep (id, fac_nomina_det_id, nom_percep_id, gravado, excen
 160	120	8	58.3800000000000026	0
 161	118	1	700	0
 162	118	8	93.6599999999999966	0
+163	121	1	700	0
+164	121	8	93.6599999999999966	0
+165	122	1	700	0
+166	122	8	93.6599999999999966	0
+167	123	1	700	0
+168	123	8	93.6599999999999966	0
+169	124	1	700	0
+170	124	8	93.6599999999999966	0
+173	125	1	1540.34999999999991	0
+174	125	8	58.3800000000000026	0
+175	126	1	700	0
+176	126	8	93.6599999999999966	0
+177	127	1	700	0
+178	127	8	93.6599999999999966	0
+179	129	1	700	0
+180	129	8	93.6599999999999966	0
+181	130	1	1540.34999999999991	0
+182	130	8	58.3800000000000026	0
+183	128	1	700	0
+184	128	8	93.6599999999999966	0
+185	131	1	700	0
+186	131	8	93.6599999999999966	0
 \.
 
 
@@ -12774,14 +15417,14 @@ COPY fac_nomina_det_percep (id, fac_nomina_det_id, nom_percep_id, gravado, excen
 -- Name: fac_nomina_det_percep_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('fac_nomina_det_percep_id_seq', 162, true);
+SELECT pg_catalog.setval('fac_nomina_det_percep_id_seq', 186, true);
 
 
 --
 -- Name: fac_nomina_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('fac_nomina_id_seq', 75, true);
+SELECT pg_catalog.setval('fac_nomina_id_seq', 77, true);
 
 
 --
@@ -12874,7 +15517,8 @@ SELECT pg_catalog.setval('gral_civils_id_seq', 1, false);
 --
 
 COPY gral_cons (id, gral_emp_id, gral_suc_id, gral_cons_tipo_id, prefijo, consecutivo, borrado_logico) FROM stdin;
-66	1	1	15		0	f
+66	1	1	15		1	f
+47	1	1	7		0	f
 \.
 
 
@@ -13000,6 +15644,21 @@ SELECT pg_catalog.setval('gral_dias_no_laborables_id_seq', 1, false);
 
 
 --
+-- Data for Name: gral_docs; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY gral_docs (id, titulo, gral_app_id, gral_emp_id, gral_usr_id_actualizacion, momento_actualizacion) FROM stdin;
+\.
+
+
+--
+-- Name: gral_docs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('gral_docs_id_seq', 1, false);
+
+
+--
 -- Data for Name: gral_edo; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
@@ -13109,6 +15768,8 @@ COPY gral_empleado_deduc (id, gral_empleado_id, nom_deduc_id) FROM stdin;
 50	4	2
 53	5	1
 54	5	2
+57	7	1
+58	7	2
 \.
 
 
@@ -13116,7 +15777,7 @@ COPY gral_empleado_deduc (id, gral_empleado_id, nom_deduc_id) FROM stdin;
 -- Name: gral_empleado_deduc_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_empleado_deduc_id_seq', 54, true);
+SELECT pg_catalog.setval('gral_empleado_deduc_id_seq', 58, true);
 
 
 --
@@ -13134,6 +15795,8 @@ COPY gral_empleado_percep (id, gral_empleado_id, nom_percep_id) FROM stdin;
 50	4	8
 53	5	1
 54	5	8
+57	7	1
+58	7	8
 \.
 
 
@@ -13141,7 +15804,7 @@ COPY gral_empleado_percep (id, gral_empleado_id, nom_percep_id) FROM stdin;
 -- Name: gral_empleado_percep_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_empleado_percep_id_seq', 54, true);
+SELECT pg_catalog.setval('gral_empleado_percep_id_seq', 58, true);
 
 
 --
@@ -13154,6 +15817,7 @@ COPY gral_empleados (id, clave, nombre_pila, apellido_paterno, apellido_materno,
 3	3	JOSE LUIS	TAMEZ	TAMEZ	43038202081		TATL820816HNLMMS07	TATL820816766	1982-08-16	2016-07-19	3	1	2	1	1	2	0	1				2	19	951										f	\N	2016-08-20 21:24:00.778474-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
 4	4	JUAN EDGAR	BALBOA	RIVERA	43048719199		BARJ870708HNLLVN02	BARJ8707085S9	1987-07-08	2016-05-05	3	1	2	1	1	2	0	1				2	19	951										f	\N	2016-08-20 21:24:12.695887-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
 5	5	ALBERTO JORGE	SUAREZ	CAVAZOS	03967836382		SUCA780502HNLRVL00	SUCA780502PG9	1978-05-02	2016-06-13	3	1	2	1	1	2	0	1				2	19	951										f	\N	2016-08-23 12:54:44.480675-04	\N	1	1	1	1	1	0	1	0	0	0	0	0	0	0	0	0		1		2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
+7	1	LUIS MARIO	GONZALEZ	TAMEZ	43977982362		GOTL791210HNLNMS00	GOTL791210P7A	1979-10-12	2016-08-30	2	1	2	1	1	2	2	1			exportacionessumar_13@outlook.com	2	19	951	VENUSTIANO CARRANZA		BENITO JUAREZ	67350						f	2016-09-02 17:46:42.641593-04	2016-09-02 17:47:47.155578-04	\N	1	1	0	1	1	0	1	0	0	0	0	0	0	0	0	0		1	1401	2	1	3	1	1	6		104.519999999999996	100	D37-15870-10-0	t	1
 \.
 
 
@@ -13161,7 +15825,7 @@ COPY gral_empleados (id, clave, nombre_pila, apellido_paterno, apellido_materno,
 -- Name: gral_empleados_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('gral_empleados_id_seq', 6, true);
+SELECT pg_catalog.setval('gral_empleados_id_seq', 7, true);
 
 
 --
@@ -16072,7 +18736,7 @@ SELECT pg_catalog.setval('gral_tc_url_id_seq', 1, false);
 --
 
 COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id) FROM stdin;
-1	admin	123qwe	t	2016-08-27 11:36:57.228178-04	1
+1	admin	123qwe	t	2016-09-06 20:21:17.147903-04	1
 2	admin1	123qwe	t	\N	2
 3	admin2	123qwe	t	\N	3
 4	admin3	123qwe	t	\N	4
@@ -16183,6 +18847,10 @@ SELECT pg_catalog.setval('inv_clas_id_seq', 1, false);
 
 COPY inv_exi (id, inv_prod_id, inv_alm_id, ano, transito, reservado, exi_inicial, entradas_1, salidas_1, costo_ultimo_1, entradas_2, salidas_2, costo_ultimo_2, entradas_3, salidas_3, costo_ultimo_3, entradas_4, salidas_4, costo_ultimo_4, entradas_5, salidas_5, costo_ultimo_5, entradas_6, salidas_6, costo_ultimo_6, entradas_7, salidas_7, costo_ultimo_7, entradas_8, salidas_8, costo_ultimo_8, entradas_9, salidas_9, costo_ultimo_9, entradas_10, salidas_10, costo_ultimo_10, entradas_11, salidas_11, costo_ultimo_11, entradas_12, salidas_12, costo_ultimo_12, momento_entrada_1, momento_salida_1, momento_entrada_2, momento_salida_2, momento_entrada_3, momento_salida_3, momento_entrada_4, momento_salida_4, momento_entrada_5, momento_salida_5, momento_entrada_6, momento_salida_6, momento_entrada_7, momento_salida_7, momento_entrada_8, momento_salida_8, momento_entrada_9, momento_salida_9, momento_entrada_10, momento_salida_10, momento_entrada_11, momento_salida_11, momento_entrada_12, momento_salida_12) FROM stdin;
 3	8	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+4	9	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	10000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+5	10	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	12000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+6	11	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	14000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+7	12	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	16000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
 \.
 
 
@@ -16190,7 +18858,7 @@ COPY inv_exi (id, inv_prod_id, inv_alm_id, ano, transito, reservado, exi_inicial
 -- Name: inv_exi_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('inv_exi_id_seq', 3, true);
+SELECT pg_catalog.setval('inv_exi_id_seq', 7, true);
 
 
 --
@@ -16254,8 +18922,10 @@ SELECT pg_catalog.setval('inv_mov_tipos_id_seq', 1, false);
 --
 
 COPY inv_pre (id, inv_prod_id, precio_1, precio_2, precio_3, precio_4, precio_5, precio_6, precio_7, precio_8, precio_9, precio_10, descuento_1, descuento_2, descuento_3, descuento_4, descuento_5, descuento_6, descuento_7, descuento_8, descuento_9, descuento_10, base_precio_1, base_precio_2, base_precio_3, base_precio_4, base_precio_5, base_precio_6, base_precio_7, base_precio_8, base_precio_9, base_precio_10, default_precio_1, default_precio_2, default_precio_3, default_precio_4, default_precio_5, default_precio_6, default_precio_7, default_precio_8, default_precio_9, default_precio_10, operacion_precio_1, operacion_precio_2, operacion_precio_3, operacion_precio_4, operacion_precio_5, operacion_precio_6, operacion_precio_7, operacion_precio_8, operacion_precio_9, operacion_precio_10, calculo_precio_1, calculo_precio_2, calculo_precio_3, calculo_precio_4, calculo_precio_5, calculo_precio_6, calculo_precio_7, calculo_precio_8, calculo_precio_9, calculo_precio_10, redondeo_precio_1, redondeo_precio_2, redondeo_precio_3, redondeo_precio_4, redondeo_precio_5, redondeo_precio_6, redondeo_precio_7, redondeo_precio_8, redondeo_precio_9, redondeo_precio_10, gral_emp_id, borrado_logico, momento_creacion, momento_baja, momento_actualizacion, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_baja, gral_mon_id_pre1, gral_mon_id_pre2, gral_mon_id_pre3, gral_mon_id_pre4, gral_mon_id_pre5, gral_mon_id_pre6, gral_mon_id_pre7, gral_mon_id_pre8, gral_mon_id_pre9, gral_mon_id_pre10, inv_prod_presentacion_id) FROM stdin;
-5	8	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-08-20 21:47:57.66066-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	3
-6	8	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-08-20 21:47:57.66066-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	4
+9	9	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-09-05 10:22:17.488498-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	1
+10	10	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-09-05 10:28:36.539137-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	1
+11	11	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-09-05 10:35:43.991143-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	1
+12	12	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	0	0	0	0	0	0	0	0	0	0	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	0	1	f	2016-09-05 10:40:15.781143-04	\N	\N	0	0	0	1	1	1	1	1	1	1	1	1	1	1
 \.
 
 
@@ -16263,7 +18933,7 @@ COPY inv_pre (id, inv_prod_id, precio_1, precio_2, precio_3, precio_4, precio_5,
 -- Name: inv_pre_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('inv_pre_id_seq', 6, true);
+SELECT pg_catalog.setval('inv_pre_id_seq', 12, true);
 
 
 --
@@ -16271,8 +18941,12 @@ SELECT pg_catalog.setval('inv_pre_id_seq', 6, true);
 --
 
 COPY inv_prod (id, sku, descripcion, codigo_barras, tentrega, inv_clas_id, inv_stock_clasif_id, estatus, inv_prod_familia_id, subfamilia_id, inv_prod_grupo_id, ieps, meta_impuesto, inv_prod_linea_id, inv_mar_id, tipo_de_producto_id, inv_seccion_id, unidad_id, requiere_numero_serie, requiere_numero_lote, requiere_pedimento, permitir_stock, venta_moneda_extranjera, compra_moneda_extranjera, requiere_nom, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, sucursal_id, empresa_id, cxp_prov_id, sku_aux, id_aux, densidad, valor_maximo, valor_minimo, punto_reorden, gral_impto_id, ctb_cta_id_gasto, ctb_cta_id_costo_venta, ctb_cta_id_venta, descripcion_corta, descripcion_larga, archivo_img, archivo_pdf, inv_prod_presentacion_id, flete, no_clie, gral_mon_id, gral_imptos_ret_id) FROM stdin;
-1	S-21	MESCLA XK XILOL MEK		0	1	1	t	0	0	1	0		1	1	1	1	1	f	f	f	f	f	f	f	f	2015-04-22 08:40:02.080175-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
-8	XXX	XXXXX		0	1	1	t	0	0	1	0		3	3	6	1	3	f	f	f	f	f	f	f	f	2016-08-20 21:47:57.66066-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					4	f		1	0
+9	CC12OZ	REFRESCO COLA (CC) 12 OZ.		0	1	1	t	0	0	1	0		1	1	7	1	2	f	f	f	f	f	f	f	f	2016-09-05 10:22:17.488498-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
+10	CC16OZ	REFRESCO COLA (CC) 16 OZ.		0	1	1	t	0	0	1	0		2	1	7	1	2	f	f	f	f	f	f	f	f	2016-09-05 10:28:36.539137-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
+11	ML16OZ	REFRESCO MANZANA 16 OZ.		0	1	1	t	0	0	1	0		2	3	7	1	2	f	f	f	f	f	f	f	f	2016-09-05 10:35:43.991143-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
+12	MJ16OZ	REFRESCO MANZANA JOYA 16 OZ		0	1	1	t	0	0	1	0		2	3	7	1	2	f	f	f	f	f	f	f	f	2016-09-05 10:40:15.781143-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
+1	S-21	MESCLA XK XILOL MEK		0	1	1	t	0	0	1	0		1	1	1	1	1	f	f	f	f	f	f	f	t	2015-04-22 08:40:02.080175-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					1	f		1	0
+8	XXX	XXXXX		0	1	1	t	0	0	1	0		3	3	6	1	3	f	f	f	f	f	f	f	t	2016-08-20 21:47:57.66066-04	\N	\N	1	0	0	1	1	0		0	1	0	0	0	1	0	0	0					4	f		1	0
 \.
 
 
@@ -16282,6 +18956,10 @@ COPY inv_prod (id, sku, descripcion, codigo_barras, tentrega, inv_clas_id, inv_s
 
 COPY inv_prod_cost_prom (id, inv_prod_id, ano, costo_promedio_1, costo_promedio_2, costo_promedio_3, costo_promedio_4, costo_promedio_5, costo_promedio_6, costo_promedio_7, costo_promedio_8, costo_promedio_9, costo_promedio_10, costo_promedio_11, costo_promedio_12, costo_ultimo_1, tipo_cambio_1, gral_mon_id_1, costo_ultimo_2, tipo_cambio_2, gral_mon_id_2, costo_ultimo_3, tipo_cambio_3, gral_mon_id_3, costo_ultimo_4, tipo_cambio_4, gral_mon_id_4, costo_ultimo_5, tipo_cambio_5, gral_mon_id_5, costo_ultimo_6, tipo_cambio_6, gral_mon_id_6, costo_ultimo_7, tipo_cambio_7, gral_mon_id_7, costo_ultimo_8, tipo_cambio_8, gral_mon_id_8, costo_ultimo_9, tipo_cambio_9, gral_mon_id_9, costo_ultimo_10, tipo_cambio_10, gral_mon_id_10, costo_ultimo_11, tipo_cambio_11, gral_mon_id_11, costo_ultimo_12, tipo_cambio_12, gral_mon_id_12, actualizacion_1, actualizacion_2, actualizacion_3, actualizacion_4, actualizacion_5, actualizacion_6, actualizacion_7, actualizacion_8, actualizacion_9, actualizacion_10, actualizacion_11, actualizacion_12, factura_ultima_1, oc_ultima_1, factura_ultima_2, oc_ultima_2, factura_ultima_3, oc_ultima_3, factura_ultima_4, oc_ultima_4, factura_ultima_5, oc_ultima_5, factura_ultima_6, oc_ultima_6, factura_ultima_7, oc_ultima_7, factura_ultima_8, oc_ultima_8, factura_ultima_9, oc_ultima_9, factura_ultima_10, oc_ultima_10, factura_ultima_11, oc_ultima_11, factura_ultima_12, oc_ultima_12) FROM stdin;
 1	8	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N																								
+2	9	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N																								
+3	10	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N																								
+4	11	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N																								
+5	12	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	0	1	1	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N																								
 \.
 
 
@@ -16289,7 +18967,7 @@ COPY inv_prod_cost_prom (id, inv_prod_id, ano, costo_promedio_1, costo_promedio_
 -- Name: inv_prod_cost_prom_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('inv_prod_cost_prom_id_seq', 1, true);
+SELECT pg_catalog.setval('inv_prod_cost_prom_id_seq', 5, true);
 
 
 --
@@ -16332,7 +19010,7 @@ SELECT pg_catalog.setval('inv_prod_grupos_id_seq', 1, true);
 -- Name: inv_prod_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('inv_prod_id_seq', 8, true);
+SELECT pg_catalog.setval('inv_prod_id_seq', 12, true);
 
 
 --
@@ -16362,6 +19040,10 @@ SELECT pg_catalog.setval('inv_prod_lineas_id_seq', 5, true);
 COPY inv_prod_pres_x_prod (id, producto_id, presentacion_id, producto_id_aux) FROM stdin;
 9	8	3	\N
 10	8	4	\N
+11	9	1	\N
+12	10	1	\N
+13	11	1	\N
+14	12	1	\N
 \.
 
 
@@ -16369,7 +19051,7 @@ COPY inv_prod_pres_x_prod (id, producto_id, presentacion_id, producto_id_aux) FR
 -- Name: inv_prod_pres_x_prod_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('inv_prod_pres_x_prod_id_seq', 10, true);
+SELECT pg_catalog.setval('inv_prod_pres_x_prod_id_seq', 14, true);
 
 
 --
@@ -16652,26 +19334,11 @@ COPY nom_periodos_conf (id, ano, nom_periodicidad_pago_id, prefijo, borrado_logi
 --
 
 COPY nom_periodos_conf_det (id, nom_periodos_conf_id, folio, titulo, fecha_ini, fecha_fin, estatus) FROM stdin;
-3	1	16	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	2016-04-15	2016-04-21	f
-4	1	17	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	2016-04-22	2016-04-28	f
-5	1	18	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	2016-04-29	2016-05-05	f
-6	1	19	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	2016-05-06	2016-05-12	f
-7	1	20	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	2016-05-13	2016-05-19	f
-8	1	21	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	2016-05-20	2016-05-26	f
-9	1	22	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	2016-05-27	2016-06-02	f
-10	1	23	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	2016-06-03	2016-06-09	f
-11	1	24	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	2016-06-10	2016-06-16	f
-12	1	25	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	2016-06-17	2016-06-23	f
-13	1	26	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	2016-06-24	2016-06-30	f
-14	1	27	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	2016-07-01	2016-07-07	f
-15	1	28	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	2016-07-08	2016-07-14	f
-16	1	29	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	2016-07-15	2016-07-21	f
-17	1	30	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	2016-07-22	2016-07-28	f
-18	1	31	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	2016-07-29	2016-08-04	f
-19	1	32	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	2016-08-05	2016-08-11	f
-20	1	33	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	2016-08-12	2016-08-18	f
-21	1	34	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	2016-08-19	2016-08-25	f
-22	1	35	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	2016-08-26	2016-09-01	f
+17	1	30	PAGO DE NOMINA DEL 22/07/2016 AL 28/07/2016	2016-07-22	2016-07-28	t
+8	1	21	PAGO DE NOMINA DEL 20/05/2016 AL 26/05/2016	2016-05-20	2016-05-26	t
+9	1	22	PAGO DE NOMINA DEL 27/05/2016 AL 02/06/2016	2016-05-27	2016-06-02	t
+10	1	23	PAGO DE NOMINA DEL 03/06/2016 AL 09/06/2016	2016-06-03	2016-06-09	t
+18	1	31	PAGO DE NOMINA DEL 29/07/2016 AL 04/08/2016	2016-07-29	2016-08-04	t
 23	1	36	PAGO DE NOMINA DEL 02/09/2016 AL 08/09/2016	2016-09-02	2016-09-08	f
 24	1	37	PAGO DE NOMINA DEL 09/09/2016 AL 15/09/2016	2016-09-09	2016-09-15	f
 25	1	38	PAGO DE NOMINA DEL 16/09/2016 AL 22/09/2016	2016-09-16	2016-09-22	f
@@ -16689,8 +19356,23 @@ COPY nom_periodos_conf_det (id, nom_periodos_conf_id, folio, titulo, fecha_ini, 
 37	1	50	PAGO DE NOMINA DEL 09/12/2016 AL 15/12/2016	2016-12-09	2016-12-15	f
 38	1	51	PAGO DE NOMINA DEL 16/12/2016 AL 22/12/2016	2016-12-16	2016-12-22	f
 39	1	52	PAGO DE NOMINA DEL 23/12/2016 AL 29/12/2016	2016-12-23	2016-12-29	f
+11	1	24	PAGO DE NOMINA DEL 10/06/2016 AL 16/06/2016	2016-06-10	2016-06-16	t
 1	1	14	PAGO DE NOMINA DEL 01/04/2016 AL 07/04/2016	2016-04-01	2016-04-07	t
 2	1	15	PAGO DE NOMINA DEL 08/04/2016 AL 14/04/2016	2016-04-08	2016-04-14	t
+3	1	16	PAGO DE NOMINA DEL 15/04/2016 AL 21/04/2016	2016-04-15	2016-04-21	t
+4	1	17	PAGO DE NOMINA DEL 22/04/2016 AL 28/04/2016	2016-04-22	2016-04-28	t
+12	1	25	PAGO DE NOMINA DEL 17/06/2016 AL 23/06/2016	2016-06-17	2016-06-23	t
+5	1	18	PAGO DE NOMINA DEL 29/04/2016 AL 05/05/2016	2016-04-29	2016-05-05	t
+19	1	32	PAGO DE NOMINA DEL 05/08/2016 AL 11/08/2016	2016-08-05	2016-08-11	t
+6	1	19	PAGO DE NOMINA DEL 06/05/2016 AL 12/05/2016	2016-05-06	2016-05-12	t
+13	1	26	PAGO DE NOMINA DEL 24/06/2016 AL 30/06/2016	2016-06-24	2016-06-30	t
+7	1	20	PAGO DE NOMINA DEL 13/05/2016 AL 19/05/2016	2016-05-13	2016-05-19	t
+20	1	33	PAGO DE NOMINA DEL 12/08/2016 AL 18/08/2016	2016-08-12	2016-08-18	t
+14	1	27	PAGO DE NOMINA DEL 01/07/2016 AL 07/07/2016	2016-07-01	2016-07-07	t
+15	1	28	PAGO DE NOMINA DEL 08/07/2016 AL 14/07/2016	2016-07-08	2016-07-14	t
+21	1	34	PAGO DE NOMINA DEL 19/08/2016 AL 25/08/2016	2016-08-19	2016-08-25	t
+16	1	29	PAGO DE NOMINA DEL 15/07/2016 AL 21/07/2016	2016-07-15	2016-07-21	t
+22	1	35	PAGO DE NOMINA DEL 26/08/2016 AL 01/09/2016	2016-08-26	2016-09-01	t
 \.
 
 
@@ -17213,6 +19895,14 @@ ALTER TABLE ONLY fac_cfds_conf_folios
 
 
 --
+-- Name: fac_docs_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY fac_docs
+    ADD CONSTRAINT fac_docs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fac_metodos_pago_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -17378,6 +20068,14 @@ ALTER TABLE ONLY gral_deptos_turnos
 
 ALTER TABLE ONLY gral_dias_no_laborables
     ADD CONSTRAINT gral_dias_no_laborables_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: gral_docs_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_docs
+    ADD CONSTRAINT gral_docs_pkey PRIMARY KEY (id);
 
 
 --
