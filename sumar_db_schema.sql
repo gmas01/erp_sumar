@@ -43,6 +43,8 @@ DECLARE
         -- # an string reply. The caller is goint to be
         -- # on charge of parsing so.
 	valor_retorno text := '';
+	valor_retorno2 text := '';
+	valor_retorno3 text := '';
 
 
 	-- # Buffer array for "campos_data" splitted content
@@ -62,6 +64,7 @@ DECLARE
         -- # Billing settings
         facpar record;
         cambiaUnidadMedida boolean:=false;
+        idAdenda integer:=0;
         	
 	-- # From Where and who is 
 	-- # performing validation
@@ -889,7 +892,7 @@ BEGIN
 	END IF; --TERMINA VALIDACION validacion de clientes
 
 
-	-- INICIAA VALIDACION de Productos
+	-- INICIA VALIDACION de Productos
 	IF id_app=8 THEN
 
 		--query para verificar si la Empresa actual incluye Modulo de Produccion
@@ -1061,6 +1064,427 @@ BEGIN
 		END IF;
 	END IF;--TERMINA VALIDACION validacion de productos
 
+
+	--Prefacturas
+	IF id_app=13 THEN
+		--str_data[3]	id_usuario
+		--str_data[4]	id_prefactura
+		--str_data[5] 	id_cliente
+		
+		--Obtener valores para estas variables:incluye_modulo_produccion, controlExisPres
+		SELECT incluye_produccion, control_exis_pres FROM gral_emp WHERE id=emp_id INTO incluye_modulo_produccion, controlExisPres;
+		
+		
+		--obtener el id del almacen de donde se va a facturar
+		SELECT inv_alm_id FROM erp_prefacturas WHERE id=str_data[4]::integer INTO id_almacen;
+		
+		IF str_data[5]::integer < 1 THEN
+			valor_retorno := ''||valor_retorno||'rfccliente:Es necesario seleccionar un cliente___';
+		END IF;
+		
+		--str_data[6]	id_moneda
+		--str_data[7]	observaciones
+		--str_data[8]	tipo_cambio_vista
+		
+		IF str_data[8] = '' OR str_data[8] = ' ' THEN
+			valor_retorno := ''||valor_retorno||'tc:Es necesario ingresar el tipo de cambio___';
+		ELSE
+			IF str_data[8]::double precision <= 0 THEN
+				valor_retorno := ''||valor_retorno||'tc:El tipo de cambio debe ser mayor que cero___';
+			ELSE
+				IF str_data[8]::double precision > 100 THEN
+					valor_retorno := ''||valor_retorno||'tc:El tipo de cambio debe ser mayor que 100___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[9]	id_vendedor
+		IF str_data[9]='0' THEN
+			valor_retorno := ''||valor_retorno||'agente:Es necesario seleccionar el Agente. Debe ir a Clientes y asignar el Agente, depues reiniciar el procesos de facturacion de Remision___';
+		END IF;
+		
+		--str_data[10]	id_condiciones
+		IF str_data[10]='0' THEN
+			valor_retorno := ''||valor_retorno||'terminos:Es necesario seleccionar un Termino de Pago. Debe ir a Clientes y asignar los Dias de Credito, depues reiniciar el procesos de facturacion de Remision___';
+		END IF;
+		
+		--str_data[11]	orden_compra
+		--str_data[12]	refacturar
+		--str_data[13]	id_metodo_pago
+		--str_data[14]	no_cuenta
+		--str_data[15]	select_tipo_documento
+		--str_data[16]	folio_pedido
+		--str_data[16]	
+		
+		--RAISE EXCEPTION '%',str_data[13];
+		
+		/*
+		IF str_data[13]::integer=2 OR str_data[13]::integer=3 THEN		
+			IF str_data[14]='' OR str_data[14]=' ' THEN
+				valor_retorno := ''||valor_retorno||'digitos:Es necesario ingresar los ultimos 4 digitos de la tarjeta___';
+			ELSE
+				EXECUTE 'select mask_regex from erp_mascaras_para_validaciones_por_app where app_id='||id_app||' and mask_name ilike ''is_DigitosTarjetaCorrect'';' INTO mask_general;
+				EXECUTE 'select '''||str_data[14]||''' ~ '''||mask_general||''';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno|| 'digitos:Es necesario ingresar 4 digitos.___';
+				END IF;
+			END IF;
+		END IF;
+		*/
+
+		
+		--Aqui se validan los datos para la Adenda
+		--Primero se verifica si en los parametros indica que se debe incluir la Adenda
+		IF facpar.incluye_adenda THEN 
+			--Verificar que exista un id de cliente valido
+			IF str_data[5]::integer > 1 THEN
+				--Buscar el numero de Adenda asignado al cliente.
+				SELECT cxc_clie_tipo_adenda_id FROM cxc_clie WHERE id=str_data[5]::integer INTO idAdenda;
+				
+				--Varificar si tiene adenda asignada
+				IF idAdenda > 0 THEN
+					--Verificar el numero de adenda
+					IF idAdenda=1 THEN 
+						--Addenda FEMSA QUIMIPRODUCTOS
+						
+						--Si el numero de Adenda es 1, entonces solo debe se debe validar datos cuando el tipo de documento es igual a 3.
+						--Tipo Documento 3=Factura de Remision
+						IF str_data[15]::integer=3 THEN 
+							--str_data[20]	NoEntrada
+							--str_data[21]	NoRemision
+							--str_data[22]	Consignacion
+							--str_data[23]  CentroCostos
+							--str_data[24]	FechaInicio
+							--str_data[25]  FechaFin
+							--str_data[26]  Orden Compra
+							--str_data[27]  Moneda
+							
+							valor_retorno2 := '';
+							IF trim(str_data[27])='' THEN 
+								valor_retorno2 := ''||valor_retorno2||'campo8$La Moneda no debe quedar vacio.&&&&&';
+								valor_retorno3 := ''||valor_retorno3||'Orden de Compra, ';
+							END IF;
+							
+							IF trim(str_data[22])='true' THEN 
+								--Aqui entra cuando es Consignacion
+								IF trim(str_data[23])='' THEN 
+									valor_retorno2 := ''||valor_retorno2||'campo4$Es necesario ingresar el Centro de Costo.&&&&&';
+									valor_retorno3 := ''||valor_retorno3||'Centro de Costo, ';
+								END IF;
+								IF trim(str_data[24])='' THEN 
+									valor_retorno2 := ''||valor_retorno2||'campo5$Es necesario ingresar la Fecha de Inicio.&&&&&';
+									valor_retorno3 := ''||valor_retorno3||'Fecha Inicio, ';
+								END IF;
+								IF trim(str_data[25])='' THEN 
+									valor_retorno2 := ''||valor_retorno2||'campo6$Es necesario ingresar la Fecha de Fin.&&&&&';
+									valor_retorno3 := ''||valor_retorno3||'Fecha Fin.';
+								END IF;
+							ELSE
+								IF trim(str_data[26])='' THEN 
+									valor_retorno2 := ''||valor_retorno2||'campo7$La Orden de Compra no debe estar vacio.&&&&&';
+									valor_retorno3 := ''||valor_retorno3||'Orden de Compra, ';
+								ELSE
+									IF char_length(str_data[26])<10 THEN
+										valor_retorno2 := ''||valor_retorno2||'campo7$La Orden de Compra debe tener 10 digitos.&&&&&';
+										valor_retorno3 := ''||valor_retorno3||'Orden de Compra, ';
+									ELSE
+										IF char_length(str_data[26])>10 THEN
+											valor_retorno2 := ''||valor_retorno2||'campo7$La Orden de Compra debe tener 10 digitos.&&&&&';
+											valor_retorno3 := ''||valor_retorno3||'Orden de Compra, ';
+										END IF;
+									END IF;
+								END IF;
+
+								
+								IF trim(str_data[20])='' THEN 
+									valor_retorno2 := ''||valor_retorno2||'campo1$El Numero de Entrada no puede quedar vacio.&&&&&';
+									valor_retorno3 := ''||valor_retorno3||'No. Entrada, ';
+								ELSE
+									IF char_length(str_data[20])<10 THEN
+										valor_retorno2 := ''||valor_retorno2||'campo1$Numero de Entrada debe tener 10 digitos.&&&&&';
+										valor_retorno3 := ''||valor_retorno3||'No. Entrada, ';
+									ELSE
+										IF char_length(str_data[20])>10 THEN
+											valor_retorno2 := ''||valor_retorno2||'campo1$Numero de Entrada debe tener 10 digitos.&&&&&';
+											valor_retorno3 := ''||valor_retorno3||'No. Entrada, ';
+										END IF;
+									END IF;
+								END IF;
+								
+								IF trim(str_data[21])='' THEN 
+									valor_retorno2 := ''||valor_retorno2||'campo2$Es necesario ingresar el Numero de Remision.&&&&&';
+									valor_retorno3 := ''||valor_retorno3||'No. Remision, ';
+								END IF;
+							END IF;
+							
+							IF valor_retorno2<>'' THEN 
+								valor_retorno := ''||valor_retorno||'adenda1: Falta ';
+								valor_retorno := ''||valor_retorno||valor_retorno3||'___';
+								valor_retorno := ''||valor_retorno||'adenda2:'||valor_retorno2;
+							END IF;
+						END IF;
+					END IF;
+					--Termina Addenda FEMSA-QUIMIPRODUCTOS
+
+
+					--Addenda SUN CHEMICAL
+					IF idAdenda=2 THEN 
+						IF trim(str_data[11])='' THEN 
+							valor_retorno := ''||valor_retorno||'oc:Orden de Compra es obligatorio para la Addenda___';
+						END IF;
+					END IF;
+					--Termina addenda SUN CHEMICAL
+				END IF;
+			END IF;
+		END IF;
+		--Termina validacion de datos para la Adenda
+		
+		--EXECUTE 'select '''||str_data[11]||''' ~ ''^[^@ ]+@[^@ ]+.[^@ .]+$'';' INTO match_cadena;
+		--str_data[28]	rfc
+		IF trim(str_data[28]) = '' THEN
+			valor_retorno := ''||valor_retorno||'rfc:Se requiere el RFC del Cliente.___';
+		ELSE
+			EXECUTE 'select '''||str_data[28]||''' ~ ''^[A-Za-z0-9&]{3,4}[0-9]{6}[A-Za-z0-9]{3}$'';' INTO match_cadena;
+			IF match_cadena = false THEN
+				valor_retorno := ''||valor_retorno||'rfc:RFC No Valido.___';
+			END IF;
+		END IF;
+		
+		/*
+		--str_data[29]	check_envio
+		IF trim(str_data[29]) = 'true' THEN
+			IF trim(str_data[30]) = '' THEN
+				valor_retorno := ''||valor_retorno||'emailenvio:Se requiere el E-Mail para el envio.___';
+			ELSE
+				EXECUTE 'select '''||str_data[30]||''' ~ ''^[^@ ]+@[^@ ]+.[^@ .]+$'';' INTO match_cadena;
+				IF match_cadena = false THEN
+					valor_retorno := ''||valor_retorno||'emailenvio:E-Mail No Valido.___';
+				END IF;
+			END IF;
+		END IF;
+		
+		--str_data[30]	email_envio
+		*/
+
+
+		--str_data[30]	select_tmov
+		--str_data[15]	select_tipo_documento
+		--1=Factura, 2=Remision, 3=Factura de Remision
+		
+		if str_data[15]::integer=1 or str_data[15]::integer=3 then 
+			if str_data[30]::integer<=0 then 
+				--valor_retorno := ''||valor_retorno||'tmov:Seleccionar el Tipo de Movimiento.___';
+			end if;
+		end if;
+		
+		total_filas:= array_length(arreglo,1);
+		cont_fila:=1;
+		IF arreglo[1] <> 'sin datos' THEN
+			
+			FOR cont_fila IN 1 .. total_filas LOOP
+				SELECT INTO str_filas string_to_array(arreglo[cont_fila],'___');
+				
+				--str_filas[1] eliminado
+				IF str_filas[1]::integer<>0 THEN--1: no esta eliminado, 0:eliminado
+					--str_filas[2]	iddetalle
+					--str_filas[3]	idproducto
+					--str_filas[4]	id_presentacion
+					--str_filas[5]	id_impuesto
+					--str_filas[6]	cantidad
+					--str_filas[7]	costo
+					--str_filas[8]	valor_impuesto
+					--str_filas[9]	id_remision
+					--str_filas[10]	costo_promedio
+					
+					--str_filas[11]	idUnidad
+					--str_filas[12]	id_ieps
+					--str_filas[13]	tasa_ieps
+					--str_filas[14]	vdescto
+					
+					--Inicializar valores
+					cantPresAsignado:=0;
+					equivalenciaPres:=0;
+					exisActualPres:=0;
+					cantPresReservAnterior:=0;
+					noDecUnidad:=0;
+					cant_reservada_anterior:=0;
+					total_existencia:=0;
+					
+					--str_filas[6]	cantidad
+					IF trim(str_filas[6]) = '' THEN
+						valor_retorno := ''||valor_retorno||'cantidad'||cont_fila||':Es necesario ingresar la cantidad___';
+					ELSE
+						--Verificar que el campo sea numerico
+						IF (SELECT trim(str_filas[6]) ~ '^([0-9]+[.]?[0-9]*|[.][0-9]+)$') THEN 
+							
+							--RAISE EXCEPTION '%',str_filas[6];
+							IF str_filas[6]::double precision < 0.000001 THEN
+								/*
+								Se comento esta validacion porque ya se se puede facturar parcialmente un pedido
+								y se puede dejar partidas en cero para no incluirla en la factura.
+								*/
+								--valor_retorno := ''||valor_retorno||'cantidad'||cont_fila||':La cantidad debe ser mayor que cero___';
+							ELSE	
+								--si refacturar=false, valida existencias, si es refacturacion no se valida nada
+								IF str_data[12] = 'false' THEN
+									
+									--obtener el tipo de producto y el numero de Decimales Permitidos
+									SELECT 
+										inv_prod.tipo_de_producto_id AS tipo_producto,
+										(CASE WHEN inv_prod_unidades.id IS NULL THEN 0 ELSE inv_prod_unidades.decimales END) AS no_dec,
+										inv_prod.unidad_id,
+										inv_prod.densidad,
+										(CASE WHEN inv_prod_unidades.titulo IS NULL THEN '' ELSE inv_prod_unidades.titulo END) AS unidad
+									FROM inv_prod 
+									LEFT JOIN inv_prod_unidades ON inv_prod_unidades.id=inv_prod.unidad_id
+									WHERE inv_prod.id=str_filas[3]::integer 
+									INTO tipo, noDecUnidad, idUnidadMedida, densidadProd, nombreUnidadMedida;
+									
+									IF densidadProd IS NULL OR densidadProd=0 THEN densidadProd:=1; END IF;
+									
+									--Verificar si se esta facturando en diferente unidad de medida
+									IF idUnidadMedida::integer<>str_filas[11]::integer  THEN
+										EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''LITRO*'';' INTO match_cadena;
+										IF match_cadena=true THEN 
+											--Convertir a Litros
+											str_filas[6] := str_filas[6]::double precision / densidadProd;
+										ELSE
+											EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''KILO*'';' INTO match_cadena;
+											IF match_cadena=true THEN
+												--Convertir a kilos
+												str_filas[6] := str_filas[6]::double precision * densidadProd;
+											END IF;
+										END IF;
+									END IF;
+									
+									
+									--Redondear la Cantidad
+									str_filas[6] := round(str_filas[6]::numeric,noDecUnidad)::double precision;
+									
+									
+									--Si el tipo de producto es diferente de 4, hay que validar existencias
+									--tipo=4 Servicios
+									--para el tipo servicios no se debe validar existencias
+									IF tipo<>4 THEN
+										
+										--Tipo de Documento diferente de 3(Facturacion de Remision)
+										IF str_data[15]::integer<>3 THEN
+											--tipo=1 Normal o Terminado
+											--tipo=2 Subensable o Formulacion o Intermedio
+											--tipo=5 Refacciones
+											--tipo=6 Accesorios
+											--tipo=7 Materia Prima
+											--tipo=8 Prod. en Desarrollo
+											IF tipo=1 OR tipo=2 OR tipo=5 OR tipo=6 OR tipo=7 OR tipo=8 THEN 
+												--llamada a proc que devuelve la existencia del producto. 
+												--El tipo de busqueda de existencia es 1=Busqueda en el almacen de la Sucursal
+												--el valor false que se le esta pasando es para indicarle que en las existencias no incluya reservados, y que solo me devualva existencias disponibles
+												SELECT inv_calculo_existencia_producto AS existencia FROM inv_calculo_existencia_producto(1,false, str_filas[3]::integer, str_data[3]::integer, id_almacen) INTO total_existencia;
+												
+												IF str_filas[2]::integer>0 THEN
+													--buscamos la cantidad reservada anterior
+													SELECT reservado FROM erp_prefacturas_detalles WHERE id=str_filas[2]::integer INTO cant_reservada_anterior;
+													
+													--Redondear la cantidad reservada anterior
+													cant_reservada_anterior := round(cant_reservada_anterior::numeric,noDecUnidad)::double precision;
+													
+													--le sumamos a la existencia la cantidad reservada anterior para tener la existencia real
+													total_existencia := total_existencia::double precision + cant_reservada_anterior::double precision;
+												END IF;
+												
+												--Redondear la existencia actual
+												total_existencia := round(total_existencia::numeric,noDecUnidad)::double precision;
+												
+												IF total_existencia<=0 THEN
+													valor_retorno := ''||valor_retorno||'cantidad'||cont_fila||':El producto tiene Existencia 0 en Almacen___';
+												ELSE
+													IF total_existencia < str_filas[6]::double precision THEN
+														valor_retorno := ''||valor_retorno||'cantidad'||cont_fila||':Disponibles '||total_existencia||',  usted esta intentando vender '||str_filas[6]||'___';
+													END IF;
+												END IF;
+												
+												--RAISE EXCEPTION '%' ,'controlExisPres: '||controlExisPres;
+												--Verificar si hay que validar existencias de Presentaciones
+												IF controlExisPres=true THEN 
+													--Buscar la equivalencia de la Presentacion
+													SELECT cantidad  FROM inv_prod_presentaciones WHERE id=str_filas[4]::integer 
+													INTO equivalenciaPres;
+													
+													IF equivalenciaPres IS NULL THEN equivalenciaPres:=0; END IF;
+													
+													--Buscar la existencia actual de la Presentacion
+													SELECT (inicial::double precision + entradas::double precision - salidas::double precision - reservado::double precision) AS exi
+													FROM inv_exi_pres WHERE inv_alm_id=id_almacen::integer AND inv_prod_id=str_filas[3]::integer AND inv_prod_presentacion_id=str_filas[4]::integer 
+													INTO exisActualPres;
+													
+													IF exisActualPres IS NULL THEN exisActualPres:=0; END IF;
+													
+													
+													--Si la configuracion indica que se validan Presentaciones desde el Pedido,
+													--entonces significa que hay reservados, por lo tanto hay que descontarlos para tener la existencia real
+													IF facpar.validar_pres_pedido=true THEN 
+														--Si la presentacion actual es igual a la presentacion  anterior, entonces calculamos la c
+														cantPresReservAnterior := cant_reservada_anterior::double precision / equivalenciaPres::double precision;
+														
+														--redondear la Cantidad de la Presentacion reservada Anteriormente
+														cantPresReservAnterior := round(cantPresReservAnterior::numeric,noDecUnidad)::double precision; 
+														
+														--sumar la cantidad reservada anterior para tener la existencia real
+														exisActualPres = exisActualPres::double precision + cantPresReservAnterior::double precision;
+													END IF;
+													--RAISE EXCEPTION '%' ,'exisActualPres: '||exisActualPres;
+													
+													--Redondear la Existencia actual de Presentaciones
+													exisActualPres := round(exisActualPres::numeric,noDecUnidad)::double precision; 
+													
+													--Convertir a su equivalencia en Presentacion, la cantidad de la partida actual del pedido
+													cantPresAsignado := str_filas[6]::double precision / equivalenciaPres::double precision;
+													
+													--Redondear la cantidad de Presentaciones Asignado en la partida
+													cantPresAsignado := round(cantPresAsignado::numeric,noDecUnidad)::double precision;
+													--RAISE EXCEPTION '%' ,'cantPresAsignado: '||cantPresAsignado;
+
+													
+													IF exisActualPres <= 0 THEN
+														valor_retorno := ''||valor_retorno||'presentacion'||cont_fila||':No hay existencia en esta Presentacion.___';
+													ELSE
+														IF exisActualPres::double precision < cantPresAsignado::double precision THEN
+															valor_retorno := ''||valor_retorno||'presentacion'||cont_fila||':Disponibles='||exisActualPres||',  Venta='||cantPresAsignado||'. No hay existencia suficiente en esta presentacion.___';
+														END IF;
+													END IF;
+													
+												END IF;
+												
+											END IF;
+										END IF;
+										
+									END IF;
+								END IF;
+							END IF;
+							
+						ELSE
+							--Aqui entra porque el campo cantidad trae un valor no numerico
+							valor_retorno := ''||valor_retorno||'cantidad'||cont_fila||':El valor para Cantidad es incorrecto, tiene mas de un punto('||str_filas[6]||')___';
+						END IF;
+						
+					END IF;
+					--valor_retorno := ''||valor_retorno||'costo'||cont_fila||':Es necesario ingresar el precio unitario___';
+					--str_filas[7]	costo
+					IF str_filas[7] = ' ' OR str_filas[7] = ''THEN
+						valor_retorno := ''||valor_retorno||'costo'||cont_fila||':Es necesario ingresar el precio unitario___';
+					ELSE
+						IF str_filas[7]::double precision < 0.000001 THEN
+							valor_retorno := ''||valor_retorno||'costo'||cont_fila||':El precio debe ser mayor que cero___';
+						END IF;
+					END IF;
+					
+				END IF;
+				
+			END LOOP;
+			
+		END IF;
+		
+	END IF;--termina prefacturas
 
 	--validacion de Catalogo de inv_pre
 	IF id_app=47 THEN
@@ -1255,118 +1679,6 @@ BEGIN
 			END IF;
 		END IF;
 
-		
---		IF empresa_transportista THEN
-			--Aqui solo entra cuando la empresa es transportista
---			IF str_data[22]='true' THEN
-				--Aqui entra cuando el pedido es de flete.
-				
-				--str_data[23]	nombre_documentador
-				--str_data[24]	valor_declarado
-				--str_data[25]	select_tviaje
-				--str_data[26]	remolque1
-				--str_data[27]	remolque2
-				--str_data[28]	id_vehiculo
-				--str_data[29]	no_operador
-				--str_data[30]	nombre_operador
-				--str_data[31]	select_pais_origen
-				--str_data[32]	select_estado_origen
-				--str_data[33]	select_municipio_origen
-				--str_data[34]	select_pais_dest
-				--str_data[35]	select_estado_dest
-				--str_data[36]	select_municipio_dest
-				--str_data[37]	agena_id
-				--str_data[38]	rem_id
-				--str_data[39]	rem_dir_alterna
-				--str_data[40]	dest_id
-				--str_data[41]	dest_dir_alterna
-				--str_data[42]	observaciones_transportista
-				
-				--str_data[23]	nombre_documentador
---				IF str_data[23] = '' THEN
---					valor_retorno := ''||valor_retorno||'documentador:Es necesario ingresar el nombre del Documentador.___';
---				END IF;
-				
-				--str_data[24]	valor_declarado
-				--str_data[25]	select_tviaje
---				IF str_data[25]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'tviaje:Es necesario seleccionar el Tipo de Viaje..___';
---				ELSE
-					--str_data[26]	remolque1
---					IF trim(str_data[26]) = '' THEN
---						valor_retorno := ''||valor_retorno||'remolque1:Es necesario seleccionar ingresar el Remolque 1.___';
---					END IF;
-					
---					IF str_data[25]::integer = 2 THEN
-						--str_data[27]	remolque2
---						IF trim(str_data[27]) = '' THEN
---							valor_retorno := ''||valor_retorno||'remolque2:Es necesario seleccionar ingresar el Remolque 2.___';
---						END IF;
---					END IF;
---				END IF;
-				
-				--str_data[28]	id_vehiculo
---				IF str_data[28]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'noeconomico:Es necesario seleccionar una Unidad.___';
---				END IF;
-				
-				--str_data[29]	no_operador
-				--str_data[30]	nombre_operador
---				IF trim(str_data[30]) = '' THEN
---					valor_retorno := ''||valor_retorno||'operador:Es necesario ingresar el Nombre del Operador.___';
---				END IF;
-				
-				--str_data[31]	select_pais_origen
---				IF str_data[31]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'paisorig:Es necesario seleccionar el Pais Origen.___';
---				END IF;
-				
-				--str_data[32]	select_estado_origen
---				IF str_data[32]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'estadoorig:Es necesario seleccionar el Estado Origen.___';
---				END IF;
-				
-				--str_data[33]	select_municipio_origen
---				IF str_data[33]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'municipioorig:Es necesario seleccionar el Municipio Origen.___';
---				END IF;
-				
-				--str_data[34]	select_pais_dest
---				IF str_data[34]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'paisdest:Es necesario seleccionar el Pais Destino.___';
---				END IF;
-				
-				--str_data[35]	select_estado_dest
---				IF str_data[35]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'estadodest:Es necesario seleccionar el Estado Destino.___';
---				END IF;
-				
-				--str_data[36]	select_municipio_dest
---				IF str_data[36]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'municipiodest:Es necesario seleccionar el Municipio Destino.___';
---				END IF;
-				
-				--str_data[37]	agena_id
---				IF str_data[37]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'agenano:Es necesario seleccionar un Agente Aduanal.___';
---				END IF;
-				
-				--str_data[38]	rem_id
---				IF str_data[38]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'remid:Es necesario seleccionar un Remitente.___';
---				END IF;
-				
-				--str_data[39]	rem_dir_alterna
-				--str_data[40]	dest_id
---				IF str_data[40]::integer = 0 THEN
---					valor_retorno := ''||valor_retorno||'nodest:Es necesario seleccionar un Destinatario.___';
---				END IF;
-				
-				--str_data[41]	dest_dir_alterna
-				--str_data[42]	observaciones_transportista
---			END IF;
---		END IF;
-		
 		total_filas:= array_length(arreglo,1);
 		cont_fila:=1;
 		IF arreglo[1] != 'sin datos' THEN
@@ -1935,6 +2247,22 @@ BEGIN
 		END IF;
 		
 	END IF;--termina pedidos
+
+
+	--Autorizacion de Pedidos de Clientes
+	IF id_app=65 THEN 
+		IF command_selected = 'autorizar' THEN 
+			--str_data[4]::integer
+			--Verificar si la configuración permite la autorizacion de precios abajo de la lista de precio en pedidos
+			if facpar.aut_precio_menor_ped then 
+				if (select count(id) from poc_pedidos_detalle where poc_pedido_id=str_data[4]::integer and requiere_aut=true and autorizado=false)>0 then 
+					valor_retorno := ''||valor_retorno||'checkauth:No es posible autorizar el pedido porque hay precios por debajo de la lista.<br>Regrese a la parte de edici&oacute;n del Pedido para pedir la autorizaci&oacute;n.___';
+				end if;
+			end if;
+			--RAISE EXCEPTION '%','valor_retorno:'||valor_retorno;
+		end if;
+		
+	END IF;--termina Autorizacion de Pedidos
 	
 
 	--Validacion de Catalogo Percepciones
@@ -5077,6 +5405,61 @@ BEGIN
 		
 	END IF;	--termina buscador de productos
 
+
+	--buscador de prefacturas
+	IF app_selected = 13 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	cliente
+		--str_data[4]	fecha_inicial
+		--str_data[5]	fecha_final
+		--str_data[6]	codigo
+		--str_data[7]	producto
+		--str_data[8]	agente
+		--str_data[9]	folio_pedido
+		
+		IF str_data[4] != '%%' THEN
+			cadena_where:= cadena_where ||' AND cxc_clie.razon_social ilike  '''||str_data[3]||'''';
+		END IF;
+		
+		--busqueda por fecha creacion
+		IF str_data[4] != '' THEN
+			IF str_data[5] = '' THEN
+				f_final:=str_data[4];
+			ELSE
+				f_final:=str_data[5];
+			END IF;
+			cadena_where:=cadena_where||' AND to_char(erp_prefacturas.momento_creacion, ''yyyymmdd'')::integer between (to_char('''||str_data[4]||'''::timestamp with time zone,''yyyymmdd'')::integer) and (to_char('''||f_final||'''::timestamp with time zone,''yyyymmdd'')::integer)';
+		END IF;
+		
+		IF str_data[6] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.sku ilike  '''||str_data[6]||'''';
+		END IF;
+		
+		IF str_data[7] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.descripcion ilike  '''||str_data[7]||'''';
+		END IF;
+		
+		IF str_data[8]::integer != 0 THEN
+			cadena_where:= cadena_where ||' AND erp_prefacturas.empleado_id='||str_data[8];
+		END IF;
+
+		IF str_data[9] != '%%' THEN
+			cadena_where:= cadena_where ||' AND erp_prefacturas.folio_pedido ilike  '''||str_data[9]||'''';
+		END IF;
+		
+		sql_query := 'SELECT DISTINCT erp_prefacturas.id 
+				FROM erp_prefacturas 
+				LEFT JOIN erp_prefacturas_detalles ON erp_prefacturas_detalles.prefacturas_id = erp_prefacturas.id 
+				JOIN inv_prod ON inv_prod.id = erp_prefacturas_detalles.producto_id
+				JOIN erp_proceso ON erp_proceso.id = erp_prefacturas.proceso_id
+				LEFT JOIN cxc_clie ON cxc_clie.id = erp_prefacturas.cliente_id  
+				WHERE erp_proceso.empresa_id='||emp_id||' AND  erp_proceso.sucursal_id='||suc_id||' '
+				'AND erp_prefacturas.borrado_logico=FALSE  '||cadena_where;
+		--RAISE EXCEPTION '%' ,sql_query;
+	END IF;	--termina buscador de prefacturas
+
+
 	
 	--buscador de Catalogo Clientes Clasificacion 1
 	IF app_selected = 20 THEN
@@ -5289,6 +5672,60 @@ BEGIN
 				WHERE erp_proceso.empresa_id='||emp_id||' AND  erp_proceso.sucursal_id='||suc_id||' AND poc_pedidos.borrado_logico=FALSE  '||cadena_where;
 		--RAISE EXCEPTION '%' ,sql_query;
 	END IF;	--termina buscador de pedidos de clientes
+
+
+	--buscador de Aplicativo Autorizacion de Pedidos de Clientes
+	IF app_selected = 65 THEN
+		--str_data[1]	app_selected
+		--str_data[2]	id_usuario
+		--str_data[3]	folio
+		--str_data[4]	cliente
+		--str_data[5]	fecha_inicial
+		--str_data[6]	fecha_final
+		--str_data[7]	codigo
+		--str_data[8]	descripcion producto
+		--str_data[9]	Agente
+		
+		IF str_data[3] != '%%' THEN
+			cadena_where:= cadena_where ||' AND poc_pedidos.folio ilike  '''||str_data[3]||'''';
+		END IF;
+		
+		IF str_data[4] != '%%' THEN
+			cadena_where:= cadena_where ||' AND cxc_clie.razon_social ilike  '''||str_data[4]||'''';
+		END IF;
+		
+		--busqueda por fecha creacion
+		IF str_data[5] != '' THEN
+			IF str_data[6] = '' THEN
+				f_final:=str_data[5];
+			ELSE
+				f_final:=str_data[6];
+			END IF;
+			cadena_where:=cadena_where||' AND to_char(poc_pedidos.momento_creacion, ''yyyymmdd'')::integer between (to_char('''||str_data[5]||'''::timestamp with time zone,''yyyymmdd'')::integer) and (to_char('''||f_final||'''::timestamp with time zone,''yyyymmdd'')::integer)';
+		END IF;
+		
+		IF str_data[7] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.sku ilike  '''||str_data[7]||'''';
+		END IF;
+		
+		IF str_data[8] != '%%' THEN
+			cadena_where:= cadena_where ||' AND inv_prod.descripcion ilike  '''||str_data[8]||'''';
+		END IF;
+		
+		IF str_data[9]::integer != 0 THEN
+			cadena_where:= cadena_where ||' AND poc_pedidos.cxc_agen_id='||str_data[9];
+		END IF;
+		
+		sql_query := 'SELECT DISTINCT poc_pedidos.id 
+				FROM poc_pedidos 
+				LEFT JOIN poc_pedidos_detalle ON poc_pedidos_detalle.poc_pedido_id = poc_pedidos.id  
+				LEFT JOIN inv_prod ON inv_prod.id = poc_pedidos_detalle.inv_prod_id  
+				JOIN erp_proceso ON erp_proceso.id = poc_pedidos.proceso_id
+				LEFT JOIN cxc_clie ON cxc_clie.id = poc_pedidos.cxc_clie_id  
+				WHERE erp_proceso.empresa_id='||emp_id||' AND poc_pedidos.borrado_logico=FALSE  '||cadena_where;
+		--RAISE EXCEPTION '%' ,sql_query;
+	END IF;	--termina buscador de Aplicativo Autorizacion de Pedidos de Clientes
+
 
         
 	--buscador del catalogo de PUESTOS
@@ -5613,53 +6050,106 @@ $$;
 ALTER FUNCTION public.gral_bus_catalogos(campos_data text) OWNER TO sumar;
 
 --
--- Name: inv_calculo_existencia_producto(integer, integer); Type: FUNCTION; Schema: public; Owner: sumar
+-- Name: inv_calculo_existencia_producto(integer, boolean, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: sumar
 --
 
-CREATE FUNCTION inv_calculo_existencia_producto(id_prod integer, id_user integer) RETURNS double precision
+CREATE FUNCTION inv_calculo_existencia_producto(tipo_calculo integer, incluye_reservados boolean, id_prod integer, id_user integer, id_almacen integer) RETURNS double precision
     LANGUAGE plpgsql
     AS $$
 
 DECLARE
+	/*
+	Este procedimiento es para obtener la existencia de un producto. Tiene dos modalidades:
+	tipo_calculo=1 : Obtiene existencia de un producto del almacen de la sucursal donde esta logueado el usuario
+	tipo_calculo=2 : Obtiene existencia de un producto en todos los alacenes de la Empresa
+	*/
 	cadena_sql text = '';
+	subquery text = '';
+	fila_almacenes record;
+	id_almacenes character varying := '';
+	primer_registro smallint=0;
 	ano_actual integer;
 	mes_actual integer;
-	id_almacen integer;
+	emp_id integer;
+	suc_id integer;
 	incrementa int:=1;
 	espacio_tiempo_ejecucion timestamp with time zone = now();
 	existencia double precision;
+	descontar_reservados_transito character varying='';
 BEGIN	
 	
 	SELECT EXTRACT(YEAR FROM espacio_tiempo_ejecucion) INTO ano_actual;
 	SELECT EXTRACT(MONTH FROM espacio_tiempo_ejecucion) INTO mes_actual;
 	
-	--obtener id de almacen de la sucursal
-  	SELECT inv_suc_alm.almacen_id FROM gral_usr_suc 
+  	SELECT gral_suc.empresa_id, gral_usr_suc.gral_suc_id
+  	FROM gral_usr_suc 
 	JOIN gral_suc ON gral_suc.id = gral_usr_suc.gral_suc_id
-	JOIN inv_suc_alm ON inv_suc_alm.sucursal_id = gral_suc.id
-	WHERE gral_usr_suc.gral_usr_id = id_user
-	INTO id_almacen;
+	WHERE gral_usr_suc.gral_usr_id=id_user
+	INTO emp_id, suc_id;
+	
+	
 
-	--Si el id del almacen es null, le asignamos un cero para que no genere error al ejecutar el query
-	IF id_almacen IS NULL THEN 
-		id_almacen:=0;
+	--tipo_calculo 1=Busqueda de Existencia por un almacen en especifico
+	IF tipo_calculo = 1 THEN
+		id_almacenes:=id_almacen;
+	END IF;
+	
+	--tipo_calculo 2=Busqueda de Existencia en Todos los almacenes de la Empresa
+	IF tipo_calculo = 2 THEN
+		--query para obtener todos los alacenes de la empresa
+		cadena_sql:='SELECT distinct inv_suc_alm.almacen_id FROM gral_suc JOIN inv_suc_alm ON inv_suc_alm.sucursal_id=gral_suc.id 
+				WHERE gral_suc.empresa_id='||emp_id||' ORDER BY inv_suc_alm.almacen_id;';
+		
+		primer_registro:=0;--variable para saber si es el primer almacen en la cadena
+		FOR fila_almacenes IN EXECUTE(cadena_sql) LOOP
+			if primer_registro=0 then
+				id_almacenes:=id_almacenes||'';
+			else
+				id_almacenes:=id_almacenes||',';
+			end if;
+			id_almacenes:=id_almacenes||fila_almacenes.almacen_id;
+			primer_registro:=1;
+		END LOOP;
 	END IF;
 	
 	
-	cadena_sql:= 'SELECT exi_inicial - transito - reservado ';
+	
+	--Si el id del almacen es null, le asignamos un cero para que no genere error al ejecutar el query
+	IF id_almacenes IS NULL OR id_almacenes='' THEN 
+		id_almacenes:='0';
+	END IF;
+	
+	--descuenta reservados y transito en el calculo de las existencias
+	IF incluye_reservados=FALSE THEN 
+		descontar_reservados_transito :=' - transito - reservado ';
+	END IF;
+	
+	
+	--reiniciar variable
+	cadena_sql:='';
+	
+	--Crear formula para calcular la existencia actual del producto
+	cadena_sql:= 'SELECT (exi_inicial '||descontar_reservados_transito||' ';
 	WHILE incrementa <= mes_actual LOOP
 		cadena_sql:=cadena_sql ||' + entradas_'||incrementa||' - salidas_'||incrementa;
 		incrementa:= incrementa + 1;
 	END LOOP;
-	cadena_sql:= cadena_sql||' FROM inv_exi WHERE inv_prod_id='||id_prod||' AND ano='||ano_actual||' AND inv_alm_id='||id_almacen;
+	cadena_sql:= cadena_sql||') AS exi FROM inv_exi WHERE inv_prod_id='||id_prod||' AND ano='||ano_actual||' AND inv_alm_id IN ('||id_almacenes||')';
 	
-	--RAISE EXCEPTION '%',cadena_sql;
 	
-	EXECUTE cadena_sql INTO existencia;
+	--obtiene existencia del producto
+	subquery := 'SELECT sum(exi) as exi FROM ('||cadena_sql||') AS sbt;';
+	
+	
+	--RAISE EXCEPTION '%',subquery;
+	
+	EXECUTE subquery INTO existencia;
 	
 	IF existencia IS NULL OR existencia<=0 THEN 
 		existencia:=0;
 	END IF;
+	
+	--existencia := round((existencia)::numeric,2)::double precision;
 	
 	RETURN existencia;
 	
@@ -5668,7 +6158,7 @@ END;
 $$;
 
 
-ALTER FUNCTION public.inv_calculo_existencia_producto(id_prod integer, id_user integer) OWNER TO sumar;
+ALTER FUNCTION public.inv_calculo_existencia_producto(tipo_calculo integer, incluye_reservados boolean, id_prod integer, id_user integer, id_almacen integer) OWNER TO sumar;
 
 --
 -- Name: poc_adm_procesos(text, text[]); Type: FUNCTION; Schema: public; Owner: sumar
@@ -6792,6 +7282,399 @@ BEGIN
 		END IF;
 		
 	END IF;--termina aplicativo Pedidos de Clientes
+
+
+	--Aplicativo Autorizacion de Pedidos de Clientes
+	IF app_selected = 65 THEN
+		
+		IF command_selected = 'autorizar' THEN 
+			--actualiza el pedido con datos del usuario que autoriza
+			UPDATE poc_pedidos SET momento_autorizacion=espacio_tiempo_ejecucion,gral_usr_id_autoriza=usuario_id 
+			WHERE id=str_data[4]::integer;
+			
+			--extraer datos del pedido
+			SELECT * FROM poc_pedidos WHERE id=str_data[4]::integer INTO pedido;
+			
+			id_almacen := pedido.inv_alm_id;
+			
+			IF pedido.cancelado=false THEN
+				
+				--Actualiza el flujo del proceso a 2=Prefactura
+				UPDATE erp_proceso SET proceso_flujo_id=2 WHERE id=pedido.proceso_id;
+				
+				IF pedido.lugar_entrega!='' AND pedido.lugar_entrega IS NOT NULL THEN
+					obser_prefactura:='LUGAR DE ENTREGA: '||pedido.lugar_entrega;
+				ELSE
+					obser_prefactura:='';
+				END IF;
+				
+				--si enviar_obser_fac=true, hay que enviar las observaciones del pedido a las observaciones de la prefactura
+				IF pedido.enviar_obser_fac=true THEN
+					--verificamos que las observaciones del pedido no venga vacio
+					IF pedido.observaciones!='' AND pedido.observaciones IS NOT NULL THEN
+						IF obser_prefactura!='' THEN
+							--si obser_prefactura no viene vacio, le agregamos un salto de linea
+							obser_prefactura:=obser_prefactura||E'\n';
+						END IF;
+						
+						obser_prefactura:=obser_prefactura||pedido.observaciones;
+					END IF;
+				END IF;
+				
+				--Crear registro en la tabla erp_prefacturas y retorna el id del registro creado
+				 INSERT INTO  erp_prefacturas(
+					proceso_id,--pedido.proceso_id,
+					folio_pedido,--pedido.folio,
+					cliente_id,--pedido.cxc_clie_id,
+					moneda_id,--pedido.moneda_id,
+					--observaciones,--pedido.observaciones,
+					observaciones,--obser_prefactura,
+					subtotal,--pedido.subtotal,
+					impuesto,--pedido.impuesto,
+					monto_retencion,--pedido.monto_retencion,
+					total,--pedido.total,
+					tasa_retencion_immex,--pedido.tasa_retencion_immex,
+					tipo_cambio,--pedido.tipo_cambio,
+					empleado_id,--pedido.cxc_agen_id,
+					terminos_id,--pedido.cxp_prov_credias_id
+					orden_compra,--pedido.orden_compra,
+					fac_metodos_pago_id,--pedido.fac_metodos_pago_id,
+					no_cuenta,--pedido.no_cuenta,
+					enviar_ruta,--pedido.enviar_ruta,
+					inv_alm_id,--pedido.inv_alm_id,
+					cxc_clie_df_id,--pedido.cxc_clie_df_id,
+					refacturar,--false,
+					id_usuario_creacion,--usuario_id,
+					momento_creacion,--espacio_tiempo_ejecucion
+					monto_ieps, --pedido.monto_ieps
+					monto_descto, --pedido.monto_descto
+					motivo_descto --pedido.motivo_descto
+				)VALUES(
+					pedido.proceso_id,
+					pedido.folio,
+					pedido.cxc_clie_id,
+					pedido.moneda_id,
+					--pedido.observaciones,
+					obser_prefactura,
+					pedido.subtotal,
+					pedido.impuesto,
+					pedido.monto_retencion,
+					pedido.total,
+					pedido.tasa_retencion_immex,
+					pedido.tipo_cambio,
+					pedido.cxc_agen_id,
+					pedido.cxp_prov_credias_id,
+					pedido.orden_compra,
+					pedido.fac_metodos_pago_id,
+					pedido.no_cuenta,
+					pedido.enviar_ruta,
+					pedido.inv_alm_id,
+					pedido.cxc_clie_df_id,
+					false,
+					usuario_id,
+					espacio_tiempo_ejecucion,
+					pedido.monto_ieps,
+					pedido.monto_descto,
+					pedido.motivo_descto
+				) RETURNING id into ultimo_id;
+				
+				--Extraer datos del detalle del pedido
+				sql_select:='SELECT *, 0::integer as depto_id, 0::integer as empleado_id FROM poc_pedidos_detalle WHERE poc_pedido_id='||str_data[4]::integer;
+				
+				--RAISE EXCEPTION '%','sql_select: '||sql_select;
+				
+				--crea registros para tabla erp_prefacturas_detalles
+				FOR fila IN EXECUTE (sql_select) LOOP
+					
+					INSERT INTO erp_prefacturas_detalles(prefacturas_id,producto_id,presentacion_id,tipo_impuesto_id,valor_imp,cantidad,precio_unitario, reservado, inv_prod_unidad_id, gral_ieps_id, valor_ieps, descto, gral_imptos_ret_id, tasa_ret)
+					VALUES(ultimo_id,fila.inv_prod_id,fila.presentacion_id,fila.gral_imp_id,fila.valor_imp,fila.cantidad,fila.precio_unitario, fila.reservado, fila.inv_prod_unidad_id, fila.gral_ieps_id, fila.valor_ieps, fila.descto, fila.gral_imptos_ret_id, fila.tasa_ret);
+					
+					IF facpar.cambiar_unidad_medida THEN 
+						--Obtener datos del Producto
+						SELECT inv_prod.tipo_de_producto_id AS tipo_producto, inv_prod.unidad_id, inv_prod_unidades.titulo, inv_prod.densidad, (CASE WHEN inv_prod_unidades.id IS NULL THEN 0 ELSE inv_prod_unidades.decimales END) AS no_dec
+						FROM inv_prod LEFT JOIN inv_prod_unidades ON inv_prod_unidades.id=inv_prod.unidad_id
+						WHERE inv_prod.id=fila.inv_prod_id
+						INTO tipo_prod, idUnidadMedida, nombreUnidadMedida, densidadProd, noDecUnidad;
+						
+						IF noDecUnidad IS NULL THEN noDecUnidad:=0; END IF;
+						
+						IF idUnidadMedida::integer<>fila.inv_prod_unidad_id THEN
+							IF densidadProd IS NULL OR densidadProd=0 THEN
+								densidadProd:=1;
+							END IF;
+							
+							EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''KILO*'';' INTO match_cadena;
+							IF match_cadena=true THEN
+								--Convertir a kilos
+								fila.cantidad := fila.cantidad::double precision * densidadProd;
+								fila.cantidad := round(fila.cantidad::numeric,noDecUnidad)::double precision;
+							ELSE
+								EXECUTE 'select '''||nombreUnidadMedida||''' ~* ''LITRO*'';' INTO match_cadena;
+								IF match_cadena=true THEN 
+									--Convertir a Litros
+									fila.cantidad := fila.cantidad::double precision / densidadProd;
+									fila.cantidad := round(fila.cantidad::numeric,noDecUnidad)::double precision;
+								END IF;
+							END IF;
+						END IF;
+					END IF;
+
+					
+					
+					
+					--Aqui debe entrar cuando la partida va a Requisicion de Compra
+					IF fila.backorder=false AND fila.requisicion=true THEN 
+						IF header_requisicion_generada=false THEN
+							id_tipo_consecutivo:=32;--consecutivo de Requisicion
+							
+							--Aqui entra para tomar el consecutivo de la Requisicion de la sucursal actual
+							UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+							WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+							
+							--Concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio
+							nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+
+							--Obtener id del empleado y departamento la que pertenece el usuario
+							--select gral_empleados.id, gral_empleados.gral_depto_id from gral_usr join gral_empleados on gral_empleados.id=gral_usr.gral_empleados_id into fila.empleado_id, fila.depto_id;
+							
+							select gral_empleados.id, gral_empleados.gral_depto_id from gral_empleados where gral_empleados.id=pedido.cxc_agen_id 
+							into fila.empleado_id, fila.depto_id;
+							
+							
+							IF fila.empleado_id IS NULL THEN fila.empleado_id:=0; END IF;
+							IF fila.depto_id IS NULL THEN fila.depto_id:=0; END IF;
+							
+							--Tipo 1=Requisiciones creadas manualmente, 2=Requisiciones generadas desde un pedido.
+							INSERT INTO com_oc_req(folio,fecha_compromiso, observaciones, cancelado, borrado_logico, gral_emp_id, gral_suc_id, momento_creacion, gral_usr_id_creacion, gral_empleado_id, gral_depto_id, folio_pedido, tipo)
+							VALUES(nuevo_folio,pedido.fecha_compromiso, pedido.observaciones, false, false, emp_id, suc_id, espacio_tiempo_ejecucion, usuario_id, fila.empleado_id, fila.depto_id, pedido.folio, 2) 
+							RETURNING id INTO ultimo_id2;
+							
+							--Cambiar bandera para indicar que ya se generó el header de la tabla de requisiciones
+							header_requisicion_generada:=true;
+						END IF;
+						
+						--Aqui se calcula la cantidad que se debe enviar a la requisicion de compra
+						cantidad_produccion := fila.cantidad - fila.reservado;
+						
+						--Genera registro en la tabla detalle de la requisicion
+						INSERT INTO com_oc_req_detalle(com_oc_req_id,inv_prod_id,presentacion_id,cantidad) VALUES(ultimo_id2, fila.inv_prod_id, fila.presentacion_id, cantidad_produccion);
+						
+					END IF;
+					
+					
+					--Aqui debe entrar solo cuando la partida va a backorder de produccion
+					IF fila.backorder=true AND fila.requisicion=false THEN 
+						id_tipo_consecutivo:=24;--Folio backorder
+						
+						--aqui entra para tomar el consecutivo del pedido de la sucursal actual
+						UPDATE 	gral_cons SET consecutivo=( SELECT sbt.consecutivo + 1  FROM gral_cons AS sbt WHERE sbt.id=gral_cons.id )
+						WHERE gral_emp_id=emp_id AND gral_suc_id=suc_id AND gral_cons_tipo_id=id_tipo_consecutivo  RETURNING prefijo,consecutivo INTO prefijo_consecutivo,nuevo_consecutivo;
+						--suc_id_consecutivo
+						
+						--concatenamos el prefijo y el nuevo consecutivo para obtener el nuevo folio del pedido
+						nuevo_folio := prefijo_consecutivo || nuevo_consecutivo::character varying;
+						
+						cantidad_produccion := fila.cantidad - fila.reservado;
+						
+						INSERT INTO poc_ped_bo(folio, poc_ped_detalle_id, inv_prod_id, cantidad, inv_alm_id, inv_mov_tipo_id, cxc_clie_id, orden_compra, observaciones, autorizado, momento_autorizacion, momento_creacion, gral_usr_id_autoriza, gral_usr_id_creacion, gral_emp_id, gral_suc_id)
+						VALUES(nuevo_folio,fila.id,fila.inv_prod_id,cantidad_produccion,id_almacen,0,pedido.cxc_clie_id,pedido.orden_compra,pedido.observaciones,true,espacio_tiempo_ejecucion,espacio_tiempo_ejecucion,usuario_id,usuario_id,emp_id,suc_id);
+					END IF;
+					
+				END LOOP;
+				
+				valor_retorno := '1';
+			ELSE
+				valor_retorno := 'El pedido fue CANCELADO en un proceso anterior. No se puede Autorizar.';
+			END IF;
+		END IF;
+		
+		
+		
+		--Aqui entra cuando la persona que autoriza es la que cancela el pedido
+		IF command_selected = 'cancelar' THEN
+			
+			--Obtener el id del proceso, id_cliente para este pedido
+			SELECT proceso_id, cxc_clie_id, folio FROM poc_pedidos WHERE id=str_data[4]::integer INTO pedido;
+			
+			id_proceso:=pedido.proceso_id;
+			id_cliente:=pedido.cxc_clie_id;
+			
+			--obtener el id del flujo del proceso
+			SELECT proceso_flujo_id,empresa_id,sucursal_id  FROM erp_proceso WHERE id=id_proceso INTO fila2;
+			
+			id_proceso_flujo := fila2.proceso_flujo_id;
+			
+			--RAISE EXCEPTION '%','id_proceso_flujo:'||id_proceso_flujo;
+			/*
+			Proceso flujo 
+			4=Pedido, 
+			2=Facturacion o Prefactura
+			7=FAC PARCIAL
+			8=REM PARCIAL
+			*/
+			IF id_proceso_flujo::integer=4 OR id_proceso_flujo::integer=2 OR id_proceso_flujo::integer=7 OR id_proceso_flujo::integer=8 THEN 
+				
+				select 
+					count(com_oc_requisicion.id) as exis_oc
+				from com_oc_req
+				join com_oc_req_detalle on com_oc_req_detalle.com_oc_req_id=com_oc_req.id 
+				join com_oc_requisicion on com_oc_requisicion.com_oc_req_det_id=com_oc_req_detalle.id
+				where trim(com_oc_req.folio_pedido)=trim(pedido.folio) and com_oc_req.gral_suc_id=fila2.sucursal_id and com_oc_req.cancelado=false
+				into exis;
+				
+				if exis<=0 then 
+					--Cancelar Requisición si es que existe.
+					update com_oc_req set cancelado=true, momento_cancelacion=espacio_tiempo_ejecucion, gral_usr_id_cancelacion=usuario_id 
+					where trim(com_oc_req.folio_pedido)=trim(pedido.folio) and com_oc_req.gral_suc_id=fila2.sucursal_id;
+					
+					--Extraer datos del backorder
+					sql_select:='SELECT poc_ped_bo.estatus FROM poc_pedidos
+						JOIN poc_pedidos_detalle ON poc_pedidos_detalle.poc_pedido_id=poc_pedidos.id
+						JOIN poc_ped_bo ON poc_ped_bo.poc_ped_detalle_id=poc_pedidos_detalle.id
+						WHERE poc_pedidos.id='||str_data[4]::integer;
+					
+					en_proceso_produccion:=false;
+					
+					--Crea devolver existencias reservadas
+					FOR fila IN EXECUTE (sql_select) LOOP
+						IF fila.estatus=1 THEN
+							--Por lo menos una partida del pedido genero backorder y se encuentra en produccion
+							en_proceso_produccion := true;
+						END IF;
+					END LOOP;
+					
+					IF en_proceso_produccion=false THEN
+						/*
+						Aqui entra cuando no hay nada en proceso de produccion 
+						y se puede proceder a cancelar el pedido y los registros en la tabla poc_ped_bo
+						*/
+						UPDATE poc_pedidos SET cancelado=true, momento_cancelacion=espacio_tiempo_ejecucion,gral_usr_id_cancelacion=usuario_id
+						where id=str_data[4]::integer
+						RETURNING inv_alm_id INTO id_almacen;
+						
+						sql_select:='';
+						
+						--Extraer datos del detalle del pedido
+						sql_select:='SELECT * FROM poc_pedidos_detalle WHERE poc_pedido_id='||str_data[4]::integer;
+						
+						--Devolver existencias reservadas
+						FOR fila IN EXECUTE (sql_select) LOOP
+							cantPresReservAnterior:=0;
+							noDecUnidad:=0;
+							equivalenciaPres:=0;
+							
+							--Obtener datos del Producto
+							SELECT inv_prod.tipo_de_producto_id AS tipo_producto, inv_prod.unidad_id, inv_prod_unidades.titulo, inv_prod.densidad, (CASE WHEN inv_prod_unidades.id IS NULL THEN 0 ELSE inv_prod_unidades.decimales END) AS no_dec
+							FROM inv_prod LEFT JOIN inv_prod_unidades ON inv_prod_unidades.id=inv_prod.unidad_id
+							WHERE inv_prod.id=fila.inv_prod_id 
+							INTO tipo_prod, idUnidadMedida, nombreUnidadMedida, densidadProd, noDecUnidad;
+							
+							IF noDecUnidad IS NULL THEN noDecUnidad:=0; END IF;
+							
+							--Quitar reservados de poc_pedidos_detalle
+							UPDATE poc_pedidos_detalle SET reservado=0 WHERE id=fila.id;
+							
+							--Redondear la cantidad reservada
+							fila.reservado := round(fila.reservado::numeric,noDecUnidad)::double precision; 
+							
+							--Quitar la cantidad reservada de la tabla inv_exi
+							UPDATE inv_exi SET reservado=(reservado::double precision - fila.reservado::double precision) WHERE inv_prod_id=fila.inv_prod_id AND inv_alm_id=id_almacen AND ano=ano_actual;
+							
+							------Inicia quitar existencias reservadas en inv_exi_pres--------------------------
+							--verificar si la configuracion indica que se esta controlando existencias por presentaciones
+							IF controlExisPres=true THEN 
+								--Verificar si hay que validar las existencias de presentaciones desde el Pedido.
+								--TRUE = Validar presentaciones desde el Pedido
+								--FALSE = No validar presentaciones desde el Pedido
+								IF facpar.validar_pres_pedido=true THEN 
+									--buscar la equivalencia de la Presentacion
+									SELECT cantidad  FROM inv_prod_presentaciones WHERE id=fila.presentacion_id::integer 
+									INTO equivalenciaPres;
+									
+									IF equivalenciaPres IS NULL THEN equivalenciaPres:=0; END IF;
+									
+									--convertir a Presentaciones la cantidad Reservada
+									cantPresReservAnterior := fila.reservado::double precision / equivalenciaPres::double precision;
+									
+									--redondear la cantidad de Presentaciones Reservada anteriormente
+									cantPresReservAnterior := round(cantPresReservAnterior::numeric,noDecUnidad)::double precision; 
+									
+									--Quitar la Cantidad Reservada anteriormente
+									UPDATE inv_exi_pres SET reservado=(reservado::double precision - cantPresReservAnterior::double precision)
+									WHERE inv_alm_id=id_almacen::integer AND inv_prod_id=fila.inv_prod_id::integer AND inv_prod_presentacion_id=fila.presentacion_id::integer;
+								END IF;
+							END IF;
+							
+						END LOOP;
+						
+						
+						sql_select:='';
+						--Extraer datos del backorder
+						sql_select:='
+						SELECT poc_ped_bo.id
+						FROM poc_pedidos
+						JOIN poc_pedidos_detalle ON poc_pedidos_detalle.poc_pedido_id=poc_pedidos.id
+						JOIN poc_ped_bo ON poc_ped_bo.poc_ped_detalle_id=poc_pedidos_detalle.id
+						WHERE poc_pedidos.id='||str_data[4]::integer;
+						
+						--cancelar los registros en la tabla poc_ped_bo(backorder)
+						FOR fila IN EXECUTE (sql_select) LOOP
+							UPDATE poc_ped_bo SET cancelado=TRUE, momento_cancelacion=espacio_tiempo_ejecucion, gral_usr_id_cancelacion=usuario_id  WHERE poc_ped_bo.id=fila.id;
+						END LOOP;
+						
+						
+						IF id_proceso_flujo::integer=2 THEN 
+							--Elimina la prefactura que se creo al momento de autorizar, solo para pedidos autorizados
+							DELETE FROM erp_prefacturas WHERE proceso_id=id_proceso;
+						END IF;
+						
+						IF id_proceso_flujo::integer=7 OR id_proceso_flujo::integer=8 THEN 
+							sql_select:='';
+							--Extraer datos del backorder
+							sql_select:='SELECT 
+								prefact_det.id AS id_det,
+								prefact_det.producto_id AS prod_id 
+							FROM erp_prefacturas 
+							JOIN erp_prefacturas_detalles AS prefact_det ON (prefact_det.prefacturas_id=erp_prefacturas.id AND prefact_det.facturado=false)
+							WHERE erp_prefacturas.proceso_id='||id_proceso||' 
+							AND erp_prefacturas.cliente_id='||id_cliente;
+							
+							--RAISE EXCEPTION '%','sql_select: '||sql_select;
+							--Cancelar los registros pendientes de Facturar o Remisionar
+							FOR fila IN EXECUTE (sql_select) LOOP
+								UPDATE erp_prefacturas_detalles SET facturado=TRUE, reservado=0 
+								WHERE id=fila.id_det;
+							END LOOP;
+							
+							IF id_proceso_flujo::integer=7 THEN 
+								--Si el flujo del proceso es Fac Parcial, se le asigna Facturado
+								UPDATE erp_proceso SET proceso_flujo_id=3 WHERE id=id_proceso;
+							END IF;
+							
+							IF id_proceso_flujo::integer=8 THEN 
+								--Si el flujo del proceso es REM PARCIAL, se le asigna Remiionado
+								UPDATE erp_proceso SET proceso_flujo_id=5 WHERE id=id_proceso;
+							END IF;
+						END IF;
+						
+						valor_retorno := '1';
+					ELSE
+						valor_retorno := 'El pedido gener&oacute; una Preorden de Producci&oacute;n. No se puede Cancelar.';
+					END IF;
+				else
+					valor_retorno := 'El pedido gener&oacute; una Reqisici&oacute;n que ya fue agregada a una Orden de Compra. No se puede Cancelar.';
+				end if;
+			ELSE
+				IF id_proceso_flujo=3 THEN 
+					valor_retorno := 'El pedido ya fue Facturado. No se puede Cancelar.';
+				END IF;
+				
+				IF id_proceso_flujo=5 THEN 
+					valor_retorno := 'El pedido ya genero una Remisi&oacute;n. No se puede Cancelar.';
+				END IF;
+			END IF;
+		END IF;
+	END IF;--termina aplicativo Autorizacion de Pedidos de Clientes
 
 
 	RETURN valor_retorno;
@@ -10072,6 +10955,41 @@ CREATE TABLE gral_docs (
 ALTER TABLE gral_docs OWNER TO sumar;
 
 --
+-- Name: gral_docs_conf; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE gral_docs_conf (
+    id integer NOT NULL,
+    gral_doc_id integer,
+    campo character varying,
+    valor character varying NOT NULL
+);
+
+
+ALTER TABLE gral_docs_conf OWNER TO sumar;
+
+--
+-- Name: gral_docs_conf_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE gral_docs_conf_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE gral_docs_conf_id_seq OWNER TO sumar;
+
+--
+-- Name: gral_docs_conf_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE gral_docs_conf_id_seq OWNED BY gral_docs_conf.id;
+
+
+--
 -- Name: gral_docs_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
 --
 
@@ -11461,6 +12379,70 @@ ALTER TABLE inv_exi_id_seq OWNER TO sumar;
 --
 
 ALTER SEQUENCE inv_exi_id_seq OWNED BY inv_exi.id;
+
+
+--
+-- Name: inv_exi_pres; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE inv_exi_pres (
+    id integer NOT NULL,
+    inv_alm_id integer NOT NULL,
+    inv_prod_id integer NOT NULL,
+    inv_prod_presentacion_id integer NOT NULL,
+    inicial double precision DEFAULT 0 NOT NULL,
+    reservado double precision DEFAULT 0,
+    momento_creacion timestamp with time zone,
+    momento_actualizacion timestamp with time zone,
+    gral_usr_id_creacion integer DEFAULT 0,
+    gral_usr_id_actualizacion integer DEFAULT 0,
+    entradas double precision DEFAULT 0,
+    salidas double precision DEFAULT 0
+);
+
+
+ALTER TABLE inv_exi_pres OWNER TO sumar;
+
+--
+-- Name: COLUMN inv_exi_pres.inicial; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_exi_pres.inicial IS 'Existencia inicial';
+
+
+--
+-- Name: COLUMN inv_exi_pres.entradas; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_exi_pres.entradas IS 'Acumula todas las Entradas';
+
+
+--
+-- Name: COLUMN inv_exi_pres.salidas; Type: COMMENT; Schema: public; Owner: sumar
+--
+
+COMMENT ON COLUMN inv_exi_pres.salidas IS 'Acumula todas las Salidas';
+
+
+--
+-- Name: inv_exi_pres_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE inv_exi_pres_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE inv_exi_pres_id_seq OWNER TO sumar;
+
+--
+-- Name: inv_exi_pres_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE inv_exi_pres_id_seq OWNED BY inv_exi_pres.id;
 
 
 --
@@ -12890,6 +13872,42 @@ ALTER SEQUENCE nom_tipo_jornada_id_seq OWNED BY nom_tipo_jornada.id;
 
 
 --
+-- Name: poc_ped_cot; Type: TABLE; Schema: public; Owner: sumar
+--
+
+CREATE TABLE poc_ped_cot (
+    id integer NOT NULL,
+    poc_ped_id integer NOT NULL,
+    poc_cot_id integer NOT NULL,
+    poc_ped_det_id integer NOT NULL,
+    poc_cot_det_id integer NOT NULL
+);
+
+
+ALTER TABLE poc_ped_cot OWNER TO sumar;
+
+--
+-- Name: poc_ped_cot_id_seq; Type: SEQUENCE; Schema: public; Owner: sumar
+--
+
+CREATE SEQUENCE poc_ped_cot_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE poc_ped_cot_id_seq OWNER TO sumar;
+
+--
+-- Name: poc_ped_cot_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: sumar
+--
+
+ALTER SEQUENCE poc_ped_cot_id_seq OWNED BY poc_ped_cot.id;
+
+
+--
 -- Name: poc_pedidos; Type: TABLE; Schema: public; Owner: sumar
 --
 
@@ -13544,6 +14562,13 @@ ALTER TABLE ONLY gral_docs ALTER COLUMN id SET DEFAULT nextval('gral_docs_id_seq
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY gral_docs_conf ALTER COLUMN id SET DEFAULT nextval('gral_docs_conf_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY gral_edo ALTER COLUMN id SET DEFAULT nextval('gral_edo_id_seq'::regclass);
 
 
@@ -13761,6 +14786,13 @@ ALTER TABLE ONLY inv_exi ALTER COLUMN id SET DEFAULT nextval('inv_exi_id_seq'::r
 -- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
 --
 
+ALTER TABLE ONLY inv_exi_pres ALTER COLUMN id SET DEFAULT nextval('inv_exi_pres_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
 ALTER TABLE ONLY inv_kit ALTER COLUMN id SET DEFAULT nextval('inv_kit_id_seq'::regclass);
 
 
@@ -13958,6 +14990,13 @@ ALTER TABLE ONLY nom_tipo_incapacidad ALTER COLUMN id SET DEFAULT nextval('nom_t
 --
 
 ALTER TABLE ONLY nom_tipo_jornada ALTER COLUMN id SET DEFAULT nextval('nom_tipo_jornada_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY poc_ped_cot ALTER COLUMN id SET DEFAULT nextval('poc_ped_cot_id_seq'::regclass);
 
 
 --
@@ -14571,6 +15610,8 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 23	18.6588999999999992	2016-09-05 21:00:20.831291-04	2	DOF
 24	1	2011-08-23 08:01:15.878597-04	1	0.21
 25	18.5580999999999996	2016-09-06 20:20:23.593424-04	2	DOF
+26	18.3523999999999994	2016-09-07 11:38:16.650592-04	2	DOF
+27	18.3523999999999994	2016-09-10 10:29:17.012476-04	2	DOF
 \.
 
 
@@ -14578,7 +15619,7 @@ COPY erp_monedavers (id, valor, momento_creacion, moneda_id, version) FROM stdin
 -- Name: erp_monedavers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_monedavers_id_seq', 25, true);
+SELECT pg_catalog.setval('erp_monedavers_id_seq', 27, true);
 
 
 --
@@ -14624,6 +15665,7 @@ SELECT pg_catalog.setval('erp_parametros_generales_id_seq', 1, false);
 --
 
 COPY erp_prefacturas (id, cliente_id, moneda_id, observaciones, subtotal, impuesto, total, proceso_id, borrado_logico, momento_creacion, momento_actualizacion, momento_baja, tipo_cambio, id_usuario_creacion, id_usuario_actualizacion, id_usuario_baja, empleado_id, terminos_id, orden_compra, factura_sai, factura_id, refacturar, fac_metodos_pago_id, no_cuenta, monto_retencion, tasa_retencion_immex, tipo_documento, folio_pedido, enviar_ruta, inv_alm_id, id_moneda_pedido, cxc_clie_df_id, fac_subtotal, fac_impuesto, fac_monto_retencion, fac_total, monto_ieps, fac_monto_ieps, monto_descto, fac_monto_descto, motivo_descto, ctb_tmov_id) FROM stdin;
+1	1	1		570	91.2000000000000028	661.200000000000045	2	f	2016-09-07 18:10:53.538077-04	\N	\N	18.5580999999999996	1	0	0	4	1			\N	f	1		0	0	0	2	f	1	0	1	0	0	0	0	0	0	0	0		0
 \.
 
 
@@ -14632,6 +15674,8 @@ COPY erp_prefacturas (id, cliente_id, moneda_id, observaciones, subtotal, impues
 --
 
 COPY erp_prefacturas_detalles (id, prefacturas_id, producto_id, presentacion_id, tipo_impuesto_id, cantidad, precio_unitario, momento_creacion, valor_imp, costo_promedio, reservado, costo_referencia, cant_facturado, facturado, cant_facturar, inv_prod_unidad_id, gral_ieps_id, valor_ieps, descto, fac_rem_det_id, gral_imptos_ret_id, tasa_ret) FROM stdin;
+1	1	11	1	1	10	20	\N	0.160000000000000003	0	10	0	0	f	0	2	0	0	0	0	0	0
+2	1	9	1	1	20	18.5	\N	0.160000000000000003	0	20	0	0	f	0	2	0	0	0	0	0	0
 \.
 
 
@@ -14639,14 +15683,14 @@ COPY erp_prefacturas_detalles (id, prefacturas_id, producto_id, presentacion_id,
 -- Name: erp_prefacturas_detalles_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_prefacturas_detalles_id_seq', 1, false);
+SELECT pg_catalog.setval('erp_prefacturas_detalles_id_seq', 2, true);
 
 
 --
 -- Name: erp_prefacturas_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_prefacturas_id_seq', 1, false);
+SELECT pg_catalog.setval('erp_prefacturas_id_seq', 1, true);
 
 
 --
@@ -14654,6 +15698,9 @@ SELECT pg_catalog.setval('erp_prefacturas_id_seq', 1, false);
 --
 
 COPY erp_proceso (id, proceso_flujo_id, empresa_id, sucursal_id) FROM stdin;
+1	4	1	1
+3	4	1	1
+2	2	1	1
 \.
 
 
@@ -14684,7 +15731,7 @@ SELECT pg_catalog.setval('erp_proceso_flujo_id_seq', 1, false);
 -- Name: erp_proceso_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('erp_proceso_id_seq', 1, false);
+SELECT pg_catalog.setval('erp_proceso_id_seq', 3, true);
 
 
 --
@@ -15518,7 +16565,7 @@ SELECT pg_catalog.setval('gral_civils_id_seq', 1, false);
 
 COPY gral_cons (id, gral_emp_id, gral_suc_id, gral_cons_tipo_id, prefijo, consecutivo, borrado_logico) FROM stdin;
 66	1	1	15		1	f
-47	1	1	7		0	f
+47	1	1	7		3	f
 \.
 
 
@@ -15648,7 +16695,25 @@ SELECT pg_catalog.setval('gral_dias_no_laborables_id_seq', 1, false);
 --
 
 COPY gral_docs (id, titulo, gral_app_id, gral_emp_id, gral_usr_id_actualizacion, momento_actualizacion) FROM stdin;
+1	Impresion de Pedido	64	1	1	\N
 \.
+
+
+--
+-- Data for Name: gral_docs_conf; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY gral_docs_conf (id, gral_doc_id, campo, valor) FROM stdin;
+2	1	CODIGO2	'
+3	2	CODIGO1	
+\.
+
+
+--
+-- Name: gral_docs_conf_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('gral_docs_conf_id_seq', 1, false);
 
 
 --
@@ -18736,10 +19801,10 @@ SELECT pg_catalog.setval('gral_tc_url_id_seq', 1, false);
 --
 
 COPY gral_usr (id, username, password, enabled, ultimo_acceso, gral_empleados_id) FROM stdin;
-1	admin	123qwe	t	2016-09-06 20:21:17.147903-04	1
 2	admin1	123qwe	t	\N	2
 3	admin2	123qwe	t	\N	3
 4	admin3	123qwe	t	\N	4
+1	admin	123qwe	t	2016-09-10 12:02:33.010679-04	1
 5	admin4	123qwe	f	\N	5
 \.
 
@@ -18847,10 +19912,10 @@ SELECT pg_catalog.setval('inv_clas_id_seq', 1, false);
 
 COPY inv_exi (id, inv_prod_id, inv_alm_id, ano, transito, reservado, exi_inicial, entradas_1, salidas_1, costo_ultimo_1, entradas_2, salidas_2, costo_ultimo_2, entradas_3, salidas_3, costo_ultimo_3, entradas_4, salidas_4, costo_ultimo_4, entradas_5, salidas_5, costo_ultimo_5, entradas_6, salidas_6, costo_ultimo_6, entradas_7, salidas_7, costo_ultimo_7, entradas_8, salidas_8, costo_ultimo_8, entradas_9, salidas_9, costo_ultimo_9, entradas_10, salidas_10, costo_ultimo_10, entradas_11, salidas_11, costo_ultimo_11, entradas_12, salidas_12, costo_ultimo_12, momento_entrada_1, momento_salida_1, momento_entrada_2, momento_salida_2, momento_entrada_3, momento_salida_3, momento_entrada_4, momento_salida_4, momento_entrada_5, momento_salida_5, momento_entrada_6, momento_salida_6, momento_entrada_7, momento_salida_7, momento_entrada_8, momento_salida_8, momento_entrada_9, momento_salida_9, momento_entrada_10, momento_salida_10, momento_entrada_11, momento_salida_11, momento_entrada_12, momento_salida_12) FROM stdin;
 3	8	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
-4	9	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	10000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
-5	10	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	12000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
-6	11	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	14000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
-7	12	1	2016	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	16000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+5	10	1	2016	0	288	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	12000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+7	12	1	2016	0	120	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	16000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+6	11	1	2016	0	10	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	14000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+4	9	1	2016	0	27	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	10000	0	0	0	0	0	0	0	0	0	0	0	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
 \.
 
 
@@ -18859,6 +19924,21 @@ COPY inv_exi (id, inv_prod_id, inv_alm_id, ano, transito, reservado, exi_inicial
 --
 
 SELECT pg_catalog.setval('inv_exi_id_seq', 7, true);
+
+
+--
+-- Data for Name: inv_exi_pres; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY inv_exi_pres (id, inv_alm_id, inv_prod_id, inv_prod_presentacion_id, inicial, reservado, momento_creacion, momento_actualizacion, gral_usr_id_creacion, gral_usr_id_actualizacion, entradas, salidas) FROM stdin;
+\.
+
+
+--
+-- Name: inv_exi_pres_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('inv_exi_pres_id_seq', 1, false);
 
 
 --
@@ -19508,10 +20588,28 @@ SELECT pg_catalog.setval('nom_tipo_jornada_id_seq', 1, false);
 
 
 --
+-- Data for Name: poc_ped_cot; Type: TABLE DATA; Schema: public; Owner: sumar
+--
+
+COPY poc_ped_cot (id, poc_ped_id, poc_cot_id, poc_ped_det_id, poc_cot_det_id) FROM stdin;
+\.
+
+
+--
+-- Name: poc_ped_cot_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
+--
+
+SELECT pg_catalog.setval('poc_ped_cot_id_seq', 1, false);
+
+
+--
 -- Data for Name: poc_pedidos; Type: TABLE DATA; Schema: public; Owner: sumar
 --
 
 COPY poc_pedidos (id, folio, cxc_clie_id, moneda_id, observaciones, subtotal, impuesto, monto_retencion, total, tasa_retencion_immex, tipo_cambio, cxc_agen_id, cxp_prov_credias_id, orden_compra, proceso_id, fecha_compromiso, lugar_entrega, transporte, cancelado, borrado_logico, momento_creacion, momento_actualizacion, momento_cancelacion, gral_usr_id_creacion, gral_usr_id_actualizacion, gral_usr_id_cancelacion, tipo_documento, gral_usr_id_autoriza, momento_autorizacion, fac_metodos_pago_id, no_cuenta, enviar_ruta, inv_alm_id, cxc_clie_df_id, enviar_obser_fac, flete, monto_ieps, monto_descto, motivo_descto, porcentaje_descto, folio_cot) FROM stdin;
+1	1	1	1		54390	8702.39999999999964	0	63092.4000000000015	0	18.5580999999999996	4	1		1	2016-09-30			f	f	2016-09-06 22:07:20.942486-04	\N	\N	1	0	0	0	0	\N	1		f	1	1	f	f	0	0		0	
+3	3	1	1		6816	1090.55999999999995	0	7906.55999999999949	0	18.3523999999999994	4	1		3	2016-09-17			f	f	2016-09-07 11:52:52.413682-04	2016-09-07 11:53:51.74964-04	\N	1	1	0	0	0	\N	1		f	1	1	f	f	0	0		0	
+2	2	1	1		570	91.2000000000000028	0	661.200000000000045	0	18.5580999999999996	4	1		2	2016-09-16			f	f	2016-09-07 09:55:21.313511-04	\N	\N	1	0	0	0	1	2016-09-07 18:10:53.538077-04	1		f	1	1	f	f	0	0		0	
 \.
 
 
@@ -19520,6 +20618,11 @@ COPY poc_pedidos (id, folio, cxc_clie_id, moneda_id, observaciones, subtotal, im
 --
 
 COPY poc_pedidos_detalle (id, poc_pedido_id, inv_prod_id, presentacion_id, cantidad, precio_unitario, gral_imp_id, valor_imp, facturado, reservado, backorder, inv_prod_unidad_id, gral_ieps_id, valor_ieps, descto, requisicion, requiere_aut, autorizado, precio_aut, gral_usr_id_aut, gral_imptos_ret_id, tasa_ret) FROM stdin;
+1	1	9	1	7	7770	1	0.160000000000000003	f	7	f	2	0	0	0	f	f	f	0	0	0	0
+2	2	11	1	10	20	1	0.160000000000000003	f	10	f	2	0	0	0	f	f	f	0	0	0	0
+3	2	9	1	20	18.5	1	0.160000000000000003	f	20	f	2	0	0	0	f	f	f	0	0	0	0
+4	3	10	1	288	17	1	0.160000000000000003	f	288	f	2	0	0	0	f	f	f	0	0	0	0
+5	3	12	1	120	16	1	0.160000000000000003	f	120	f	2	0	0	0	f	f	f	0	0	0	0
 \.
 
 
@@ -19527,14 +20630,14 @@ COPY poc_pedidos_detalle (id, poc_pedido_id, inv_prod_id, presentacion_id, canti
 -- Name: poc_pedidos_detalle_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('poc_pedidos_detalle_id_seq', 1, false);
+SELECT pg_catalog.setval('poc_pedidos_detalle_id_seq', 5, true);
 
 
 --
 -- Name: poc_pedidos_id_seq; Type: SEQUENCE SET; Schema: public; Owner: sumar
 --
 
-SELECT pg_catalog.setval('poc_pedidos_id_seq', 1, false);
+SELECT pg_catalog.setval('poc_pedidos_id_seq', 3, true);
 
 
 --
@@ -20071,6 +21174,14 @@ ALTER TABLE ONLY gral_dias_no_laborables
 
 
 --
+-- Name: gral_docs_conf_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY gral_docs_conf
+    ADD CONSTRAINT gral_docs_conf_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: gral_docs_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -20383,6 +21494,14 @@ ALTER TABLE ONLY inv_exi
 
 
 --
+-- Name: inv_exi_pres_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi_pres
+    ADD CONSTRAINT inv_exi_pres_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: inv_kit_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -20639,6 +21758,14 @@ ALTER TABLE ONLY erp_parametros_generales
 
 
 --
+-- Name: poc_ped_cot_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY poc_ped_cot
+    ADD CONSTRAINT poc_ped_cot_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: poc_pedidos_detalle_pkey; Type: CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -20756,6 +21883,14 @@ ALTER TABLE ONLY gral_tc_url
 
 ALTER TABLE ONLY inv_exi
     ADD CONSTRAINT unique_inv_exi UNIQUE (inv_prod_id, inv_alm_id, ano);
+
+
+--
+-- Name: unique_inv_exi_pres; Type: CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi_pres
+    ADD CONSTRAINT unique_inv_exi_pres UNIQUE (inv_alm_id, inv_prod_id, inv_prod_presentacion_id);
 
 
 --
@@ -20901,6 +22036,14 @@ ALTER TABLE ONLY gral_emp
 --
 
 ALTER TABLE ONLY inv_prod_cost_prom
+    ADD CONSTRAINT "fk-354532" FOREIGN KEY (inv_prod_id) REFERENCES inv_prod(id);
+
+
+--
+-- Name: fk-354532; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi_pres
     ADD CONSTRAINT "fk-354532" FOREIGN KEY (inv_prod_id) REFERENCES inv_prod(id);
 
 
@@ -21121,6 +22264,14 @@ ALTER TABLE ONLY gral_edo
 
 
 --
+-- Name: fk_pres_id; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi_pres
+    ADD CONSTRAINT fk_pres_id FOREIGN KEY (inv_prod_presentacion_id) REFERENCES inv_prod_presentaciones(id);
+
+
+--
 -- Name: fk_rol; Type: FK CONSTRAINT; Schema: public; Owner: sumar
 --
 
@@ -21157,6 +22308,14 @@ ALTER TABLE ONLY gral_usr_rol
 --
 
 ALTER TABLE ONLY inv_exi
+    ADD CONSTRAINT inv_exi_inv_alm_id_fkey FOREIGN KEY (inv_alm_id) REFERENCES inv_alm(id);
+
+
+--
+-- Name: inv_exi_inv_alm_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: sumar
+--
+
+ALTER TABLE ONLY inv_exi_pres
     ADD CONSTRAINT inv_exi_inv_alm_id_fkey FOREIGN KEY (inv_alm_id) REFERENCES inv_alm(id);
 
 
