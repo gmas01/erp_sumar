@@ -726,6 +726,8 @@ def __create_extra_sec(dat):
 
 def __create_arts_section(dat):
 
+    add_currency_simbol = lambda c: '${0:>20}'.format(c)
+
     st = ParagraphStyle(
         name='info',
         fontName='Helvetica',
@@ -749,8 +751,8 @@ def __create_arts_section(dat):
                 currency_format(__chomp_extra_zeroes(i['CANTIDAD'])),
                 currency_format(__chomp_extra_zeroes(covelts)),
                 currency_format(__chomp_extra_zeroes(covekgs)),
-                currency_format(__chomp_extra_zeroes(i['VALORUNITARIO'])),
-                currency_format(__chomp_extra_zeroes(i['IMPORTE']))
+                add_currency_simbol(currency_format(__chomp_extra_zeroes(i['VALORUNITARIO']))),
+                add_currency_simbol(currency_format(__chomp_extra_zeroes(i['IMPORTE'])))
         ]
         cont_concepts.append(row)
 
@@ -780,7 +782,8 @@ def __create_arts_section(dat):
         ('FONT', (0, 0), (-1, -1), 'Helvetica', 7),
         ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 7),
         ('ROWBACKGROUNDS', (0, 1),(-1, -1), [colors.white, colors.aliceblue]),
-        ('ALIGN', (0, 1),(2, -1), 'LEFT'),
+        ('ALIGN', (0, 1),(1, -1), 'LEFT'),
+        ('ALIGN', (2, 0),(2, -1), 'CENTER'),
         ('ALIGN', (3, 1),(-1, -1), 'RIGHT'),
 
         #Clave column look and feel (specific)
