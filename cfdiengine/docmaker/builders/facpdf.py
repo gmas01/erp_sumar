@@ -603,7 +603,7 @@ class FacPdf(BuilderGen):
         return table
 
     def __items_section(self, dat):
-        add_currency_simbol = lambda c: '${0:>40}'.format(c)
+        add_currency_simbol = lambda c: '${0:>20}'.format(c)
 
         st = ParagraphStyle(
             name='info',
@@ -611,19 +611,25 @@ class FacPdf(BuilderGen):
             fontSize=7,
             leading=8
         )
+
         header_concepts = (
             dat['CAP_LOADED']['TL_ART_SKU'], dat['CAP_LOADED']['TL_ART_DES'],
             dat['CAP_LOADED']['TL_ART_UNIT'], dat['CAP_LOADED']['TL_ART_QUAN'],
+            'COVE LTS', 'COVE KGS',
             dat['CAP_LOADED']['TL_ART_UP'], dat['CAP_LOADED']['TL_ART_AMNT']
         )
 
         cont_concepts = []
         for i in dat['XML_PARSED']['ARTIFACTS']:
+            covelts = dat['COVE_DATA'][i['NOIDENTIFICACION']]['mul_lit']
+            covekgs = dat['COVE_DATA'][i['NOIDENTIFICACION']]['mul_kgs']
             row = [
                 i['NOIDENTIFICACION'],
                 Paragraph(i['DESCRIPCION'], st),
                 i['CLAVEUNIDAD'].upper(),
                 strtricks.HelperStr.format_currency(i['CANTIDAD']),
+                strtricks.HelperStr.format_currency(covelts),
+                strtricks.HelperStr.format_currency(covekgs),
                 add_currency_simbol(strtricks.HelperStr.format_currency(i['VALORUNITARIO'])),
                 add_currency_simbol(strtricks.HelperStr.format_currency(i['IMPORTE']))
             ]
@@ -631,18 +637,19 @@ class FacPdf(BuilderGen):
 
         cont = [header_concepts] + cont_concepts
 
-        table = Table(cont,
-            [
-                2.2 * cm,
-                5.6 * cm,
-                2.3 * cm,
-                2.3 * cm,
-                3.8 * cm,
-                3.8 * cm
-            ]
-        )
+        table = Table(cont, [
+            1.9 * cm,
+            5.2 * cm,
+            2.0 * cm,
+            2.0 * cm,
+            2.1 * cm,
+            2.0 * cm,
+            2.3 * cm,
+            2.5 * cm
+        ])
 
         table.setStyle( TableStyle([
+
             #Body and header look and feel (common)
             ('ALIGN', (0,0),(-1,0), 'CENTER'),
             ('VALIGN', (0,0),(-1,-1), 'TOP'),
@@ -680,7 +687,9 @@ class FacPdf(BuilderGen):
             #Amount column look and feel (specific)
             ('BOX', (7, 1),(7, -1), 0.25, colors.black),
         ]))
+
         return table
+
 
     def __customer_table(self, dat):
 
