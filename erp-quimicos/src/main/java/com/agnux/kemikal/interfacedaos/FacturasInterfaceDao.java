@@ -236,5 +236,7 @@ public interface FacturasInterfaceDao {
     
     //Obtiene los tipos de movimientos de contabilidad
     public ArrayList<HashMap<String, Object>> getCtb_TiposDeMovimiento(Integer id_empresa, Integer appId);
+
+    public String q_serie_folio(Integer id_usuario);
     
 }
