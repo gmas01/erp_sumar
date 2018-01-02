@@ -85,6 +85,52 @@ class FacPdf(BuilderGen):
     def __init__(self, logger):
         super().__init__(logger)
 
+
+    def __harness_cove_info(self, conn, serie_folio, concepts_inxml):
+
+        def format_cove(cove_rows):
+            rd = {}
+            for i in cove_rows:
+                rd["%s" % (i['sku'])] = {
+                    'cove_lts': "%s" % (i['cove_lts']),
+                    'cove_kgs': "%s" % (i['cove_kgs']),
+                    'mul_lit': "%s" % (i['mul_lit']),
+                    'mul_kgs': "%s" % (i['mul_kgs'])
+                }
+            return rd
+
+        def find_concept_in_cove(sku, cove_rows):
+            """
+            find an item over cove rows,
+            this methods is not very smart
+            due to it is using brute force
+            """
+            for item in cove_rows:
+                if sku == "%s" % (item["sku"]):
+                    return True
+            return False
+
+        def load_cove(conn, serie_folio):
+            SQL = """SELECT fac_docs.serie_folio,  inv_prod.sku,
+                fac_docs_detalles.cantidad, inv_prod_cove.cove_lts,
+                inv_prod_cove.cove_kgs,
+                (fac_docs_detalles.cantidad * inv_prod_cove.cove_lts) as mul_lit,
+                (fac_docs_detalles.cantidad * inv_prod_cove.cove_kgs) as mul_kgs
+                FROM fac_docs
+                JOIN fac_docs_detalles ON fac_docs.id = fac_docs_detalles.fac_doc_id
+                JOIN inv_prod_cove ON inv_prod_cove.inv_prod_id = fac_docs_detalles.inv_prod_id
+                JOIN inv_prod ON inv_prod_cove.inv_prod_id = inv_prod.id
+                WHERE fac_docs_detalles.inv_prod_id=inv_prod_cove.inv_prod_id AND
+                fac_docs.serie_folio like"""
+            return self.pg_query(conn, "{0}'{1}'".format(SQL, serie_folio))
+
+        cove_rows = load_cove(conn, serie_folio)
+        for c in concepts_inxml:
+            if not find_concept_in_cove(c['NOIDENTIFICACION'], cove_rows):
+                raise DocBuilderStepError("concept not found in cove.")
+        return format_cove(cove_rows)
+
+
     def __cover_xml_lacks(self, conn, serie_folio, cap):
         SQL = """select gral_emp.telefono as tel,
             gral_emp.pagina_web as www,
@@ -216,6 +262,7 @@ class FacPdf(BuilderGen):
 
         xml_parsed, original = fetch_info(f_xml)
         serie_folio = "%s%s" % (xml_parsed['CFDI_SERIE'], xml_parsed['CFDI_FOLIO'])
+        cove_info = self.__harness_cove_info(conn, serie_folio, xml_parsed['ARTIFACTS'])
         lack = self.__cover_xml_lacks(conn, serie_folio, cap)
         einfo = extra(serie_folio, cap)
         f_qr = qrcode_cfdi(self.__VERIFICATION_URL, xml_parsed['UUID'],
@@ -228,6 +275,7 @@ class FacPdf(BuilderGen):
             'QRCODE': f_qr,
             'LOGO': logo_filename,
             'STAMP_ORIGINAL_STR': original,
+            'COVE_DATA': cove_info,
             'XML_PARSED': xml_parsed,
             'XML_LACK': lack,
             'CUSTOMER_WWW': lack['WWW'],
