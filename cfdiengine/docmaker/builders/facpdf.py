@@ -95,7 +95,8 @@ class FacPdf(BuilderGen):
                     'cove_lts': "%s" % (i['cove_lts']),
                     'cove_kgs': "%s" % (i['cove_kgs']),
                     'mul_lit': "%s" % (i['mul_lit']),
-                    'mul_kgs': "%s" % (i['mul_kgs'])
+                    'mul_kgs': "%s" % (i['mul_kgs']),
+                    'aduana_up': "%s" % (i['aduana_up'])
                 }
             return rd
 
@@ -115,11 +116,13 @@ class FacPdf(BuilderGen):
                 fac_docs_detalles.cantidad, inv_prod_cove.cove_lts,
                 inv_prod_cove.cove_kgs,
                 (fac_docs_detalles.cantidad * inv_prod_cove.cove_lts) as mul_lit,
-                (fac_docs_detalles.cantidad * inv_prod_cove.cove_kgs) as mul_kgs
+                (fac_docs_detalles.cantidad * inv_prod_cove.cove_kgs) as mul_kgs,
+                inv_prod_unidades.titulo as aduana_up
                 FROM fac_docs
                 JOIN fac_docs_detalles ON fac_docs.id = fac_docs_detalles.fac_doc_id
                 JOIN inv_prod_cove ON inv_prod_cove.inv_prod_id = fac_docs_detalles.inv_prod_id
                 JOIN inv_prod ON inv_prod_cove.inv_prod_id = inv_prod.id
+                JOIN inv_prod_unidades ON inv_prod.unidad_id = inv_prod_unidades.id
                 WHERE fac_docs_detalles.inv_prod_id=inv_prod_cove.inv_prod_id AND
                 fac_docs.serie_folio like"""
             return self.pg_query(conn, "{0}'{1}'".format(SQL, serie_folio))
@@ -623,10 +626,11 @@ class FacPdf(BuilderGen):
         for i in dat['XML_PARSED']['ARTIFACTS']:
             covelts = dat['COVE_DATA'][i['NOIDENTIFICACION']]['mul_lit']
             covekgs = dat['COVE_DATA'][i['NOIDENTIFICACION']]['mul_kgs']
+            coveup = dat['COVE_DATA'][i['NOIDENTIFICACION']]['aduana_up']
             row = [
                 i['NOIDENTIFICACION'],
                 Paragraph(i['DESCRIPCION'], st),
-                i['CLAVEUNIDAD'].upper(),
+                coveup.upper(),
                 strtricks.HelperStr.format_currency(i['CANTIDAD']),
                 strtricks.HelperStr.format_currency(covelts),
                 strtricks.HelperStr.format_currency(covekgs),
