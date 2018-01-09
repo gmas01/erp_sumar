@@ -192,7 +192,7 @@ class FacXml(BuilderGen):
                 'UNIDAD': row['unidad'],
                 'PRODSERV': row['prodserv'],
                 'CANTIDAD': row['cantidad'],
-                'PRECIO_UNITARIO': row['precio_unitario'],
+                'PRECIO_UNITARIO': self.__narf(row['precio_unitario']),
                 'IMPORTE': row['importe'],
                 'DESCTO': truncate(row['descto'], self.__NDECIMALS),
                 # From this point onwards tax related elements
