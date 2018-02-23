@@ -12,6 +12,8 @@ import java.util.HashMap;
  * 21/junio/2012
  */
 public interface PocInterfaceDao{
+    public ArrayList<HashMap<String, String>> getUsos();
+    public ArrayList<HashMap<String, String>> getMetodos();
     public HashMap<String, String> selectFunctionValidateAaplicativo(String data, Integer idApp, String extra_data_array);
     public String selectFunctionForThisApp(String campos_data, String extra_data_array);
     public int countAll(String data_string);
