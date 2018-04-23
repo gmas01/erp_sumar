@@ -1,0 +1,24 @@
+FROM dockette/stretch
+MAINTAINER pianodaemon@gmail.com
+
+RUN apt-get update
+RUN apt-get install -y python3-pyxb python3-psycopg2 python3-zeep python3-pip python3-lxml python3-reportlab python3-unidecode python3-qrcode
+RUN apt-get install -y xsltproc git
+
+# The trick is to use useradd instead of its interactive wrapper adduser
+RUN useradd -ms /bin/bash cfdiengine
+USER cfdiengine
+WORKDIR /home/cfdiengine
+
+ENV GIT_REPO_CFDIENGINE https://github.com/gmas01/erp_sumar
+
+RUN git clone $GIT_REPO_CFDIENGINE last_clonation
+RUN mv ./last_clonation/cfdiengine ./
+RUN mkdir resources
+RUN rm -rf ./last_clonation
+
+WORKDIR /home/cfdiengine/cfdiengine
+
+CMD ["python3", "run.py", "-d"]
+
+EXPOSE 10080
