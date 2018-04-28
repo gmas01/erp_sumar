@@ -513,6 +513,9 @@ class FacXml(BuilderGen):
             return pyxb.BIND(TipoFactor='Tasa',
                 Impuesto=c, TasaOCuota=tc, Importe=imp)
 
+        def retencion(c, imp):
+            return pyxb.BIND(Impuesto=c, Importe=imp)
+
         def zigma(v):
             z = Decimal(0)
             for w in v:
