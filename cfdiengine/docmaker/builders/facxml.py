@@ -242,7 +242,7 @@ class FacXml(BuilderGen):
                  )
             )
 
-        totales['MONTO_TOTAL'] = self.__narf(totales['IMPORTE_SUM']) - self.__narf(totales['DESCTO_SUM']) + self.__narf(totales['IMPORTE_SUM_IEPS']) + self.__narf(totales['IMPORTE_SUM_IMPUESTO'] - self.__narf(totales['IMPORTE_SUM_RETENCION'])
+        totales['MONTO_TOTAL'] = self.__narf(totales['IMPORTE_SUM']) - self.__narf(totales['DESCTO_SUM']) + self.__narf(totales['IMPORTE_SUM_IEPS']) + self.__narf(totales['IMPORTE_SUM_IMPUESTO']) - self.__narf(totales['IMPORTE_SUM_RETENCION'])
         return {k: truncate(float(v), self.__NDECIMALS) for k, v in totales.items()}
 
     def __calc_retenciones(self, l_items, l_rets):
@@ -533,7 +533,7 @@ class FacXml(BuilderGen):
             TotalImpuestosRetenidos=zigma(dat['RETENCIONES']),
             Retenciones=pyxb.BIND(
                 *tuple([retencion(t['clave'], t['importe']) for t in dat['RETENCIONES']])
-            )
+            ),
             TotalImpuestosTrasladados=zigma(dat['TRASLADOS']),
             Traslados=pyxb.BIND(
                 *tuple([traslado(t['clave'], self.__place_tasa(t['tasa']), t['importe']) for t in dat['TRASLADOS']])
@@ -635,7 +635,7 @@ class FacXml(BuilderGen):
         if i['IMPORTE_IMPUESTO'] > 0 or i['IMPORTE_IEPS'] > 0:
             notaxes = False
             kwargs['Traslados'] = self.__tag_traslados(i)
-        if i[['TASA_RETENCION'] > 0:
+        if i['TASA_RETENCION'] > 0:
             notaxes = False
             kwargs['Retenciones'] = self.__tag_retenciones(i)
         return pyxb.BIND() if notaxes else pyxb.BIND(**kwargs)
