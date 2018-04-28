@@ -241,7 +241,30 @@ class FacXml(BuilderGen):
         """
         Calcula los impuestos retenidos
         """
-        pass
+        retenciones = []
+
+        for tax in l_rets:
+            # next two variables shall get lastest value of loop
+            # It's not me. It is the Noe approach :|
+            impto_id = 0
+            tasa = 0
+            importe_sum = Decimal(0)
+            for item in l_items:
+                if tax['ID'] == item['RETENCION_ID']:
+                    impto_id = item['RETENCION_ID']
+                    tasa = item['TASA_RETENCION']
+                    importe_sum += self.__narf(self.__calc_imp_tax(
+                        self.__abs_importe(item), self.__place_tasa(item['TASA_RETENCION'])
+                    ))
+            if impto_id > 0:
+                retenciones.append({
+                    'impuesto': 'RETENCION',
+                    'clave': '002',
+                    'importe': truncate(float(importe_sum), self.__NDECIMALS),
+                    'tasa': tasa
+                })
+
+        return retenciones
 
     def __calc_traslados(self, l_items, l_ieps, l_iva):
         """
