@@ -233,6 +233,12 @@ class FacXml(BuilderGen):
         totales['MONTO_TOTAL'] = self.__narf(totales['IMPORTE_SUM']) - self.__narf(totales['DESCTO_SUM']) + self.__narf(totales['IMPORTE_SUM_IEPS']) + self.__narf(totales['IMPORTE_SUM_IMPUESTO'])
         return {k: truncate(float(v), self.__NDECIMALS) for k, v in totales.items()}
 
+    def __calc_retenciones(self, l_items, l_rets):
+        """
+        Calcula los impuestos retenidos
+        """
+        pass
+
     def __calc_traslados(self, l_items, l_ieps, l_iva):
         """
         Calcula los impuestos trasladados
@@ -322,6 +328,29 @@ class FacXml(BuilderGen):
             })
         return rowset
 
+    def __q_imptos_ret(self, conn, usr_id):
+        """
+        Consulta el total de los impuesto retenidos activos en dbms
+        """
+        SQL = """SELECT gral_imptos_ret.id as id, cci.clave as clave,
+            gral_imptos_ret.titulo as desc, gral_imptos_ret.tasa as tasa
+            FROM gral_suc AS SUC
+            LEFT JOIN gral_usr_suc AS USR_SUC ON USR_SUC.gral_suc_id = SUC.id
+            LEFT JOIN gral_emp AS EMP ON EMP.id = SUC.empresa_id
+            LEFT JOIN gral_imptos_ret ON gral_imptos_ret.gral_emp_id = EMP.id
+            LEFT JOIN cfdi_c_impuesto AS cci ON cci.id = gral_imptos_ret.cfdi_c_impuesto
+            WHERE gral_imptos_ret.borrado_logico=false AND
+            USR_SUC.gral_usr_id="""
+        rowset = []
+        for row in self.pg_query(conn, "{0}{1}".format(SQL, usr_id)):
+            rowset.append({
+                'ID' : row['id'],
+                'CLAVE': row['clave'],
+                'DESC': row['desc'],
+                'TASA': row['tasa']
+            })
+        return rowset
+
     def __q_sign_params(self, conn, usr_id):
         """
         Consulta parametros requeridos para firmado cfdi
@@ -374,6 +403,8 @@ class FacXml(BuilderGen):
             certb64 = base64.b64encode(content).decode('ascii')
 
         conceptos = self.__q_conceptos(conn, prefact_id)
+        retenciones = self.__calc_retenciones(conceptos,
+            self.__q_imptos_ret(self, conn, usr_id))
         traslados = self.__calc_traslados(conceptos,
             self.__q_ieps(conn, usr_id), self.__q_ivas(conn))
 
@@ -390,6 +421,7 @@ class FacXml(BuilderGen):
             'FORMA_PAGO': self.__q_forma_pago(conn, prefact_id),
             'LUGAR_EXPEDICION': self.__q_lugar_expedicion(conn, usr_id),
             'CONCEPTOS': conceptos,
+            'RETENCIONES': retenciones,
             'TRASLADOS': traslados,
             'TOTALES': self.__calc_totales(conceptos)
         }
