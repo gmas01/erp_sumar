@@ -15,6 +15,7 @@ ENV GIT_REPO_CFDIENGINE https://github.com/gmas01/erp_sumar
 RUN git clone $GIT_REPO_CFDIENGINE last_clonation
 RUN mv ./last_clonation/cfdiengine ./
 RUN mkdir resources
+RUN ln -sf $PWD/resources $PWD/cfdiengine/
 RUN rm -rf ./last_clonation
 
 WORKDIR /home/cfdiengine/cfdiengine
