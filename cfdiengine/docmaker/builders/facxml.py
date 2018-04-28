@@ -404,7 +404,7 @@ class FacXml(BuilderGen):
 
         conceptos = self.__q_conceptos(conn, prefact_id)
         retenciones = self.__calc_retenciones(conceptos,
-            self.__q_imptos_ret(self, conn, usr_id))
+            self.__q_imptos_ret(conn, usr_id))
         traslados = self.__calc_traslados(conceptos,
             self.__q_ieps(conn, usr_id), self.__q_ivas(conn))
 
