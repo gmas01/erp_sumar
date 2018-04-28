@@ -544,7 +544,7 @@ class FacXml(BuilderGen):
         HelperStr.edit_pattern('TipoCambio="1.0"', 'TipoCambio="1"', tmp_file)  # XXX: Horrible workaround
         HelperStr.edit_pattern('(Descuento=)"([0-9]*(\.[0-9]{0,1})?)"', lambda x: 'Descuento="%.2f"' % (float(x.group(2)),), tmp_file)
         HelperStr.edit_pattern('(Importe=)"([0-9]*(\.[0-9]{0,1})?)"', lambda x: 'Importe="%.2f"' % (float(x.group(2)),), tmp_file)
-        HelperStr.edit_pattern('(TasaOCuota=)"([0-9]*(\.[0-9]{0,2})?)"', lambda x: 'TasaOCuota="%.6f"' % (float(x.roup(2)),), tmp_file)
+        HelperStr.edit_pattern('(TasaOCuota=)"([0-9]*(\.[0-9]{0,2})?)"', lambda x: 'TasaOCuota="%.6f"' % (float(x.group(2)),), tmp_file)
         with open(output_file, 'w', encoding="utf-8") as a:
             a.write(sign_cfdi(dat['KEY_PRIVATE'], dat['XSLT_SCRIPT'], tmp_file))
         os.remove(tmp_file)
@@ -608,10 +608,34 @@ class FacXml(BuilderGen):
             )
         return pyxb.BIND(*tuple(taxes))
 
+    def __tag_retenciones(self, i):
+
+        def retencion(b, c, tc, imp):
+            return pyxb.BIND(
+                Base=b, TipoFactor='Tasa',
+                Impuesto=c, TasaOCuota=tc, Importe=imp)
+
+        taxes = []
+
+        if i['TASA_RETENCION'] > 0:
+            base = self.__calc_base(self.__abs_importe(i), self.__place_tasa(i['TASA_RETENCION']))
+            taxes.append(
+                retencion(
+                    base, "002", self.__place_tasa(i['TASA_IMPUESTO']), self.__calc_imp_tax(
+                        base, self.__place_tasa(i['TASA_IMPUESTO'])
+                    )
+                )
+            )
+
+        return pyxb.BIND(*tuple(taxes))
+
     def __tag_impuestos(self, i):
         notaxes = True
         kwargs = {}
         if i['IMPORTE_IMPUESTO'] > 0 or i['IMPORTE_IEPS'] > 0:
             notaxes = False
             kwargs['Traslados'] = self.__tag_traslados(i)
+        if i[['TASA_RETENCION'] > 0:
+            notaxes = False
+            kwargs['Retenciones'] = self.__tag_retenciones(i)
         return pyxb.BIND() if notaxes else pyxb.BIND(**kwargs)
