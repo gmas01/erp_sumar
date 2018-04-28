@@ -214,6 +214,7 @@ class FacXml(BuilderGen):
             'MONTO_TOTAL': Decimal(0),
             'IMPORTE_SUM': Decimal(0),
             'IMPORTE_SUM_IMPUESTO': Decimal(0),
+            'IMPORTE_SUM_RETENCION': Decimal(0),
             'IMPORTE_SUM_IEPS': Decimal(0),
             'IMPORTE_SUM_RETENCION': Decimal(0),
             'DESCTO_SUM': Decimal(0),
