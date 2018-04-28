@@ -175,7 +175,8 @@ class FacXml(BuilderGen):
             (erp_prefacturas_detalles.valor_ieps * 100::double precision) AS tasa_ieps,
             (erp_prefacturas_detalles.valor_imp * 100::double precision) AS tasa_impuesto,
             erp_prefacturas_detalles.gral_ieps_id as ieps_id,
-            erp_prefacturas_detalles.tipo_impuesto_id as impto_id
+            erp_prefacturas_detalles.tipo_impuesto_id as impto_id,
+            erp_prefacturas_detalles.gral_imptos_ret_id as retencion_id
             FROM erp_prefacturas
             JOIN erp_prefacturas_detalles on erp_prefacturas_detalles.prefacturas_id=erp_prefacturas.id
             LEFT JOIN inv_prod on inv_prod.id = erp_prefacturas_detalles.producto_id
@@ -201,7 +202,8 @@ class FacXml(BuilderGen):
                 'TASA_IEPS': row['tasa_ieps'],
                 'TASA_IMPUESTO': row['tasa_impuesto'],
                 'IEPS_ID': row['ieps_id'],
-                'IMPUESTO_ID': row['impto_id']
+                'IMPUESTO_ID': row['impto_id'],
+                'RETENCION_ID': row['retencion_id']
             })
         return rowset
 
