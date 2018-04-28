@@ -215,6 +215,7 @@ class FacXml(BuilderGen):
             'IMPORTE_SUM': Decimal(0),
             'IMPORTE_SUM_IMPUESTO': Decimal(0),
             'IMPORTE_SUM_IEPS': Decimal(0),
+            'IMPORTE_SUM_RETENCION': Decimal(0),
             'DESCTO_SUM': Decimal(0),
         }
 
@@ -234,7 +235,14 @@ class FacXml(BuilderGen):
                  )
             )
 
-        totales['MONTO_TOTAL'] = self.__narf(totales['IMPORTE_SUM']) - self.__narf(totales['DESCTO_SUM']) + self.__narf(totales['IMPORTE_SUM_IEPS']) + self.__narf(totales['IMPORTE_SUM_IMPUESTO'])
+            totales['IMPORTE_SUM_RETENCION'] += self.__narf(
+                 self.__calc_imp_tax(
+                    self.__calc_base(self.__abs_importe(item), self.__place_tasa(item['TASA_RETENCION'])),
+                    self.__place_tasa(item['TASA_RETENCION'])
+                 )
+            )
+            
+        totales['MONTO_TOTAL'] = self.__narf(totales['IMPORTE_SUM']) - self.__narf(totales['DESCTO_SUM']) + self.__narf(totales['IMPORTE_SUM_IEPS']) + self.__narf(totales['IMPORTE_SUM_IMPUESTO'] - self.__narf(totales['IMPORTE_SUM_RETENCION'])
         return {k: truncate(float(v), self.__NDECIMALS) for k, v in totales.items()}
 
     def __calc_retenciones(self, l_items, l_rets):
