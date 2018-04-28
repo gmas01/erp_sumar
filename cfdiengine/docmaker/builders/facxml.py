@@ -621,8 +621,8 @@ class FacXml(BuilderGen):
             base = self.__calc_base(self.__abs_importe(i), self.__place_tasa(i['TASA_RETENCION']))
             taxes.append(
                 retencion(
-                    base, "002", self.__place_tasa(i['TASA_IMPUESTO']), self.__calc_imp_tax(
-                        base, self.__place_tasa(i['TASA_IMPUESTO'])
+                    base, "002", self.__place_tasa(i['TASA_RETENCION']), self.__calc_imp_tax(
+                        base, self.__place_tasa(i['TASA_RETENCION'])
                     )
                 )
             )
