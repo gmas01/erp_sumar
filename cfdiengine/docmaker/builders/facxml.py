@@ -527,7 +527,7 @@ class FacXml(BuilderGen):
             return float(z)
 
         c.Impuestos = pyxb.BIND(
-            TotalImpuestosRetenidos=0,
+            TotalImpuestosRetenidos=zigma(dat['RETENCIONES']),
             TotalImpuestosTrasladados=zigma(dat['TRASLADOS']),
             Traslados=pyxb.BIND(
                 *tuple([traslado(t['clave'], self.__place_tasa(t['tasa']), t['importe']) for t in dat['TRASLADOS']])
