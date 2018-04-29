@@ -237,7 +237,7 @@ class FacXml(BuilderGen):
 
             totales['IMPORTE_SUM_RETENCION'] += self.__narf(
                  self.__calc_imp_tax(
-                    self.__calc_base(self.__abs_importe(item), self.__place_tasa(item['TASA_RETENCION'])),
+                    self.__abs_importe(item),
                     self.__place_tasa(item['TASA_RETENCION'])
                  )
             )
