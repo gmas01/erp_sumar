@@ -549,9 +549,9 @@ class FacPdf(BuilderGen):
 
             TAXES = {'002':'IVA', '003':'IEPS'} # hardcode taxes as per SAT cat
 
-            for imptras in dat['XML_PARSED']['TAXES']['TRAS']['DETAILS']:
-                _, tasa  = imptras['TASAOCUOTA'].split('.')
-
+            for imptras in ( dat['XML_PARSED']['TAXES']['TRAS']['DETAILS'] + dat['XML_PARSED']['TAXES']['RET']['DETAILS'] ):
+                tasa = "%.2f" % float(imptras.get('TASAOCUOTA', '0.04'))
+                _, tasa  = tasa.split('.')
                 row = [
                     "{0} {1}%".format(
                         'TAX' if dat['CAP_LOADED']['TL_DOC_LANG'] == 'ENGLISH' else TAXES[imptras['IMPUESTO']],
