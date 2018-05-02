@@ -547,20 +547,27 @@ class FacPdf(BuilderGen):
                 ]
             ]
 
-            TAXES = {'002':'IVA', '003':'IEPS'} # hardcode taxes as per SAT cat
 
-            for imptras in ( dat['XML_PARSED']['TAXES']['TRAS']['DETAILS'] + dat['XML_PARSED']['TAXES']['RET']['DETAILS'] ):
-                tasa = "%.2f" % float(imptras.get('TASAOCUOTA', '0.04'))
-                _, tasa  = tasa.split('.')
-                row = [
-                    "{0} {1}%".format(
-                        'TAX' if dat['CAP_LOADED']['TL_DOC_LANG'] == 'ENGLISH' else TAXES[imptras['IMPUESTO']],
-                        tasa
-                    ),
-                    dat['EXTRA_INFO']['CURRENCY_ABR'],
-                    strtricks.HelperStr.format_currency(imptras['IMPORTE'])
-                ]
-                cont.append(row)
+            def tax_column(tt, taxes):
+                rows = []
+                for imp in taxes:
+                    tasa = "%.2f" % float(imp.get('TASAOCUOTA', '0.04')) #XXX Horrible workaround
+                    _, tasa  = tasa.split('.')
+                    rows.append([
+                        "{0} {1}%".format(
+                            'TAX' if dat['CAP_LOADED']['TL_DOC_LANG'] == 'ENGLISH' else tt[imp['IMPUESTO']],
+                            tasa),
+                        dat['EXTRA_INFO']['CURRENCY_ABR'], strtricks.HelperStr.format_currency(imp['IMPORTE'])
+                    ])
+                return rows
+
+            TAXES_TRAS = {'002':'IVA', '003':'IEPS'} # hardcode taxes as per SAT cat
+            TAXES_RET  = {'002':'RET'} # hardcode taxes as per SAT cat
+
+            cont += (
+                    tax_column(TAXES_TRAS, dat['XML_PARSED']['TAXES']['TRAS']['DETAILS']) +
+                    tax_column(TAXES_RET, dat['XML_PARSED']['TAXES']['RET']['DETAILS'])
+            )
 
             cont.append([
                 dat['CAP_LOADED']['TL_ART_TOTAL'], dat['EXTRA_INFO']['CURRENCY_ABR'],
